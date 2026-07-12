@@ -34,3 +34,19 @@ poker:
     send-buffer-size: 262144
     send-time-limit: 10000
     time-to-first-message: 10000
+  abuse:
+    command-rate: 10
+    command-burst: 20
+    control-rate: 2
+    control-burst: 5
+    frame-rate: 100
+    frame-burst: 200
+    coarse-violation-threshold: 3
+    coarse-violation-window: 10s
+    cleanup-interval-ms: 60000
+    registry-cap: 100000
+    registry-ttl: 10m
+  rooms:
+    disconnected-grace: 30m
+  gameplay:
+    recovery-sweep-ms: 5000

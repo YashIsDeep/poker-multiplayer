@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
+import java.time.Clock;
+import com.poker.room.application.DeckFactory;
 
 /** Mutable aggregate. Package-private so only RoomManager can mutate authoritative state. */
 final class PokerRoom {
@@ -16,17 +18,27 @@ final class PokerRoom {
     final String name;
     final int maxSeats;
     final Instant createdAt;
+    final RoomConfig config;
+    final TableGame game;
     final ReentrantLock lock = new ReentrantLock();
     final Map<UUID, Member> members = new HashMap<>();
     final UUID[] seats;
     long revision = 1;
 
-    PokerRoom(RoomId id, JoinCode joinCode, String name, int maxSeats, Instant createdAt) {
+    boolean closed;
+    long presenceGeneration;
+    Instant allDisconnectedSince;
+    boolean idleExpiryPending;
+
+    PokerRoom(RoomId id, JoinCode joinCode, String name, int maxSeats, Instant createdAt,
+              RoomConfig config, Clock clock, DeckFactory decks) {
         this.id = Objects.requireNonNull(id, "id");
         this.joinCode = Objects.requireNonNull(joinCode, "joinCode");
         this.name = Objects.requireNonNull(name, "name");
         this.maxSeats = maxSeats;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
+        this.config = Objects.requireNonNull(config, "config");
+        this.game = new TableGame(config, maxSeats, clock, decks);
         this.seats = new UUID[maxSeats];
     }
 
@@ -47,7 +59,9 @@ final class PokerRoom {
                 createdAt,
                 revision,
                 memberStates,
-                java.util.Arrays.asList(seats.clone()));
+                java.util.Arrays.asList(seats.clone()),
+                config,
+                game.snapshot());
     }
 
     LobbyRoomState lobbyState() {
@@ -61,7 +75,7 @@ final class PokerRoom {
     }
 
     void assertInvariant() {
-        if (members.isEmpty() || members.size() > maxSeats || revision <= 0) {
+        if ((!closed && members.isEmpty()) || members.size() > maxSeats || revision <= 0) {
             throw new IllegalStateException("room invariant violated");
         }
         for (int seat = 0; seat < seats.length; seat++) {
@@ -87,13 +101,15 @@ final class PokerRoom {
         final String displayName;
         final String avatarUrl;
         final Instant joinedAt;
+        final long membershipEpoch;
         Integer seat;
 
-        Member(MemberProfile profile, Instant joinedAt) {
+        Member(MemberProfile profile, Instant joinedAt, long membershipEpoch) {
             this.userId = profile.userId();
             this.displayName = profile.displayName();
             this.avatarUrl = profile.avatarUrl();
             this.joinedAt = joinedAt;
+            this.membershipEpoch = membershipEpoch;
         }
 
         MemberState snapshot() {

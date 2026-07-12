@@ -11,6 +11,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
+import com.poker.engine.cards.Deck;
+import com.poker.room.application.DeckFactory;
+import java.security.SecureRandom;
 
 /**
  * Authoritative in-memory room registry. The registry lock is always acquired
@@ -21,6 +24,7 @@ public final class RoomManager {
 
     private final Clock clock;
     private final JoinCodeGenerator joinCodeGenerator;
+    private final DeckFactory deckFactory;
     private final ReentrantLock registryLock = new ReentrantLock();
     private final Map<RoomId, PokerRoom> rooms = new HashMap<>();
     private final Map<JoinCode, RoomId> roomsByCode = new HashMap<>();
@@ -30,16 +34,26 @@ public final class RoomManager {
     private long lobbyRevision;
 
     public RoomManager() {
-        this(Clock.systemUTC(), new JoinCodeGenerator());
+        this(Clock.systemUTC(), new JoinCodeGenerator(), () -> Deck.shuffled(new SecureRandom()));
     }
 
     public RoomManager(Clock clock, JoinCodeGenerator joinCodeGenerator) {
+        this(clock, joinCodeGenerator, () -> Deck.shuffled(new SecureRandom()));
+    }
+
+    public RoomManager(Clock clock, JoinCodeGenerator joinCodeGenerator, DeckFactory deckFactory) {
         this.clock = Objects.requireNonNull(clock, "clock");
         this.joinCodeGenerator = Objects.requireNonNull(joinCodeGenerator, "joinCodeGenerator");
+        this.deckFactory = Objects.requireNonNull(deckFactory, "deckFactory");
     }
 
     public RoomChange create(MemberProfile profile, String rawName, int maxSeats) {
+        return create(profile, rawName, maxSeats, RoomConfig.DEFAULT);
+    }
+
+    public RoomChange create(MemberProfile profile, String rawName, int maxSeats, RoomConfig config) {
         Objects.requireNonNull(profile, "profile");
+        Objects.requireNonNull(config, "config");
         String name = normalizeName(rawName);
         validateMaxSeats(maxSeats);
         registryLock.lock();
@@ -50,13 +64,13 @@ public final class RoomManager {
             RoomId roomId = uniqueRoomId();
             JoinCode code = allocateCode();
             Instant now = clock.instant();
-            PokerRoom room = new PokerRoom(roomId, code, name, maxSeats, now);
-            room.members.put(profile.userId(), new PokerRoom.Member(profile, now));
+            incrementEpoch(profile.userId());
+            PokerRoom room = new PokerRoom(roomId, code, name, maxSeats, now, config, clock, deckFactory);
+            room.members.put(profile.userId(), new PokerRoom.Member(profile, now, epoch(profile.userId())));
             room.assertInvariant();
             rooms.put(roomId, room);
             roomsByCode.put(code, roomId);
             roomsByUser.put(profile.userId(), roomId);
-            incrementEpoch(profile.userId());
             incrementLobbyRevision();
             updateLobbyEntry(room);
             return change(
@@ -107,9 +121,9 @@ public final class RoomManager {
                     throw new RoomException(RoomError.ROOM_FULL);
                 }
                 Instant now = clock.instant();
-                room.members.put(profile.userId(), new PokerRoom.Member(profile, now));
-                roomsByUser.put(profile.userId(), roomId);
                 incrementEpoch(profile.userId());
+                room.members.put(profile.userId(), new PokerRoom.Member(profile, now, epoch(profile.userId())));
+                roomsByUser.put(profile.userId(), roomId);
                 incrementRoomRevision(room);
                 incrementLobbyRevision();
                 room.assertInvariant();
@@ -162,6 +176,11 @@ public final class RoomManager {
                     throw new RoomException(RoomError.NOT_A_ROOM_MEMBER);
                 }
                 if (member.seat != null) {
+                    if (room.game.handIncludes(member.seat)) {
+                        room.members.put(userId, member);
+                        throw new RoomException(RoomError.HAND_IN_PROGRESS);
+                    }
+                    room.game.removeAtBoundary(member.seat);
                     room.seats[member.seat] = null;
                 }
                 roomsByUser.remove(userId);
@@ -171,6 +190,7 @@ public final class RoomManager {
                 Set<UUID> recipients = memberIds(room);
                 RoomState state = null;
                 if (room.members.isEmpty()) {
+                    room.closed = true;
                     rooms.remove(room.id);
                     roomsByCode.remove(room.joinCode);
                     lobbyRooms.remove(room.id);
@@ -209,7 +229,11 @@ public final class RoomManager {
     }
 
     public RoomChange takeSeat(UUID userId, UUID roomId, int seat) {
-        return seatMutation(userId, roomId, seat);
+        return seatMutation(userId, roomId, seat, 0);
+    }
+
+    public RoomChange takeSeat(UUID userId, UUID roomId, int seat, long buyIn) {
+        return seatMutation(userId, roomId, seat, buyIn);
     }
 
     public RoomChange takeSeat(UUID userId, RoomId roomId, int seat) {
@@ -235,8 +259,11 @@ public final class RoomManager {
                             0,
                             Map.of(userId, epoch(userId)));
                 }
-                room.seats[member.seat] = null;
-                member.seat = null;
+                boolean immediate = room.game.stand(member.seat);
+                if (immediate) {
+                    room.seats[member.seat] = null;
+                    member.seat = null;
+                }
                 incrementRoomRevision(room);
                 incrementLobbyRevision();
                 room.assertInvariant();
@@ -282,6 +309,136 @@ public final class RoomManager {
         } finally {
             registryLock.unlock();
         }
+    }
+
+    public RoomChange act(UUID userId, UUID roomId, long actionSeq, GameAction action, Long amount) {
+        return gameplay(roomId, userId, room -> room.game.act(userId, actionSeq, action, amount));
+    }
+
+    public RoomChange sitOut(UUID userId, UUID roomId) {
+        return gameplay(roomId, userId, room -> room.game.sitOut(requiredSeat(room, userId)));
+    }
+
+    public RoomChange sitIn(UUID userId, UUID roomId) {
+        return gameplay(roomId, userId, room -> room.game.sitIn(requiredSeat(room, userId)));
+    }
+
+    public RoomChange rebuy(UUID userId, UUID roomId, long amount) {
+        return gameplay(roomId, userId, room -> room.game.rebuy(requiredSeat(room, userId), amount));
+    }
+
+    public Optional<RoomChange> timeout(UUID roomId, long handId, long actionSeq, UUID actor) {
+        return gameplayCallback(roomId, room -> room.game.timeout(handId, actionSeq, actor));
+    }
+
+    public Optional<RoomChange> startHand(
+            UUID roomId,
+            long lifecycleSeq,
+            long scheduleGeneration) {
+        return gameplayCallback(
+                roomId,
+                room -> room.game.startHand(lifecycleSeq, scheduleGeneration));
+    }
+
+    public Optional<RoomChange> pauseGameplay(UUID roomId, long scheduleGeneration) {
+        return gameplayCallback(
+                roomId,
+                room -> room.game.pause(scheduleGeneration));
+    }
+
+    public Optional<RoomChange> recoverGameplay(UUID roomId, long scheduleGeneration) {
+        return gameplayCallback(
+                roomId,
+                room -> room.game.recoverOrFail(scheduleGeneration));
+    }
+
+    public Set<UUID> pausedRoomIds() {
+        registryLock.lock();
+        try {
+            java.util.HashSet<UUID> paused = new java.util.HashSet<>();
+            for (PokerRoom room : rooms.values()) {
+                room.lock.lock();
+                try {
+                    if (room.game.snapshot().tableStatus() == TableStatus.PAUSED) {
+                        paused.add(room.id.value());
+                    }
+                } finally {
+                    room.lock.unlock();
+                }
+            }
+            return Set.copyOf(paused);
+        } finally {
+            registryLock.unlock();
+        }
+    }
+
+    public Optional<RoomChange> advancePresentation(UUID roomId, long handId, long scheduleGeneration) {
+        return gameplayCallback(roomId, room -> room.game.advancePresentation(handId, scheduleGeneration));
+    }
+
+    public Optional<RoomChange> nextHand(UUID roomId, long completedHandId, long scheduleGeneration) {
+        return gameplayCallback(roomId, room -> {
+            if (!room.game.nextHand(completedHandId, scheduleGeneration)) return false;
+            for (PokerRoom.Member member : room.members.values()) {
+                if (member.seat != null && !room.game.hasSeat(member.seat, member.userId)) {
+                    room.seats[member.seat] = null;
+                    member.seat = null;
+                }
+            }
+            return true;
+        });
+    }
+
+    private RoomChange gameplay(UUID rawRoomId, UUID userId, java.util.function.Consumer<PokerRoom> mutation) {
+        Objects.requireNonNull(rawRoomId, "roomId"); Objects.requireNonNull(userId, "userId");
+        RoomLease lease = gameplayLease(rawRoomId);
+        PokerRoom room = lease.room();
+        room.lock.lock();
+        try {
+            if (room.closed) throw new RoomException(RoomError.ROOM_NOT_FOUND);
+            if (room.member(userId) == null) throw new RoomException(RoomError.NOT_A_ROOM_MEMBER);
+            mutation.accept(room);
+            incrementRoomRevision(room);
+            room.assertInvariant();
+            return gameplayChange(room, lease.lobby());
+        } finally { room.lock.unlock(); }
+    }
+
+    private Optional<RoomChange> gameplayCallback(UUID rawRoomId, java.util.function.Predicate<PokerRoom> mutation) {
+        RoomLease lease;
+        try { lease = gameplayLease(rawRoomId); } catch (RoomException ex) { return Optional.empty(); }
+        PokerRoom room = lease.room();
+        room.lock.lock();
+        try {
+            if (room.closed || !mutation.test(room)) return Optional.empty();
+            incrementRoomRevision(room);
+            return Optional.of(gameplayChange(room, lease.lobby()));
+        } finally { room.lock.unlock(); }
+    }
+
+    private RoomLease gameplayLease(UUID rawRoomId) {
+        registryLock.lock();
+        try {
+            PokerRoom room = rooms.get(new RoomId(rawRoomId));
+            if (room == null) throw new RoomException(RoomError.ROOM_NOT_FOUND);
+            return new RoomLease(room, lobbyStateLocked());
+        } finally { registryLock.unlock(); }
+    }
+
+    private RoomChange gameplayChange(PokerRoom room, LobbyState lobby) {
+        Set<UUID> recipients = Set.copyOf(room.members.keySet());
+        Map<UUID, Long> epochs = new HashMap<>();
+        for (PokerRoom.Member member : room.members.values()) epochs.put(member.userId, member.membershipEpoch);
+        return new RoomChange(RoomChange.Kind.GAME_CHANGED, room.id.value(), room.snapshot(), lobby,
+                recipients, epochs, null, 0, room.revision, lobby.revision());
+    }
+
+    private record RoomLease(PokerRoom room, LobbyState lobby) {}
+
+    private static int requiredSeat(PokerRoom room, UUID userId) {
+        PokerRoom.Member member = room.member(userId);
+        if (member == null || member.seat == null) throw new GameException(GameError.NOT_SEATED);
+        return member.seat;
     }
 
     public RoomChange roomSync(UUID userId, RoomId roomId) {
@@ -386,12 +543,120 @@ public final class RoomManager {
         }
     }
 
-    private RoomChange seatMutation(UUID userId, UUID roomId, int seat) {
+    public Set<UUID> memberIds(UUID roomId) {
+        registryLock.lock();
+        try {
+            PokerRoom room = rooms.get(new RoomId(roomId));
+            if (room == null) return Set.of();
+            room.lock.lock();
+            try { return Set.copyOf(room.members.keySet()); }
+            finally { room.lock.unlock(); }
+        } finally { registryLock.unlock(); }
+    }
+
+    public IdleGuard markRoomDisconnected(UUID roomId, Instant now) {
+        registryLock.lock();
+        try {
+            PokerRoom room = rooms.get(new RoomId(roomId));
+            if (room == null) return new IdleGuard(0, now);
+            room.lock.lock();
+            try {
+                if (room.allDisconnectedSince == null) {
+                    room.allDisconnectedSince = now;
+                    room.presenceGeneration = incrementExact(room.presenceGeneration, "presence generation");
+                }
+                return new IdleGuard(room.presenceGeneration, room.allDisconnectedSince);
+            } finally { room.lock.unlock(); }
+        } finally { registryLock.unlock(); }
+    }
+
+    public void markRoomConnected(UUID roomId) {
+        registryLock.lock();
+        try {
+            PokerRoom room = rooms.get(new RoomId(roomId));
+            if (room == null) return;
+            room.lock.lock();
+            try {
+                if (room.allDisconnectedSince != null) {
+                    room.allDisconnectedSince = null;
+                    room.idleExpiryPending = false;
+                    room.presenceGeneration = incrementExact(room.presenceGeneration, "presence generation");
+                }
+            } finally { room.lock.unlock(); }
+        } finally { registryLock.unlock(); }
+    }
+
+    public boolean idleGuardCurrent(
+            UUID rawRoomId,
+            long generation,
+            Instant due,
+            java.time.Duration grace) {
+        RoomId roomId = new RoomId(rawRoomId);
+        registryLock.lock();
+        try {
+            PokerRoom room = rooms.get(roomId);
+            if (room == null) return false;
+            room.lock.lock();
+            try {
+                return room.presenceGeneration == generation
+                        && room.allDisconnectedSince != null
+                        && room.allDisconnectedSince.plus(grace).equals(due);
+            } finally {
+                room.lock.unlock();
+            }
+        } finally {
+            registryLock.unlock();
+        }
+    }
+
+    public Optional<RoomChange> expireIdleRoom(UUID rawRoomId, long generation, Instant due,
+                                                Instant now, java.time.Duration grace) {
+        RoomId roomId = new RoomId(rawRoomId);
+        registryLock.lock();
+        try {
+            PokerRoom room = rooms.get(roomId);
+            if (room == null) return Optional.empty();
+            room.lock.lock();
+            try {
+                if (room.presenceGeneration != generation || room.allDisconnectedSince == null
+                        || !room.allDisconnectedSince.plus(grace).equals(due)
+                        || now.isBefore(due) || now.isBefore(room.allDisconnectedSince.plus(grace))) {
+                    return Optional.empty();
+                }
+                GameState game = room.game.snapshot();
+                if (game.tableStatus() == TableStatus.PAUSED
+                        && (game.pausedSince() == null
+                                || now.isBefore(game.pausedSince().plusSeconds(300)))) {
+                    room.idleExpiryPending = true;
+                    return Optional.empty();
+                }
+                if (!game.safeBoundary() && game.tableStatus() != TableStatus.FAILED
+                        && game.tableStatus() != TableStatus.PAUSED) {
+                    room.idleExpiryPending = true;
+                    return Optional.empty();
+                }
+                Set<UUID> removed = Set.copyOf(room.members.keySet());
+                Map<UUID, Long> epochs = new HashMap<>();
+                for (UUID user : removed) { roomsByUser.remove(user); incrementEpoch(user); epochs.put(user, epoch(user)); }
+                room.closed = true;
+                rooms.remove(roomId); roomsByCode.remove(room.joinCode); lobbyRooms.remove(roomId);
+                incrementLobbyRevision();
+                return Optional.of(new RoomChange(RoomChange.Kind.IDLE_CLOSED, rawRoomId, null,
+                        lobbyStateLocked(), removed, epochs, null, 0, room.revision, lobbyRevision));
+            } finally { room.lock.unlock(); }
+        } finally { registryLock.unlock(); }
+    }
+
+    public record IdleGuard(long generation, Instant since) {}
+
+    private RoomChange seatMutation(UUID userId, UUID roomId, int seat, long requestedBuyIn) {
         Objects.requireNonNull(userId, "userId");
         Objects.requireNonNull(roomId, "roomId");
         registryLock.lock();
         try {
             PokerRoom room = requiredMemberRoom(userId, roomId);
+            long buyIn = requestedBuyIn == 0 ? room.config.minBuyIn() : requestedBuyIn;
+            room.config.validateBuyIn(buyIn);
             if (seat < 0 || seat >= room.maxSeats) {
                 throw new RoomException(RoomError.SEAT_OUT_OF_RANGE);
             }
@@ -400,6 +665,9 @@ public final class RoomManager {
                 PokerRoom.Member member = room.member(userId);
                 if (member.seat != null) {
                     if (member.seat == seat) {
+                        if (!room.game.matchesSeatRequest(seat, userId, buyIn)) {
+                            throw new RoomException(RoomError.ALREADY_SEATED);
+                        }
                         return change(
                                 RoomChange.Kind.SEAT_TAKEN,
                                 room,
@@ -414,6 +682,7 @@ public final class RoomManager {
                 if (occupant != null) {
                     throw new RoomException(RoomError.SEAT_OCCUPIED);
                 }
+                room.game.seat(seat, userId, buyIn);
                 room.seats[seat] = userId;
                 member.seat = seat;
                 incrementRoomRevision(room);

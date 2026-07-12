@@ -1,6 +1,7 @@
 package com.poker.ws;
 
 import com.poker.room.RoomException;
+import com.poker.room.RoomConfig;
 import com.poker.room.application.RoomCommandResult;
 import com.poker.room.application.RoomCommandService;
 import com.poker.ws.protocol.CommandAck;
@@ -25,6 +26,7 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.stereotype.Controller;
 import org.springframework.validation.annotation.Validated;
+import com.poker.hardening.AdmittedCommand;
 
 @Controller
 @Validated
@@ -39,6 +41,7 @@ public class RoomMessageController {
     }
 
     @MessageMapping("/state.sync")
+    @AdmittedCommand(value = CommandType.STATE_SYNC, control = true)
     @SendToUser(destinations = "/queue/acks", broadcast = false)
     public CommandAck stateSync(
             @Valid @Payload CommandEnvelope<SyncStateRequest> envelope,
@@ -55,17 +58,25 @@ public class RoomMessageController {
     }
 
     @MessageMapping("/room.create")
+    @AdmittedCommand(CommandType.ROOM_CREATE)
     @SendToUser(destinations = "/queue/acks", broadcast = false)
     public CommandAck create(
             @Valid @Payload CommandEnvelope<CreateRoomRequest> envelope,
             Principal principal) {
         return execute(envelope.requestId(), CommandType.ROOM_CREATE, principal, user -> {
-            RoomCommandResult result = service.create(user.profile(), envelope.payload().name(), envelope.payload().maxSeats());
+            CreateRoomRequest p = envelope.payload();
+            boolean defaultConfig = p.smallBlind() == 0 && p.bigBlind() == 0
+                    && p.minBuyIn() == 0 && p.maxBuyIn() == 0
+                    && p.actionTimeoutSeconds() == 0;
+            RoomConfig config = defaultConfig ? RoomConfig.DEFAULT : new RoomConfig(
+                    p.smallBlind(), p.bigBlind(), p.minBuyIn(), p.maxBuyIn(), p.actionTimeoutSeconds());
+            RoomCommandResult result = service.create(user.profile(), p.name(), p.maxSeats(), config);
             return ack(envelope.requestId(), CommandType.ROOM_CREATE, result);
         });
     }
 
     @MessageMapping("/room.join")
+    @AdmittedCommand(CommandType.ROOM_JOIN)
     @SendToUser(destinations = "/queue/acks", broadcast = false)
     public CommandAck join(
             @Valid @Payload CommandEnvelope<JoinRoomRequest> envelope,
@@ -77,6 +88,7 @@ public class RoomMessageController {
     }
 
     @MessageMapping("/room.leave")
+    @AdmittedCommand(value = CommandType.ROOM_LEAVE, control = true)
     @SendToUser(destinations = "/queue/acks", broadcast = false)
     public CommandAck leave(
             @Valid @Payload CommandEnvelope<LeaveRoomRequest> envelope,
@@ -88,6 +100,7 @@ public class RoomMessageController {
     }
 
     @MessageMapping("/room.sync")
+    @AdmittedCommand(value = CommandType.ROOM_SYNC, control = true)
     @SendToUser(destinations = "/queue/acks", broadcast = false)
     public CommandAck roomSync(
             @Valid @Payload CommandEnvelope<SyncRoomRequest> envelope,
@@ -99,18 +112,20 @@ public class RoomMessageController {
     }
 
     @MessageMapping("/room.take-seat")
+    @AdmittedCommand(CommandType.ROOM_TAKE_SEAT)
     @SendToUser(destinations = "/queue/acks", broadcast = false)
     public CommandAck takeSeat(
             @Valid @Payload CommandEnvelope<TakeSeatRequest> envelope,
             Principal principal) {
         return execute(envelope.requestId(), CommandType.ROOM_TAKE_SEAT, principal, user -> {
             RoomCommandResult result = service.takeSeat(
-                    user.userId(), envelope.payload().roomId(), envelope.payload().seat());
+                    user.userId(), envelope.payload().roomId(), envelope.payload().seat(), envelope.payload().buyIn());
             return ack(envelope.requestId(), CommandType.ROOM_TAKE_SEAT, result);
         });
     }
 
     @MessageMapping("/room.stand")
+    @AdmittedCommand(CommandType.ROOM_STAND)
     @SendToUser(destinations = "/queue/acks", broadcast = false)
     public CommandAck stand(
             @Valid @Payload CommandEnvelope<StandRequest> envelope,
@@ -159,7 +174,9 @@ public class RoomMessageController {
             case ALREADY_SEATED -> ErrorCode.ALREADY_SEATED;
             case NOT_SEATED -> ErrorCode.NOT_SEATED;
             case JOIN_CODE_EXHAUSTED -> ErrorCode.JOIN_CODE_EXHAUSTED;
-            case INVALID_ROOM_NAME, INVALID_MAX_SEATS, INVALID_JOIN_CODE -> ErrorCode.INVALID_REQUEST;
+            case INVALID_BUY_IN -> ErrorCode.INVALID_BUY_IN;
+            case HAND_IN_PROGRESS -> ErrorCode.HAND_IN_PROGRESS;
+            case INVALID_ROOM_NAME, INVALID_MAX_SEATS, INVALID_JOIN_CODE, INVALID_ROOM_CONFIG -> ErrorCode.INVALID_REQUEST;
             case INTERNAL_ERROR -> ErrorCode.INTERNAL_ERROR;
         };
     }

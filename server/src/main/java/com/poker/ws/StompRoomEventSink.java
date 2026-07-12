@@ -60,7 +60,20 @@ public final class StompRoomEventSink implements RoomEventSink {
                 failures.add("ROOM_EXIT");
             }
         }
-        if (change.kind() != RoomChange.Kind.ROOM_SYNC && change.roomRevision() > 0) {
+        if (change.kind() == RoomChange.Kind.IDLE_CLOSED && change.roomId() != null) {
+            for (UUID recipient : change.recipients()) {
+                attempted++;
+                try {
+                    RoomExitNotice notice = mapper.idleExit(change.roomId(),
+                            change.membershipEpochs().getOrDefault(recipient, 0L), clock.instant());
+                    messaging.convertAndSendToUser(recipient.toString(), "/queue/room-events", notice);
+                } catch (RuntimeException ex) {
+                    failures.add("ROOM_IDLE_EXIT");
+                }
+            }
+        }
+        if (change.kind() != RoomChange.Kind.ROOM_SYNC && change.kind() != RoomChange.Kind.GAME_CHANGED
+                && change.roomRevision() > 0) {
             attempted++;
             try {
                 LobbySnapshot lobby = mapper.lobby(change.lobby());

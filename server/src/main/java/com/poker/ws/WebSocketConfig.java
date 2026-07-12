@@ -20,20 +20,27 @@ public class WebSocketConfig extends AbstractSessionWebSocketMessageBrokerConfig
     private final PokerWebSocketProperties properties;
     private final MappingJackson2MessageConverter stompMessageConverter;
     private final ActiveWebSocketSessionInterceptor activeSessionInterceptor;
+    private final com.poker.hardening.InboundFrameBudgetInterceptor frameBudgetInterceptor;
+    private final org.springframework.scheduling.TaskScheduler brokerTaskScheduler;
 
     public WebSocketConfig(
             PokerWebSocketProperties properties,
             MappingJackson2MessageConverter stompMessageConverter,
-            ActiveWebSocketSessionInterceptor activeSessionInterceptor) {
+            ActiveWebSocketSessionInterceptor activeSessionInterceptor,
+            com.poker.hardening.InboundFrameBudgetInterceptor frameBudgetInterceptor,
+            @org.springframework.beans.factory.annotation.Qualifier("gameplayTaskScheduler")
+            org.springframework.scheduling.TaskScheduler brokerTaskScheduler) {
         this.properties = properties;
         this.stompMessageConverter = stompMessageConverter;
         this.activeSessionInterceptor = activeSessionInterceptor;
+        this.frameBudgetInterceptor = frameBudgetInterceptor;
+        this.brokerTaskScheduler = brokerTaskScheduler;
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         super.configureClientInboundChannel(registration);
-        registration.interceptors(activeSessionInterceptor);
+        registration.interceptors(activeSessionInterceptor, frameBudgetInterceptor);
     }
 
     @Override
@@ -44,7 +51,9 @@ public class WebSocketConfig extends AbstractSessionWebSocketMessageBrokerConfig
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic", "/queue");
+        registry.enableSimpleBroker("/topic", "/queue")
+                .setHeartbeatValue(new long[] {10_000, 10_000})
+                .setTaskScheduler(brokerTaskScheduler);
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
     }

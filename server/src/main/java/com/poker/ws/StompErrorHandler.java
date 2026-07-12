@@ -58,6 +58,10 @@ public class StompErrorHandler {
             case "/app/room.sync" -> CommandType.ROOM_SYNC;
             case "/app/room.take-seat" -> CommandType.ROOM_TAKE_SEAT;
             case "/app/room.stand" -> CommandType.ROOM_STAND;
+            case "/app/game.act" -> CommandType.GAME_ACT;
+            case "/app/game.sit-out" -> CommandType.GAME_SIT_OUT;
+            case "/app/game.sit-in" -> CommandType.GAME_SIT_IN;
+            case "/app/game.rebuy" -> CommandType.GAME_REBUY;
             default -> CommandType.STATE_SYNC;
         };
     }

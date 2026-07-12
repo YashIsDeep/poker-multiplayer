@@ -14,8 +14,9 @@ public record RoomSnapshot(
         Instant serverNow,
         List<RoomMemberView> members,
         List<SeatView> seats,
+        RoomConfigView config,
         ViewerRoomState viewer,
-        Object game) {
+        GameView game) {
     public RoomSnapshot {
         members = List.copyOf(members);
         seats = List.copyOf(seats);

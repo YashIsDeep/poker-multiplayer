@@ -9,6 +9,7 @@ import com.poker.ws.protocol.LobbySnapshot;
 import com.poker.ws.protocol.RoomExitNotice;
 import com.poker.ws.protocol.RoomMemberView;
 import com.poker.ws.protocol.RoomSnapshot;
+import com.poker.ws.protocol.RoomConfigView;
 import com.poker.ws.protocol.SeatView;
 import com.poker.ws.protocol.StateSyncView;
 import com.poker.ws.protocol.ViewerRoomState;
@@ -22,6 +23,13 @@ import org.springframework.stereotype.Component;
 /** Allow-list mapper from immutable room projections to wire DTOs. */
 @Component
 public final class RoomSnapshotMapper {
+    private final GameSnapshotRedactor gameRedactor;
+
+    public RoomSnapshotMapper(GameSnapshotRedactor gameRedactor) {
+        this.gameRedactor = Objects.requireNonNull(gameRedactor, "gameRedactor");
+    }
+
+    public RoomSnapshotMapper() { this(new GameSnapshotRedactor()); }
     public LobbySnapshot lobby(LobbyState state) {
         Objects.requireNonNull(state, "state");
         List<LobbyRoomView> rooms = state.rooms().stream().map(this::lobbyRoom).toList();
@@ -59,8 +67,14 @@ public final class RoomSnapshotMapper {
                 now,
                 members,
                 seats,
+                new RoomConfigView(
+                        state.config().smallBlind(),
+                        state.config().bigBlind(),
+                        state.config().minBuyIn(),
+                        state.config().maxBuyIn(),
+                        state.config().actionTimeoutSeconds()),
                 viewerState,
-                null);
+                gameRedactor.redact(state, viewerId));
     }
 
     public StateSyncView stateSync(LobbyState lobby, RoomState room, UUID viewerId, long membershipEpoch) {
@@ -72,6 +86,10 @@ public final class RoomSnapshotMapper {
 
     public RoomExitNotice exit(UUID roomId, long membershipEpoch, Instant now) {
         return new RoomExitNotice(roomId, RoomExitNotice.ExitReason.LEFT, membershipEpoch, now);
+    }
+
+    public RoomExitNotice idleExit(UUID roomId, long membershipEpoch, Instant now) {
+        return new RoomExitNotice(roomId, RoomExitNotice.ExitReason.IDLE_TIMEOUT, membershipEpoch, now);
     }
 
     private LobbyRoomView lobbyRoom(LobbyRoomState room) {

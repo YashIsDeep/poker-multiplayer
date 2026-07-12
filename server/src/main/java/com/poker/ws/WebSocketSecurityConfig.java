@@ -25,7 +25,11 @@ public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBro
                         "/app/room.leave",
                         "/app/room.sync",
                         "/app/room.take-seat",
-                        "/app/room.stand").authenticated()
+                        "/app/room.stand",
+                        "/app/game.act",
+                        "/app/game.sit-out",
+                        "/app/game.sit-in",
+                        "/app/game.rebuy").authenticated()
                 .simpSubscribeDestMatchers(
                         "/topic/lobby",
                         "/user/queue/acks",

@@ -2,6 +2,7 @@ package com.poker.ws;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.poker.room.MemberProfile;
 import com.poker.room.RoomManager;
@@ -15,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 class RoomSnapshotMapperTest {
     @Test
-    void mapsOnlyViewerSpecificStateAndKeepsGameReserved() {
+    void mapsViewerSpecificRoomAndWaitingGameState() {
         RoomManager manager = new RoomManager(
                 Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
                 new JoinCodeGenerator(() -> new com.poker.room.JoinCode("ABC234")));
@@ -33,9 +34,14 @@ class RoomSnapshotMapperTest {
         assertEquals(bob.userId(), bobView.viewer().userId());
         assertEquals(0, aliceView.viewer().seat());
         assertNull(bobView.viewer().seat());
-        assertNull(aliceView.game());
+        assertNotNull(aliceView.game());
+        assertEquals("WAITING", aliceView.game().tableStatus());
+        assertEquals(0, aliceView.game().handId());
+        assertNull(aliceView.game().phase());
         assertEquals(room.maxSeats(), aliceView.seats().size());
         assertEquals(alice.userId(), aliceView.seats().get(0).userId());
+        assertEquals(room.config().minBuyIn(), aliceView.config().minBuyIn());
+        assertEquals(room.config().maxBuyIn(), aliceView.config().maxBuyIn());
     }
 
     private static MemberProfile profile(String name) {

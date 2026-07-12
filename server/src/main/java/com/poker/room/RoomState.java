@@ -17,7 +17,15 @@ public record RoomState(
         Instant createdAt,
         long revision,
         List<MemberState> members,
-        List<UUID> seats) {
+        List<UUID> seats,
+        RoomConfig config,
+        GameState game) {
+    public RoomState(RoomId id, JoinCode joinCode, String name, int maxSeats, Instant createdAt,
+                     long revision, List<MemberState> members, List<UUID> seats) {
+        this(id, joinCode, name, maxSeats, createdAt, revision, members, seats, RoomConfig.DEFAULT,
+                new GameState(TableStatus.WAITING, 0, 0, null, null, null,
+                        List.of(), java.util.Map.of(), 1, 1, null, null, true));
+    }
     public RoomState {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(joinCode, "joinCode");
@@ -25,6 +33,8 @@ public record RoomState(
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(members, "members");
         Objects.requireNonNull(seats, "seats");
+        Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(game, "game");
         if (maxSeats < 2 || maxSeats > 9 || revision <= 0 || members.isEmpty()
                 || members.size() > maxSeats || seats.size() != maxSeats) {
             throw new IllegalArgumentException("invalid room projection");

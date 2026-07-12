@@ -25,6 +25,8 @@ public record RoomChange(
         ROOM_SYNC,
         SEAT_TAKEN,
         STOOD,
+        GAME_CHANGED,
+        IDLE_CLOSED,
         STATE_SYNC
     }
 
