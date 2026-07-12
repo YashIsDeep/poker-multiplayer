@@ -1,0 +1,16 @@
+package com.poker.ws.protocol;
+
+public enum ErrorCode {
+    INVALID_REQUEST,
+    UNAUTHENTICATED,
+    ROOM_NOT_FOUND,
+    ROOM_FULL,
+    ALREADY_IN_ANOTHER_ROOM,
+    NOT_A_ROOM_MEMBER,
+    SEAT_OUT_OF_RANGE,
+    SEAT_OCCUPIED,
+    ALREADY_SEATED,
+    NOT_SEATED,
+    JOIN_CODE_EXHAUSTED,
+    INTERNAL_ERROR
+}

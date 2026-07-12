@@ -1,12 +1,12 @@
 package com.poker.auth;
 
+import com.poker.ws.WebSocketSessionLogoutHandler;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -20,6 +20,9 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 
 @Configuration
 @EnableWebSecurity
@@ -50,6 +53,14 @@ public class SecurityConfig {
     }
 
     @Bean
+    CsrfTokenRepository csrfTokenRepository() {
+        HttpSessionCsrfTokenRepository repository = new HttpSessionCsrfTokenRepository();
+        repository.setHeaderName("X-XSRF-TOKEN");
+        repository.setParameterName("_csrf");
+        return repository;
+    }
+
+    @Bean
     OAuthLoginSuccessHandler oauthLoginSuccessHandler(
             SecurityContextRepository securityContextRepository,
             SessionAuthenticationStrategy sessionAuthenticationStrategy) {
@@ -65,11 +76,15 @@ public class SecurityConfig {
             GoogleOidcUserService googleOidcUserService,
             DiscordOAuth2UserService discordOAuth2UserService,
             OAuthLoginSuccessHandler oauthLoginSuccessHandler,
-            DiscardingAuthorizedClientRepository authorizedClientRepository) throws Exception {
+            DiscardingAuthorizedClientRepository authorizedClientRepository,
+            CsrfTokenRepository csrfTokenRepository,
+            WebSocketSessionLogoutHandler webSocketSessionLogoutHandler) throws Exception {
         http
-                // CSRF protection stays at Spring Security defaults; the token
-                // repository decision for the SPA is deferred to T5.
-                .csrf(Customizer.withDefaults())
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokenRepository)
+                        // The JSON endpoint supplies one raw session token for
+                        // both HTTP headers and the STOMP CONNECT header.
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .securityContext(context -> context
                         .securityContextRepository(securityContextRepository)
                         .requireExplicitSave(true))
@@ -90,6 +105,7 @@ public class SecurityConfig {
                                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                                 WEBSOCKET_REQUEST))
                 .logout(logout -> logout
+                        .addLogoutHandler(webSocketSessionLogoutHandler)
                         .clearAuthentication(true)
                         .invalidateHttpSession(true)
                         .deleteCookies("SESSION")

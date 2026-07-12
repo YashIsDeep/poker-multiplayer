@@ -24,3 +24,13 @@ server:
         http-only: true
         same-site: lax
         secure: ${SESSION_COOKIE_SECURE:false}
+
+poker:
+  websocket:
+    allowed-origins:
+      - http://127.0.0.1:5173
+      - http://localhost:5173
+    max-message-size: 16384
+    send-buffer-size: 262144
+    send-time-limit: 10000
+    time-to-first-message: 10000
