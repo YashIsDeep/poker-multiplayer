@@ -1,5 +1,4 @@
-# NOTE: this file SHADOWS the main application.yml on the test classpath —
-# keep every property tests rely on defined here.
+# This file shadows the main application.yml on the test classpath.
 spring:
   datasource:
     url: jdbc:h2:mem:test;DB_CLOSE_DELAY=-1
@@ -8,11 +7,12 @@ spring:
     password: ""
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 0
   session:
     jdbc:
       initialize-schema: always
-
-poker:
-  dev-login: false
+    timeout: 30d

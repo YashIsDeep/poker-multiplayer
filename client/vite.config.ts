@@ -11,12 +11,12 @@ export default defineConfig({
     host: '127.0.0.1',
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/auth': 'http://localhost:8080',
-      '/oauth2': 'http://localhost:8080',
-      '/login': 'http://localhost:8080',
-      '/logout': 'http://localhost:8080',
-      '/ws': { target: 'http://localhost:8080', ws: true },
+      '/api': 'http://127.0.0.1:8080',
+      '/auth': 'http://127.0.0.1:8080',
+      '/oauth2': 'http://127.0.0.1:8080',
+      '/login': 'http://127.0.0.1:8080',
+      '/logout': 'http://127.0.0.1:8080',
+      '/ws': { target: 'http://127.0.0.1:8080', ws: true },
     },
   },
 })

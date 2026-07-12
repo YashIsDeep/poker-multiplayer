@@ -30,6 +30,15 @@ client/   Vite + React app
 
 ## OAuth setup
 
-Documented when auth lands (P3): you'll register a Google OAuth client + Discord application with redirect URIs
-`http://localhost:5173/login/oauth2/code/google` and `http://localhost:5173/login/oauth2/code/discord`.
-Local development uses a dev-only login (`/auth/dev?u=name`, `dev` profile) so multiplayer can be tested without real accounts.
+Register a Google OAuth client and Discord application with these redirect URIs:
+
+`http://localhost:5173/login/oauth2/code/google`
+
+`http://localhost:5173/login/oauth2/code/discord`
+
+The `oauth` profile reads `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`DISCORD_CLIENT_ID`, and `DISCORD_CLIENT_SECRET` from the environment. Start it
+with `spring-boot.run.profiles=oauth` (or `dev,oauth`) and never commit the
+secrets. Local development uses the loopback-only dev login
+(`/auth/dev?u=name`, `dev` profile) so multiplayer can be tested without real
+accounts; the dev route is intentionally absent outside that profile.

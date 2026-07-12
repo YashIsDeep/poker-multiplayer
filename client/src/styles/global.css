@@ -80,6 +80,62 @@ main {
   box-shadow: 0 1px 0 var(--blue-deep);
 }
 
+.btn-green {
+  background: var(--green);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--green) 65%, black);
+}
+
+.btn:active.btn-green {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--green) 65%, black);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.guest-form {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: center;
+}
+
+.guest-input {
+  padding: 12px 16px;
+  font-family: inherit;
+  font-size: 20px;
+  color: var(--text);
+  background: var(--panel);
+  border: 2px solid var(--panel-edge);
+  border-radius: var(--radius-panel);
+  outline: none;
+  width: 240px;
+}
+
+.guest-input:focus {
+  border-color: var(--gold);
+}
+
+.guest-input::placeholder {
+  color: var(--text-dim);
+}
+
+.btn-plain {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--text-dim);
+  cursor: pointer;
+  text-shadow: var(--outline-text);
+}
+
+.btn-plain:hover {
+  color: var(--text);
+}
+
 .server-status {
   position: fixed;
   bottom: 12px;
