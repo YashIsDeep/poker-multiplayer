@@ -1,0 +1,36 @@
+/* Balatro-inspired palette — eyedropper-tuned, adjust freely */
+:root {
+  --bg: #1a2332;
+  --swirl-1: #2b4b6f;
+  --swirl-2: #16283c;
+
+  --panel: #33404f;
+  --panel-edge: #4a5a6b;
+
+  --red: #ff4c40;
+  --red-deep: #c93a30;
+  --blue: #2e9dfa;
+  --blue-deep: #1e6fc0;
+  --orange: #ff9d2e;
+  --gold: #f2c14e;
+  --green: #4bc292;
+
+  --text: #f4f4f4;
+  --text-dim: #9aa7b4;
+
+  --card-face: #f8f5f0;
+  --suit-red: #ff4c40;
+  --suit-dark: #2e3444;
+
+  /* Drop m6x11.ttf (managore.itch.io/m6x11, Balatro's font) into src/assets
+     and add an @font-face named 'm6x11' to switch the whole app over. */
+  --font-pixel: 'm6x11', 'Pixelify Sans', monospace;
+
+  --radius-panel: 12px;
+  --radius-card: 8px;
+  --outline-text:
+    -1px -1px 0 rgba(0, 0, 0, 0.55),
+    1px -1px 0 rgba(0, 0, 0, 0.55),
+    -1px 1px 0 rgba(0, 0, 0, 0.55),
+    2px 2px 0 rgba(0, 0, 0, 0.55);
+}

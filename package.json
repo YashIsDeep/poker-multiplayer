@@ -1,0 +1,13 @@
+{
+  "name": "poker-multiplayer",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && .\\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev",
+    "dev:client": "cd client && npm run dev",
+    "test": "cd server && .\\mvnw.cmd -B -ntp test"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

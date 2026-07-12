@@ -1,0 +1,18 @@
+# NOTE: this file SHADOWS the main application.yml on the test classpath —
+# keep every property tests rely on defined here.
+spring:
+  datasource:
+    url: jdbc:h2:mem:test;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  session:
+    jdbc:
+      initialize-schema: always
+
+poker:
+  dev-login: false

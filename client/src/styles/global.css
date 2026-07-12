@@ -1,0 +1,88 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-pixel);
+  -webkit-font-smoothing: none;
+  text-shadow: var(--outline-text);
+}
+
+main {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+}
+
+.logo {
+  font-size: clamp(56px, 12vw, 120px);
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+
+.tagline {
+  color: var(--text-dim);
+  font-size: 20px;
+}
+
+.landing-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.btn {
+  display: inline-block;
+  padding: 12px 24px;
+  font-family: inherit;
+  font-size: 20px;
+  color: var(--text);
+  text-decoration: none;
+  border: none;
+  border-radius: var(--radius-panel);
+  cursor: pointer;
+  transition: transform 60ms ease;
+}
+
+.btn:active {
+  transform: translateY(3px);
+}
+
+.btn-red {
+  background: var(--red);
+  box-shadow: 0 4px 0 var(--red-deep);
+}
+
+.btn-blue {
+  background: var(--blue);
+  box-shadow: 0 4px 0 var(--blue-deep);
+}
+
+.btn:active.btn-red {
+  box-shadow: 0 1px 0 var(--red-deep);
+}
+
+.btn:active.btn-blue {
+  box-shadow: 0 1px 0 var(--blue-deep);
+}
+
+.server-status {
+  position: fixed;
+  bottom: 12px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
