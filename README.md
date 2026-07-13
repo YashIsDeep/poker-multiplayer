@@ -19,8 +19,31 @@ npm run dev
 
 Client: http://127.0.0.1:5173 (proxies `/api`, `/auth`, `/oauth2`, `/login`, `/logout`, `/ws` to the server on :8080).
 
-Copy `.env.example` to `.env` and populate the four OAuth credentials before
-starting. The root commands load `.env` automatically.
+Development uses a standalone local H2 server on `127.0.0.1:9092`. `npm run
+dev` starts it automatically. If it is already running, the command asks before
+restarting it and otherwise reuses the running database. You can also manage it
+directly:
+
+```
+npm run start:db
+npm run stop:db
+npm run restart:db
+```
+
+Copy `.env.example` to `.env`. Populate all four OAuth credentials to test
+Google and Discord login, or leave all four blank to run locally with only the
+development login. The root commands load `.env` automatically; a partially
+filled OAuth configuration is rejected with the missing variable names.
+
+To delete the local H2 database and start fresh, stop the application and the
+database, then run:
+
+```
+npm run stop:db
+npm run reset:db
+```
+
+Flyway recreates the schema the next time the server starts.
 
 ## Run (production)
 

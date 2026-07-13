@@ -1,6 +1,8 @@
 spring:
   datasource:
-    url: jdbc:h2:file:./data/poker
+    # Allow local app restarts and database tools to share the file through
+    # H2's automatic mixed mode instead of competing for an exclusive lock.
+    url: jdbc:h2:file:./data/poker;AUTO_SERVER=TRUE
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
