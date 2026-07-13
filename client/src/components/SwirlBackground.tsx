@@ -76,10 +76,11 @@ export default function SwirlBackground() {
     const uR = gl.getUniformLocation(program, 'r')
 
     const resize = () => {
-      // Undersample at 0.66× (capped DPR): the swirl is soft, fill rate drops ~56%.
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.25)
-      canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr * 0.66))
-      canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr * 0.66))
+      // Render at native density (DPR capped at 2 for very-hi-DPI fill-rate sanity).
+      // Previously undersampled at 0.66×/1.25 DPR, which read as blocky on retina.
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr))
+      canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr))
       gl.viewport(0, 0, canvas.width, canvas.height)
     }
     resize()

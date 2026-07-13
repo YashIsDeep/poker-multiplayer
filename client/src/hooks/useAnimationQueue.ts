@@ -22,7 +22,7 @@ const CLEAR_AFTER_MS = 900 // longest entrance (delay + duration) rounded up
 
 function potTotal(game: Game | null): number {
   if (!game) return 0
-  return game.pots.reduce((total, pot) => total + pot.amount, 0)
+  return game.potTotal
 }
 
 export type AnimationDiff = {

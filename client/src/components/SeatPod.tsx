@@ -1,9 +1,10 @@
-// One seat pod on the felt: name / stack / last action, badges (dealer, all-in,
-// sitting out, busted, offline), hole cards above, timer ring when acting.
+// One seat pod on the felt: name / stack / actions, position chips (dealer/SB/BB),
+// status badges, hole cards above, and the timer ring when acting.
 
 import PixelCard from './PixelCard'
 import TimerRing from './TimerRing'
-import type { GameSeat, RoomMemberView } from '../store/types'
+import type { GameSeat, LastAction, RoomMemberView } from '../store/types'
+import { formatChips, formatChipsFull } from '../lib/chips'
 
 export type SeatPodProps = {
   seat: number
@@ -13,6 +14,8 @@ export type SeatPodProps = {
   isActor: boolean
   isWinner: boolean
   isDealer: boolean
+  isSmallBlind: boolean
+  isBigBlind: boolean
   showdown: boolean
   deadline: number | null
   budgetMs: number
@@ -22,23 +25,33 @@ export type SeatPodProps = {
   dealDelayMs?: number
 }
 
-function lastActionLabel(gameSeat: GameSeat | null): string {
-  const last = gameSeat?.lastAction
-  if (!last) return ''
-  const verb = last.action.replaceAll('_', ' ').toLowerCase()
-  return last.amount !== null && last.amount > 0
-    ? `${verb} ${last.amount.toLocaleString()}`
+function actionLabel(action: LastAction): string {
+  const verb = action.action === 'RAISE_TO' ? 'raise' : action.action.toLowerCase()
+  return action.amount !== null && action.amount > 0
+    ? `${verb} ${formatChips(action.amount)}`
     : verb
 }
 
 export default function SeatPod(props: SeatPodProps) {
-  const { seat, member, gameSeat, isYou, isActor, isWinner, isDealer, showdown } = props
+  const {
+    seat,
+    member,
+    gameSeat,
+    isYou,
+    isActor,
+    isWinner,
+    isDealer,
+    isSmallBlind,
+    isBigBlind,
+    showdown,
+  } = props
 
   if (!member) {
     return (
       <div className="seat empty" data-seat={seat}>
         <button
           className="pod pod-empty"
+          data-sound="seat"
           disabled={!props.canTakeSeat}
           onClick={() => props.onTakeSeat(seat)}
           aria-label={`Take seat ${seat + 1}`}
@@ -56,6 +69,11 @@ export default function SeatPod(props: SeatPodProps) {
   const busted = status === 'BUSTED'
   const allin = status === 'ALL_IN'
   const offline = member.connected === false
+  const roundActions = gameSeat?.actions?.length
+    ? gameSeat.actions
+    : gameSeat?.lastAction
+      ? [gameSeat.lastAction]
+      : []
 
   const seatClasses = [
     'seat',
@@ -96,23 +114,53 @@ export default function SeatPod(props: SeatPodProps) {
         <div className="badge-row">
           {allin && <span className="badge allin">All-in</span>}
           {sitout && <span className="badge sitout-b">Sitting out</span>}
-          {busted && <span className="badge sitout-b">Busted</span>}
+          {busted && (
+            <span className="badge sitout-b">
+              Busted{(gameSeat?.rebuyRoundsRemaining ?? 0) > 0 ? ` · ${gameSeat?.rebuyRoundsRemaining}R` : ''}
+            </span>
+          )}
           {offline && <span className="badge offline-b">Offline</span>}
         </div>
-        {isDealer && <span className="badge dealer">D</span>}
+        {(isDealer || isSmallBlind || isBigBlind) && (
+          <div className="position-chip-row" aria-label="Table positions">
+            {isDealer && <span className="badge position-chip dealer" aria-label="Dealer button">D</span>}
+            {isSmallBlind && <span className="badge position-chip small-blind" aria-label="Small blind">SB</span>}
+            {isBigBlind && <span className="badge position-chip big-blind" aria-label="Big blind">BB</span>}
+          </div>
+        )}
         {isActor && props.deadline !== null && (
           <TimerRing deadline={props.deadline} budgetMs={props.budgetMs} />
         )}
-        <div className="pname">
-          {member.displayName.toUpperCase()}
-          {isYou ? ' (YOU)' : ''}
+        <div className="pidentity">
+          {gameSeat?.position && <span className="position-label">{gameSeat.position}</span>}
+          <span className="pname">
+            {member.displayName.toUpperCase()}
+            {isYou ? ' (YOU)' : ''}
+          </span>
+          {member.admin && (
+            <span className="admin-shield" title="Table admin" aria-label="Table admin">A</span>
+          )}
         </div>
-        <div className="pstack num">
-          {gameSeat ? (allin ? 'ALL-IN' : gameSeat.stack.toLocaleString()) : '—'}
+        {gameSeat?.rebought && (
+          <div className="rebought-label" title="This player has rebought" aria-label="Player has rebought">
+            ↻ REBOUGHT
+          </div>
+        )}
+        <div
+          className="pstack num"
+          title={gameSeat ? `${formatChipsFull(gameSeat.stack)} chips` : undefined}
+        >
+          {gameSeat ? (allin ? 'ALL-IN' : formatChips(gameSeat.stack)) : '—'}
         </div>
-        <div className="plast">
-          {showdown && gameSeat?.finalHandRank ? gameSeat.finalHandRank : lastActionLabel(gameSeat)}
+        <div className="pactions" aria-label="Actions this betting round">
+          {roundActions.map((action, index) => (
+            <span key={`${index}-${action.action}-${action.amount ?? ''}`}>
+              {index > 0 && <span className="action-separator"> · </span>}
+              {actionLabel(action)}
+            </span>
+          ))}
         </div>
+        {showdown && gameSeat?.finalHandRank && <div className="prank">{gameSeat.finalHandRank}</div>}
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 // Deadline countdown driven by the EMA-corrected server clock (T7).
 // Ticks every 100ms while a deadline is set; returns seconds remaining and the
-// fraction of the budget left (for the timer ring).
+// fraction of the budget left (for the turn timer meter).
 
 import { useEffect, useState } from 'react'
 import { serverNow } from '../store/gameStore'

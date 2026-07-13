@@ -22,6 +22,7 @@ function baseRoom(seatCount: number): Omit<RoomSnapshot, 'game'> {
     seat: i,
     connected: true,
     disconnectedSince: null,
+    admin: i === 0,
   }))
   const seats: SeatView[] = members.map((m, i) => ({ seat: i, userId: m.userId }))
   return {
@@ -29,6 +30,8 @@ function baseRoom(seatCount: number): Omit<RoomSnapshot, 'game'> {
     joinCode: 'MOCK01',
     name: 'Mock Table',
     maxSeats: seatCount,
+    privateTable: true,
+    canEditSettings: true,
     membershipEpoch: 1,
     revision: revision++,
     serverNow: new Date().toISOString(),
@@ -41,6 +44,9 @@ function baseRoom(seatCount: number): Omit<RoomSnapshot, 'game'> {
       minBuyIn: 200,
       maxBuyIn: 2000,
       actionTimeoutSeconds: 30,
+      startingStack: 200,
+      rebuysEnabled: true,
+      rebuyStack: 200,
     },
     viewer: {
       userId: 'u-yash',
@@ -55,11 +61,22 @@ function baseRoom(seatCount: number): Omit<RoomSnapshot, 'game'> {
 
 type SeatSpec = Partial<GameSeat> & { seat: number }
 
-function gameSeats(seatCount: number, specs: SeatSpec[]): GameSeat[] {
+const POSITION_LABELS: Record<number, NonNullable<GameSeat['position']>[]> = {
+  2: ['BN/SB', 'BB'],
+  3: ['BN', 'SB', 'BB'],
+  4: ['BN', 'SB', 'BB', 'CO'],
+  5: ['BN', 'SB', 'BB', 'UTG', 'CO'],
+  6: ['BN', 'SB', 'BB', 'UTG', 'MP', 'CO'],
+  7: ['BN', 'SB', 'BB', 'UTG', 'MP', 'HJ', 'CO'],
+  8: ['BN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'HJ', 'CO'],
+  9: ['BN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'LJ', 'HJ', 'CO'],
+}
+
+function gameSeats(seatCount: number, buttonSeat: number, specs: SeatSpec[]): GameSeat[] {
   const stacks = [1850, 2430, 990, 3120, 560, 760, 2010, 1555, 880]
   return Array.from({ length: seatCount }, (_, i) => {
     const spec = specs.find((s) => s.seat === i)
-    return {
+    const seat = {
       seat: i,
       userId: `u-${NAMES[i]}`,
       stack: stacks[i],
@@ -67,9 +84,15 @@ function gameSeats(seatCount: number, specs: SeatSpec[]): GameSeat[] {
       holeCards: null,
       committed: 0,
       lastAction: null,
+      actions: [],
+      position: POSITION_LABELS[seatCount][(i - buttonSeat + seatCount) % seatCount],
       finalHandRank: null,
+      rebuyRoundsRemaining: 0,
+      rebought: false,
       ...spec,
     } as GameSeat
+    if (spec?.actions === undefined && spec?.lastAction) seat.actions = [spec.lastAction]
+    return seat
   })
 }
 
@@ -79,15 +102,20 @@ function makeGame(seatCount: number, overrides: Partial<Game>, specs: SeatSpec[]
   const minRaiseTo = overrides.minRaiseTo ?? 240
   const maxRaiseTo = overrides.maxRaiseTo ?? 1850
   const canAct = actingSeat === 0
+  const buttonSeat = overrides.buttonSeat ?? Math.min(3, seatCount - 1)
+  const pots = overrides.pots ?? [
+    { amount: 340, eligibleSeats: Array.from({ length: seatCount }, (_, seat) => seat) },
+  ]
+  const potTotal = overrides.potTotal ?? pots.reduce((total, pot) => total + pot.amount, 0)
   return {
     tableStatus: 'RUNNING',
     handId: 42,
     phase: 'FLOP',
     completionReason: null,
     board: ['Kh', '9c', '2d'],
-    buttonSeat: Math.min(3, seatCount - 1),
-    smallBlindSeat: 0,
-    bigBlindSeat: 1 % seatCount,
+    buttonSeat,
+    smallBlindSeat: seatCount === 2 ? buttonSeat : 0,
+    bigBlindSeat: seatCount === 2 ? (buttonSeat + 1) % seatCount : 1 % seatCount,
     actionSeq: 7,
     actingSeat,
     deadline: Date.now() + 18_000,
@@ -95,15 +123,16 @@ function makeGame(seatCount: number, overrides: Partial<Game>, specs: SeatSpec[]
     maxRaiseTo,
     toCall,
     currentBet: 120,
-    pots: [{ amount: 340, eligibleSeats: Array.from({ length: seatCount }, (_, seat) => seat) }],
+    potTotal,
+    pots,
     awards: [],
-    seats: gameSeats(seatCount, specs),
+    seats: gameSeats(seatCount, buttonSeat, specs),
     viewer: {
       seated: true,
       seat: 0,
       canAct,
-      rebuyMinimum: null,
-      rebuyMaximum: null,
+      rebuyAmount: null,
+      rebuyRoundsRemaining: null,
       legalActions: canAct
         ? {
             canFold: true,
@@ -178,12 +207,15 @@ function staticState(state: string, seatCount: number): Game {
             seated: true,
             seat: 0,
             canAct: false,
-            rebuyMinimum: 400,
-            rebuyMaximum: 2000,
+            rebuyAmount: 400,
+            rebuyRoundsRemaining: 5,
             legalActions: null,
           },
         },
-        [{ seat: 0, seatStatus: 'BUSTED', stack: 0 }, ...COMMON_SPECS.slice(1)],
+        [
+          { seat: 0, seatStatus: 'BUSTED', stack: 0, rebuyRoundsRemaining: 5 },
+          ...COMMON_SPECS.slice(1),
+        ],
       )
     case 'sitout':
       return makeGame(seatCount, { actingSeat: 1 % seatCount }, [

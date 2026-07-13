@@ -1,6 +1,6 @@
 /* T7/T8 — Room view skin, from the approved tasks/task7/design/table-green.html.
    Structure (T7): stage, stadium felt, superellipse seats, pods, cards, action bar.
-   Juice (T8): deal stagger, chip fly, pot pop, pod pulse, timer tremble. */
+   Juice (T8): deal stagger, chip fly, pot pop, pod pulse, timer warning. */
 
 .stage {
   position: relative;
@@ -83,6 +83,14 @@
   pointer-events: auto;
 }
 .room-tag .label { font-size: 11px; }
+.table-config-chip {
+  padding: 2px 6px 3px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 5px;
+  color: var(--gold);
+  font-size: 11px;
+  white-space: nowrap;
+}
 
 .room-topbar-actions {
   display: flex;
@@ -90,6 +98,27 @@
   pointer-events: auto;
 }
 .btn-leave { font-size: 14px; padding: 6px 14px 9px; }
+.btn-table-settings {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.admin-shield {
+  display: inline-grid;
+  width: 17px;
+  height: 19px;
+  flex: 0 0 auto;
+  place-items: center;
+  clip-path: polygon(50% 0, 95% 20%, 84% 75%, 50% 100%, 16% 75%, 5% 20%);
+  background: var(--gold);
+  color: #182131;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: none;
+}
+.admin-shield.large { width: 30px; height: 34px; font-size: 13px; }
 
 .room-splash {
   position: absolute;
@@ -309,6 +338,13 @@
   box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.28), 0 6px 14px rgba(0, 0, 0, 0.45);
   padding: 7px 12px 9px;
 }
+.pod .pidentity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+}
 .pod .pname {
   font-size: 16px;
   letter-spacing: 0.5px;
@@ -317,19 +353,60 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.position-label {
+  flex: 0 0 auto;
+  padding: 1px 4px 2px;
+  border: 1px solid rgba(242, 193, 78, 0.65);
+  border-radius: 4px;
+  background: rgba(242, 193, 78, 0.13);
+  color: var(--gold);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  line-height: 1;
+  text-shadow: none;
+  white-space: nowrap;
+}
 .pod .pstack {
   font-size: 19px;
   color: var(--gold);
   font-weight: 700;
   text-shadow: var(--outline-text);
 }
-.pod .plast {
+.pod .plast,
+.pod .pactions,
+.pod .prank {
   font-size: 11px;
   letter-spacing: 1.5px;
   color: var(--text-dim);
   text-transform: uppercase;
   min-height: 13px;
 }
+.rebought-label {
+  width: fit-content;
+  margin: 2px auto 1px;
+  border: 1px solid #2d8b59;
+  border-radius: 4px;
+  background: rgba(55, 181, 111, 0.15);
+  color: #77e5a9;
+  padding: 1px 5px 2px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  line-height: 1;
+  text-shadow: none;
+  white-space: nowrap;
+}
+.pod .pactions {
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.pod .prank {
+  margin-top: 2px;
+  color: var(--gold);
+  letter-spacing: 0.6px;
+}
+.action-separator { color: var(--gold); }
 
 .seat.empty .pod {
   background: rgba(16, 23, 34, 0.4);
@@ -388,50 +465,82 @@
 }
 .badge.allin { background: var(--red); }
 .badge.sitout-b { background: #46525f; }
-.badge.dealer {
+.position-chip-row {
   position: absolute;
-  top: auto;
-  bottom: -10px;
+  top: -10px;
   left: -10px;
-  right: auto;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.badge.position-chip {
+  position: static;
   width: 26px;
   height: 26px;
   padding: 0;
   border-radius: 50%;
-  background: var(--gold);
-  color: #1a2332;
   text-shadow: none;
-  font-size: 15px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 23px;
   text-align: center;
+}
+.badge.dealer {
+  background: var(--gold);
+  color: #1a2332;
   border: 2px solid #b98d1f;
 }
+.badge.small-blind {
+  background: var(--blue);
+  color: #eef8ff;
+  border-color: #176a8d;
+}
+.badge.big-blind {
+  background: var(--orange);
+  color: #251507;
+  border-color: #b65f13;
+}
 
-.timer-ring {
+.turn-timer {
   position: absolute;
   left: 50%;
-  top: -23px;
+  bottom: -27px;
+  z-index: 5;
   transform: translateX(-50%);
-  z-index: 4;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: conic-gradient(var(--orange) calc(var(--p) * 1%), rgba(16, 23, 34, 0.85) 0);
-  border: 3px solid #101722;
   display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   place-items: center;
+  border: 3px solid #101722;
+  border-radius: 50%;
+  background: conic-gradient(var(--orange) calc(var(--p) * 1%), #202a36 0);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.34), 0 4px 9px rgba(0, 0, 0, 0.32);
 }
-.timer-ring i {
-  font-style: normal;
-  font-size: 13px;
+.turn-timer::before {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #202a36;
+  content: '';
+}
+.turn-timer__seconds {
+  position: relative;
+  z-index: 1;
+  color: var(--orange);
+  font-size: 10px;
   font-weight: 700;
-  color: var(--text);
+  line-height: 1;
+  text-align: center;
   text-shadow: var(--outline-text);
 }
-.timer-ring.low {
-  background: conic-gradient(var(--red) calc(var(--p) * 1%), rgba(16, 23, 34, 0.85) 0);
-  animation: tremble 0.18s linear infinite;
+.turn-timer.low {
+  background: conic-gradient(var(--red) calc(var(--p) * 1%), #202a36 0);
+}
+.turn-timer.low .turn-timer__seconds {
+  color: var(--red);
+  animation: blink 1s steps(2) infinite;
 }
 
 /* committed bet chips on the inner curve */
@@ -499,6 +608,47 @@
   letter-spacing: 0.5px;
 }
 .waiting b { color: var(--text); }
+
+.rebuy-cooldown {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.rebuy-round-track {
+  display: flex;
+  gap: 8px;
+}
+.round-chip {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #3d4a59;
+  border-radius: 50%;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+}
+.round-chip.remaining {
+  background: var(--red);
+  border-color: #8f2631;
+}
+.round-chip.cleared {
+  background: #26313e;
+  opacity: 0.45;
+}
+.fixed-rebuy {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.fixed-rebuy strong {
+  color: var(--gold);
+  font-size: 22px;
+  text-shadow: var(--outline-text);
+}
 
 .raise-row {
   display: flex;
@@ -639,7 +789,13 @@
     white-space: nowrap;
   }
   .room-tag .label { display: none; }
+  .table-config-chip + .table-config-chip { display: none; }
   .room-topbar-actions .btn-dev { display: none; }
+  .room-topbar-actions .btn-table-settings {
+    display: inline-flex;
+    padding: 5px 8px 7px;
+  }
+  .table-settings-button-label { display: none; }
   .btn-leave { padding-inline: 10px; }
 
   /* Keep a fixed layout width so the felt bleeds past the screen edges while

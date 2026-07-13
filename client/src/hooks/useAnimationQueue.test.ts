@@ -19,6 +19,7 @@ function game(overrides: Partial<Game> = {}): Game {
     maxRaiseTo: 100,
     toCall: 10,
     currentBet: 10,
+    potTotal: 20,
     pots: [{ amount: 20, eligibleSeats: [0, 1] }],
     awards: [],
     seats: [
@@ -30,15 +31,19 @@ function game(overrides: Partial<Game> = {}): Game {
         committed: 10,
         holeCards: ['As', 'Kd'],
         lastAction: null,
+        actions: [],
+        position: 'BN',
         finalHandRank: null,
+        rebuyRoundsRemaining: 0,
+        rebought: false,
       },
     ],
     viewer: {
       seated: true,
       seat: 0,
       canAct: false,
-      rebuyMinimum: null,
-      rebuyMaximum: null,
+      rebuyAmount: null,
+      rebuyRoundsRemaining: null,
       legalActions: null,
     },
     ...overrides,
@@ -50,6 +55,7 @@ describe('deriveAnimationDiff', () => {
     const previous = game()
     const current = game({
       board: ['Ah', '9c', '2d'],
+      potTotal: 40,
       pots: [{ amount: 40, eligibleSeats: [0, 1] }],
       seats: [{ ...previous.seats[0], committed: 20 }],
     })

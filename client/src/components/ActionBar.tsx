@@ -6,6 +6,7 @@ import { useGameStore } from '../store/gameStore'
 import { clampRaise, raisePresets } from '../lib/cards'
 import { formatCountdown, useServerCountdown } from '../hooks/useServerCountdown'
 import type { CSSProperties } from 'react'
+import { formatChips, formatChipsFull } from '../lib/chips'
 
 export default function ActionBar() {
   const connection = useGameStore((s) => s.connection)
@@ -16,7 +17,6 @@ export default function ActionBar() {
   const pendingAction = useGameStore((s) => s.pendingAction)
   const act = useGameStore((s) => s.act)
   const rebuy = useGameStore((s) => s.rebuy)
-  const sitOut = useGameStore((s) => s.sitOut)
   const sitBack = useGameStore((s) => s.sitBack)
   const stand = useGameStore((s) => s.stand)
 
@@ -43,7 +43,7 @@ export default function ActionBar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionKey])
 
-  const potTotal = game?.pots.reduce((total, pot) => total + pot.amount, 0) ?? 0
+  const potTotal = game?.potTotal ?? 0
   const presets = useMemo(
     () =>
       raisePresets({
@@ -89,15 +89,12 @@ export default function ActionBar() {
     )
   }
 
-  if (gameSeat?.seatStatus === 'BUSTED' || game.viewer.rebuyMinimum !== null) {
-    const range = {
-      minRebuy: game.viewer.rebuyMinimum ?? room.config.minBuyIn,
-      maxRebuy: game.viewer.rebuyMaximum ?? room.config.maxBuyIn,
-    }
+  if (gameSeat?.seatStatus === 'BUSTED') {
     return (
       <BustedBar
-        min={range.minRebuy}
-        max={range.maxRebuy}
+        amount={game.viewer.rebuyAmount}
+        enabled={room.config.rebuysEnabled ?? true}
+        roundsRemaining={game.viewer.rebuyRoundsRemaining ?? gameSeat.rebuyRoundsRemaining}
         disabled={pendingAction !== null}
         onRebuy={rebuy}
         onStand={() => void stand()}
@@ -111,10 +108,10 @@ export default function ActionBar() {
         <h3 className="ab-head">Sitting out</h3>
         <p className="waiting">You are sitting out — dealt out of hands.</p>
         <div className="ab-buttons">
-          <button className="btn btn-blue" onClick={sitBack}>
+          <button className="btn btn-blue" data-sound="seat" onClick={sitBack}>
             I&#39;m back (sit in)
           </button>
-          <button className="btn btn-red" onClick={() => void stand()}>
+          <button className="btn btn-red" data-sound="exit" onClick={() => void stand()}>
             Stand up
           </button>
         </div>
@@ -127,11 +124,6 @@ export default function ActionBar() {
       <div className="actionbar panel wait" data-testid="actionbar-showdown">
         <h3 className="ab-head">Showdown</h3>
         <ShowdownLine />
-        <div className="ab-buttons">
-          <button className="btn btn-dev" onClick={sitOut}>
-            Sit out next hand
-          </button>
-        </div>
       </div>
     )
   }
@@ -166,26 +158,42 @@ export default function ActionBar() {
       </h3>
       <div className="ab-buttons">
         {legal.canFold && (
-          <button className="btn btn-red" disabled={locked} onClick={() => act('fold')}>
+          <button
+            className="btn btn-red"
+            data-sound="fold"
+            disabled={locked}
+            onClick={() => act('fold')}
+          >
             Fold
           </button>
         )}
         {legal.canCall ? (
-          <button className="btn btn-blue" disabled={locked} onClick={() => act('call')}>
-            Call <span className="num">{callAmount.toLocaleString()}</span>
+          <button
+            className="btn btn-blue"
+            data-sound="call"
+            disabled={locked}
+            onClick={() => act('call')}
+          >
+            Call <span className="num" title={formatChipsFull(callAmount)}>{formatChips(callAmount)}</span>
           </button>
         ) : legal.canCheck ? (
-          <button className="btn btn-blue" disabled={locked} onClick={() => act('check')}>
+          <button
+            className="btn btn-blue"
+            data-sound="check"
+            disabled={locked}
+            onClick={() => act('check')}
+          >
             Check
           </button>
         ) : null}
         {canRaise && (
           <button
             className="btn btn-orange"
+            data-sound="raise"
             disabled={locked}
             onClick={() => act('raiseTo', raiseValue)}
           >
-            Raise to <span className="num">{raiseValue.toLocaleString()}</span>
+            Raise to <span className="num" title={formatChipsFull(raiseValue)}>{formatChips(raiseValue)}</span>
           </button>
         )}
       </div>
@@ -196,6 +204,7 @@ export default function ActionBar() {
               <button
                 key={key}
                 className="pill"
+                data-sound="tick"
                 disabled={locked}
                 onClick={() => setRaiseTo(presets[key])}
               >
@@ -214,7 +223,7 @@ export default function ActionBar() {
             onChange={(e) => setRaiseTo(clampRaise(Number(e.target.value), minRaiseTo, maxRaiseTo))}
             aria-label="Raise amount"
           />
-          <span className="raise-amt num">{raiseValue.toLocaleString()}</span>
+          <span className="raise-amt num" title={formatChipsFull(raiseValue)}>{formatChips(raiseValue)}</span>
         </div>
       )}
     </div>
@@ -222,39 +231,57 @@ export default function ActionBar() {
 }
 
 function BustedBar(props: {
-  min: number
-  max: number
+  amount: number | null
+  enabled: boolean
+  roundsRemaining: number
   disabled: boolean
   onRebuy: (amount: number) => void
   onStand: () => void
 }) {
-  const [amount, setAmount] = useState(props.max)
-  const value = clampRaise(amount, props.min, props.max)
-  const fillPct = props.max > props.min ? ((value - props.min) / (props.max - props.min)) * 100 : 100
+  const locked = !props.enabled || props.roundsRemaining > 0 || props.amount === null
   return (
     <div className="actionbar panel" data-testid="actionbar-busted">
       <h3 className="ab-head">You busted out</h3>
-      <p className="waiting">Stack is 0. Rebuy to keep your seat, or stand up.</p>
-      <div className="raise-row">
-        <span className="label">rebuy</span>
-        <input
-          type="range"
-          min={props.min}
-          max={props.max}
-          step={1}
-          value={value}
-          disabled={props.disabled}
-          style={{ '--fill': `${fillPct}%` } as CSSProperties}
-          onChange={(e) => setAmount(Number(e.target.value))}
-          aria-label="Rebuy amount"
-        />
-        <span className="raise-amt num">{value.toLocaleString()}</span>
-      </div>
+      {props.enabled ? (
+        <div className="rebuy-cooldown" aria-live="polite">
+          <div className="rebuy-round-track" aria-hidden="true">
+            {Array.from({ length: 5 }, (_, index) => (
+              <span
+                key={index}
+                className={index < props.roundsRemaining ? 'round-chip remaining' : 'round-chip cleared'}
+              />
+            ))}
+          </div>
+          <p className="waiting">
+            {props.roundsRemaining > 0
+              ? `Rebuy unlocks after ${props.roundsRemaining} more completed ${props.roundsRemaining === 1 ? 'round' : 'rounds'}.`
+              : 'Cooldown complete — rebuy is unlocked.'}
+          </p>
+        </div>
+      ) : (
+        <p className="waiting">Rebuys are disabled at this table.</p>
+      )}
+      {props.enabled && (
+        <div className="fixed-rebuy">
+          <span>Rebuy stack</span>
+          <strong className="num" title={props.amount === null ? undefined : formatChipsFull(props.amount)}>
+            {props.amount === null ? '—' : formatChips(props.amount)}
+          </strong>
+        </div>
+      )}
       <div className="ab-buttons">
-        <button className="btn btn-orange" disabled={props.disabled} onClick={() => props.onRebuy(value)}>
-          Rebuy <span className="num">{value.toLocaleString()}</span>
-        </button>
-        <button className="btn btn-red" onClick={props.onStand}>
+        {props.enabled && (
+          <button
+            className="btn btn-orange"
+            data-sound="rebuy"
+            disabled={props.disabled || locked}
+            onClick={() => props.amount !== null && props.onRebuy(props.amount)}
+          >
+            {props.roundsRemaining > 0 ? `Rebuy locked · ${props.roundsRemaining}R` : 'Rebuy'}{' '}
+            {props.amount !== null && <span className="num">{formatChips(props.amount)}</span>}
+          </button>
+        )}
+        <button className="btn btn-red" data-sound="exit" onClick={props.onStand}>
           Stand up
         </button>
       </div>
@@ -277,7 +304,7 @@ function ShowdownLine() {
             ? (room.members.find((member) => member.userId === occupant.userId)?.displayName ?? 'player')
             : 'player'
           const rank = game.seats.find((seat) => seat.seat === winner.seat)?.finalHandRank
-          return `${name} +${winner.amount.toLocaleString()}${rank ? ` — ${rank}` : ''}`
+          return `${name} +${formatChips(winner.amount)}${rank ? ` — ${rank}` : ''}`
         })
         return (
           <p className="waiting" key={award.potIndex}>

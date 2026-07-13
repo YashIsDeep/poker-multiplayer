@@ -9,8 +9,13 @@ import CrtOverlay from '../components/CrtOverlay'
 import SettingsButton from '../components/SettingsButton'
 import { useGameStore } from '../store/gameStore'
 import { endSession } from '../lib/auth'
-import { playSound } from '../lib/sound'
 import { generateRandomTableName } from '../lib/tableNames'
+import { formatChips } from '../lib/chips'
+import TableSettingsFields, {
+  PUBLIC_TABLE_SETTINGS,
+  tableSettingsError,
+} from '../components/TableSettingsFields'
+import type { TableSettings } from '../store/types'
 import '../styles/lobby.css'
 
 type Me = {
@@ -68,7 +73,6 @@ export default function Lobby() {
 
   const join = (code: string) => {
     if (busy) return
-    playSound('click')
     setBusy(true)
     joinRoom(code)
       .then((ack) => {
@@ -88,7 +92,6 @@ export default function Lobby() {
 
   const logout = async () => {
     if (loggingOut) return
-    playSound('click')
     setLoggingOut(true)
     try {
       await endSession()
@@ -116,7 +119,13 @@ export default function Lobby() {
             )}
             <b>{me?.displayName ?? '…'}</b>
             <SettingsButton />
-            <button className="btn btn-dev logout" type="button" disabled={loggingOut} onClick={logout}>
+            <button
+              className="btn btn-dev logout"
+              type="button"
+              data-sound="exit"
+              disabled={loggingOut}
+              onClick={logout}
+            >
               {loggingOut ? 'Logging out…' : 'Log out'}
             </button>
           </div>
@@ -156,6 +165,7 @@ export default function Lobby() {
                 </span>
                 <button
                   className="btn btn-blue btn-join"
+                  data-sound="confirm"
                   disabled={busy || connection !== 'connected'}
                   onClick={() => join(r.joinCode)}
                 >
@@ -169,11 +179,9 @@ export default function Lobby() {
         <div className="lobby-actions">
           <button
             className="btn btn-orange btn-create"
+            data-sound="open"
             disabled={connection !== 'connected'}
-            onClick={() => {
-              playSound('click')
-              setCreating(true)
-            }}
+            onClick={() => setCreating(true)}
           >
             + Create table
           </button>
@@ -190,6 +198,7 @@ export default function Lobby() {
             <button
               className="btn btn-green btn-code-join"
               type="submit"
+              data-sound="confirm"
               disabled={busy || !joinCode.trim() || connection !== 'connected'}
             >
               Join
@@ -208,6 +217,7 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(generateRandomTableName)
   const [seats, setSeats] = useState(6)
   const [privateTable, setPrivateTable] = useState(false)
+  const [settings, setSettings] = useState<TableSettings>(PUBLIC_TABLE_SETTINGS)
   const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
   const createRoom = useGameStore((s) => s.createRoom)
@@ -215,9 +225,9 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
 
   const submit = () => {
     const trimmed = name.trim()
-    if (!trimmed || busy) return
+    if (!trimmed || busy || (privateTable && tableSettingsError(settings))) return
     setBusy(true)
-    createRoom(trimmed, seats, privateTable)
+    createRoom(trimmed, seats, privateTable, privateTable ? settings : undefined)
       .then((ack) => {
         if (ack.ok && ack.roomId) {
           navigate(`/room/${ack.roomId}`)
@@ -233,7 +243,7 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="modalback" data-testid="modal-create">
-      <div className="modal panel">
+      <div className="modal panel create-table-modal">
         <h3>Create table</h3>
         <div className="field">
           <span className="label">Name</span>
@@ -250,11 +260,19 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
         <div className="field">
           <span className="label">Seats</span>
           <span className="stepper">
-            <button aria-label="fewer seats" onClick={() => setSeats((n) => Math.max(2, n - 1))}>
+            <button
+              aria-label="fewer seats"
+              data-sound="tick"
+              onClick={() => setSeats((n) => Math.max(2, n - 1))}
+            >
               −
             </button>
             <b data-testid="seat-count">{seats}</b>
-            <button aria-label="more seats" onClick={() => setSeats((n) => Math.min(9, n + 1))}>
+            <button
+              aria-label="more seats"
+              data-sound="tick"
+              onClick={() => setSeats((n) => Math.min(9, n + 1))}
+            >
               +
             </button>
           </span>
@@ -265,6 +283,7 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               className={`visibility-option${privateTable ? '' : ' selected'}`}
+              data-sound="toggleOn"
               aria-pressed={!privateTable}
               onClick={() => setPrivateTable(false)}
             >
@@ -274,6 +293,7 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               className={`visibility-option${privateTable ? ' selected' : ''}`}
+              data-sound="toggleOn"
               aria-pressed={privateTable}
               onClick={() => setPrivateTable(true)}
             >
@@ -282,11 +302,37 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </div>
+        {privateTable ? (
+          <>
+            <TableSettingsFields value={settings} onChange={setSettings} disabled={busy} />
+            {tableSettingsError(settings) && (
+              <p className="settings-error" role="alert">{tableSettingsError(settings)}</p>
+            )}
+          </>
+        ) : (
+          <div className="public-table-defaults">
+            <span className="label">Public table defaults</span>
+            <div>
+              <span>BB <b className="num">{formatChips(PUBLIC_TABLE_SETTINGS.bigBlind)}</b></span>
+              <span title={`${formatChips(PUBLIC_TABLE_SETTINGS.startingStack)} chips`}>
+                STACK <b className="num">
+                  {formatChips(PUBLIC_TABLE_SETTINGS.startingStack / PUBLIC_TABLE_SETTINGS.bigBlind)} BB
+                </b>
+              </span>
+              <span>REBUYS <b>OFF</b></span>
+            </div>
+          </div>
+        )}
         <div className="row">
-          <button className="btn btn-dev" onClick={onClose}>
+          <button className="btn btn-dev" data-sound="close" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn btn-orange" disabled={!name.trim() || busy} onClick={submit}>
+          <button
+            className="btn btn-orange"
+            data-sound="confirm"
+            disabled={!name.trim() || busy || (privateTable && Boolean(tableSettingsError(settings)))}
+            onClick={submit}
+          >
             Create
           </button>
         </div>

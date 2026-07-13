@@ -7,9 +7,9 @@ import type { RefObject } from 'react'
 import PixelCard from './PixelCard'
 import SeatPod from './SeatPod'
 import { useGameStore } from '../store/gameStore'
-import { playSound } from '../lib/sound'
 import type { AnimationEvents } from '../hooks/useAnimationQueue'
 import type { Game, RoomSnapshot } from '../store/types'
+import { formatChips, formatChipsFull } from '../lib/chips'
 
 const K = 0.72 // superellipse power
 
@@ -33,9 +33,9 @@ export function seatPosition(viewIndex: number, totalSeats: number) {
   }
 }
 
-// Clearance for bits that stick out past a seat's layout box (dealer badge
-// below, all-in badge to the right) plus breathing room against hard edges.
-const FIT_PAD = { top: 8, bottom: 14, side: 14 }
+// Clearance for bits that stick out past a seat's layout box (turn timer
+// below, status badges to the sides) plus breathing room against hard edges.
+const FIT_PAD = { top: 8, bottom: 42, side: 14 }
 
 // T11 fit-to-viewport: the composition (felt + overhanging pods) has a fixed
 // layout size from the CSS width breakpoints; this hook scales and positions
@@ -170,10 +170,9 @@ export default function Table({ room, game, animations }: TableProps) {
   const isShowdown = game?.phase === 'COMPLETE' && game.completionReason === 'SHOWDOWN'
   const potMain = game?.pots[0]?.amount ?? 0
   const potSide = game?.pots.slice(1).reduce((total, pot) => total + pot.amount, 0) || undefined
-  const potTotal = potMain + (potSide ?? 0)
+  const potTotal = game?.potTotal ?? 0
 
   const handleTakeSeat = (seat: number) => {
-    playSound('click')
     takeSeat(seat).then(
       (ack) => {
         if (ack.ok) pushToast('ok', `Took seat ${seat + 1}`)
@@ -192,13 +191,13 @@ export default function Table({ room, game, animations }: TableProps) {
       <div className="pot-wrap">
         <div className="pot">
           <span className="label">pot</span>
-          <b className="num pop" key={animations.potPopKey} data-testid="pot">
-            {potTotal.toLocaleString()}
+          <b className="num pop" key={animations.potPopKey} data-testid="pot" title={formatChipsFull(potTotal)}>
+            {formatChips(potTotal)}
           </b>
         </div>
         {potSide !== undefined && potSide > 0 && (
           <span className="pot-side num">
-            main {potMain.toLocaleString()} · side {potSide.toLocaleString()}
+            main {formatChips(potMain)} · side {formatChips(potSide)}
           </span>
         )}
         {game && <div className="street label">{game.phase ? (PHASE_LABEL[game.phase] ?? '') : ''}</div>}
@@ -241,6 +240,8 @@ export default function Table({ room, game, animations }: TableProps) {
                 isActor={isActor}
                 isWinner={isShowdown && winnerSeats.has(seat)}
                 isDealer={game?.buttonSeat === seat}
+                isSmallBlind={game?.smallBlindSeat === seat}
+                isBigBlind={game?.bigBlindSeat === seat}
                 showdown={Boolean(isShowdown)}
                 deadline={isActor && game ? game.deadline : null}
                 budgetMs={room.config.actionTimeoutSeconds * 1000}
@@ -268,7 +269,9 @@ export default function Table({ room, game, animations }: TableProps) {
                   style={{ left: `${pos.betX}%`, top: `${pos.betY}%` }}
                 >
                   <span className="chip" />
-                  <b className="num">{(gs.committed ?? 0).toLocaleString()}</b>
+                  <b className="num" title={formatChipsFull(gs.committed ?? 0)}>
+                    {formatChips(gs.committed ?? 0)}
+                  </b>
                 </div>
               )
             })}

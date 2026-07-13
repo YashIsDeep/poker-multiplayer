@@ -1,5 +1,6 @@
-// Conic-gradient countdown ring above the acting player's pod (T7 structure,
-// T8 red/tremble low state). Driven by the server-clock EMA countdown.
+// In-pod countdown meter for the acting player. Keeping the timer in normal
+// layout flow prevents it from colliding with hole cards or position badges.
+// Driven by the server-clock EMA countdown.
 
 import { useServerCountdown } from '../hooks/useServerCountdown'
 import type { CSSProperties } from 'react'
@@ -13,8 +14,15 @@ export default function TimerRing({ deadline, budgetMs = 30_000 }: TimerRingProp
   const { secondsRemaining, percentRemaining, low } = useServerCountdown(deadline, budgetMs)
   const style = { '--p': String(percentRemaining) } as CSSProperties
   return (
-    <span className={`timer-ring${low ? ' low' : ''}`} style={style} data-testid="timer-ring">
-      <i>{secondsRemaining}</i>
-    </span>
+    <div
+      className={`turn-timer${low ? ' low' : ''}`}
+      style={style}
+      data-testid="timer-ring"
+      role="timer"
+      aria-label={`Turn timer: ${secondsRemaining} seconds remaining`}
+      aria-atomic="true"
+    >
+      <span className="turn-timer__seconds num" aria-hidden="true">{secondsRemaining}</span>
+    </div>
   )
 }

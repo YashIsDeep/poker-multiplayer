@@ -11,6 +11,7 @@ export type CommandType =
   | 'ROOM_LEAVE'
   | 'ROOM_SYNC'
   | 'ROOM_KEEP_ALIVE'
+  | 'ROOM_UPDATE_SETTINGS'
   | 'ROOM_TAKE_SEAT'
   | 'ROOM_STAND'
   // T6 gameplay command types
@@ -41,6 +42,8 @@ export type ErrorCode =
   | 'ACTION_NOT_LEGAL'
   | 'INVALID_RAISE_TO'
   | 'INVALID_BUY_IN'
+  | 'NOT_ROOM_ADMIN'
+  | 'SETTINGS_NOT_EDITABLE'
   | 'REBUY_NOT_AVAILABLE'
   | 'ALREADY_SITTING_IN'
   | 'ALREADY_SITTING_OUT'
@@ -54,6 +57,7 @@ export type RoomMemberView = {
   seat: number | null
   connected: boolean
   disconnectedSince: string | null
+  admin: boolean
 }
 
 export type SeatView = { seat: number; userId: string }
@@ -73,13 +77,23 @@ export type RoomConfig = {
   minBuyIn: number
   maxBuyIn: number
   actionTimeoutSeconds: number
+  startingStack: number
+  rebuysEnabled: boolean
+  rebuyStack: number
 }
+
+export type TableSettings = Pick<
+  RoomConfig,
+  'bigBlind' | 'startingStack' | 'rebuysEnabled' | 'rebuyStack'
+>
 
 export type RoomSnapshot = {
   roomId: string
   joinCode: string
   name: string
   maxSeats: number
+  privateTable: boolean
+  canEditSettings: boolean
   membershipEpoch: number
   revision: number
   serverNow: string
@@ -155,7 +169,15 @@ export type GameSeat = {
   /** Viewer-redacted: your own cards, or winners' at showdown; null/absent otherwise. */
   holeCards: string[] | null
   lastAction: LastAction | null
+  /** Ordered actions made by this player during the currently displayed betting round. */
+  actions: LastAction[]
+  /** Standard poker position for this hand; null when the seat is not in the hand. */
+  position: 'BN/SB' | 'BN' | 'SB' | 'BB' | 'UTG' | 'UTG+1' | 'MP' | 'LJ' | 'HJ' | 'CO' | null
   finalHandRank: string | null
+  /** Completed table rounds still required before this busted seat may rebuy. */
+  rebuyRoundsRemaining: number
+  /** True once at least one accepted rebuy has been applied to this seat. */
+  rebought: boolean
 }
 
 export type LegalActions = {
@@ -186,6 +208,8 @@ export type Game = {
   maxRaiseTo: number
   toCall: number
   currentBet: number
+  /** All chips currently wagered, including a temporarily unmatched bet. */
+  potTotal: number
   pots: { amount: number; eligibleSeats: number[] }[]
   awards: { potIndex: number; potAmount: number; winners: { seat: number; amount: number }[] }[]
   seats: GameSeat[]
@@ -193,8 +217,9 @@ export type Game = {
     seated: boolean
     seat: number | null
     canAct: boolean
-    rebuyMinimum: number | null
-    rebuyMaximum: number | null
+    /** The seat's original buy-in; the only accepted rebuy amount. */
+    rebuyAmount: number | null
+    rebuyRoundsRemaining: number | null
     legalActions: LegalActions | null
   }
 }

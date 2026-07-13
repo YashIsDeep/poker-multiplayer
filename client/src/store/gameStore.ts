@@ -20,6 +20,7 @@ import type {
   RoomExitNotice,
   RoomSnapshot,
   StateSyncView,
+  TableSettings,
 } from './types'
 
 // ---------- toasts ----------
@@ -61,10 +62,16 @@ export type GameStore = {
 
   // room commands (resolve with the server ack)
   stateSync: () => Promise<CommandAck>
-  createRoom: (name: string, maxSeats: number, privateTable: boolean) => Promise<CommandAck>
+  createRoom: (
+    name: string,
+    maxSeats: number,
+    privateTable: boolean,
+    settings?: TableSettings,
+  ) => Promise<CommandAck>
   joinRoom: (joinCode: string) => Promise<CommandAck>
   syncRoom: (roomId: string) => Promise<CommandAck>
   keepRoomAlive: () => Promise<CommandAck>
+  updateRoomSettings: (settings: TableSettings) => Promise<CommandAck>
   leaveRoom: () => Promise<CommandAck | null>
   takeSeat: (seat: number) => Promise<CommandAck>
   stand: () => Promise<CommandAck>
@@ -72,7 +79,7 @@ export type GameStore = {
   // game commands (T6 destinations)
   act: (action: PlayerActionType, amount?: number) => void
   rebuy: (amount: number) => void
-  sitOut: () => void
+  sitOut: () => Promise<CommandAck | null>
   sitBack: () => void
 
   // ui helpers
@@ -449,8 +456,8 @@ export const useGameStore = create<GameStore>()((set, get) => {
     stateSync() {
       return sendCommand('/app/state.sync', {})
     },
-    createRoom(name: string, maxSeats: number, privateTable: boolean) {
-      return sendCommand('/app/room.create', { name, maxSeats, privateTable })
+    createRoom(name: string, maxSeats: number, privateTable: boolean, settings?: TableSettings) {
+      return sendCommand('/app/room.create', { name, maxSeats, privateTable, ...settings })
     },
     joinRoom(joinCode: string) {
       return sendCommand('/app/room.join', { joinCode })
@@ -462,6 +469,11 @@ export const useGameStore = create<GameStore>()((set, get) => {
       const roomId = requireRoomId()
       if (!roomId) return Promise.reject(new Error('not in a room'))
       return sendCommand('/app/room.keep-alive', { roomId })
+    },
+    updateRoomSettings(settings: TableSettings) {
+      const roomId = requireRoomId()
+      if (!roomId) return Promise.reject(new Error('not in a room'))
+      return sendCommand('/app/room.update-settings', { roomId, ...settings })
     },
     async leaveRoom() {
       const roomId = requireRoomId()
@@ -484,7 +496,8 @@ export const useGameStore = create<GameStore>()((set, get) => {
     takeSeat(seat: number) {
       const roomId = requireRoomId()
       if (!roomId) return Promise.reject(new Error('not in a room'))
-      const buyIn = get().room?.config.minBuyIn
+      const config = get().room?.config
+      const buyIn = config?.startingStack ?? config?.minBuyIn
       if (!buyIn) return Promise.reject(new Error('room buy-in configuration is unavailable'))
       return sendCommand('/app/room.take-seat', { roomId, seat, buyIn })
     },
@@ -533,13 +546,12 @@ export const useGameStore = create<GameStore>()((set, get) => {
       if (
         !roomId ||
         get().pendingAction ||
-        viewer?.rebuyMinimum == null ||
-        viewer.rebuyMaximum == null ||
-        !Number.isFinite(amount)
+        viewer?.rebuyAmount == null ||
+        viewer.rebuyRoundsRemaining !== 0 ||
+        !Number.isFinite(amount) ||
+        Math.round(amount) !== viewer.rebuyAmount
       ) return
-      const normalizedAmount = Math.round(
-        Math.min(viewer.rebuyMaximum, Math.max(viewer.rebuyMinimum, amount)),
-      )
+      const normalizedAmount = viewer.rebuyAmount
       const requestId = newRequestId()
       set({ pendingAction: { type: 'rebuy', amount: normalizedAmount, requestId, sentAt: clockNow() } })
       if (mockMode) return
@@ -550,8 +562,8 @@ export const useGameStore = create<GameStore>()((set, get) => {
 
     sitOut() {
       const roomId = requireRoomId()
-      if (!roomId || mockMode) return
-      sendCommand(GAME_SIT_OUT_DESTINATION, { roomId }).catch(() => {})
+      if (!roomId || mockMode) return Promise.resolve(null)
+      return sendCommand(GAME_SIT_OUT_DESTINATION, { roomId })
     },
 
     sitBack() {
