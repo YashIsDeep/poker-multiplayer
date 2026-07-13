@@ -429,11 +429,9 @@ public final class HoldemHand {
         } else if (action instanceof PlayerAction.RaiseTo raiseTo) {
             amountCommitted = checkedSubtract(raiseTo.amount(), player.streetCommitted);
             addContribution(player, amountCommitted);
-            long raiseSize = checkedSubtract(raiseTo.amount(), round.currentBet);
+            Long fullRaiseSize = fullRaiseSize(raiseTo.amount(), facingBet);
             round.currentBet = raiseTo.amount();
-            round.lastFullRaiseSize = isFullRaise(raiseTo.amount(), facingBet)
-                    ? raiseSize
-                    : round.lastFullRaiseSize;
+            if (fullRaiseSize != null) round.lastFullRaiseSize = fullRaiseSize;
             player.acted = true;
             player.lastActedFacingBet = round.currentBet;
         } else {
@@ -443,12 +441,19 @@ public final class HoldemHand {
                 player.streetCommitted, player.stack));
     }
 
-    private boolean isFullRaise(long raiseTo, long facingBet) {
-        if (facingBet == 0) return raiseTo >= config.bigBlind();
+    private Long fullRaiseSize(long raiseTo, long facingBet) {
+        // A short all-in opening wager can be completed to the nominal minimum bet.
+        // Once completed, the entire wager (not only the amount above the short all-in)
+        // establishes the size of the opening bet for subsequent raises.
+        if (facingBet < config.bigBlind()) {
+            return raiseTo >= config.bigBlind() ? raiseTo : null;
+        }
         try {
-            return raiseTo >= Math.addExact(facingBet, round.lastFullRaiseSize);
+            return raiseTo >= Math.addExact(facingBet, round.lastFullRaiseSize)
+                    ? checkedSubtract(raiseTo, facingBet)
+                    : null;
         } catch (ArithmeticException overflow) {
-            return false;
+            return null;
         }
     }
 
@@ -479,7 +484,7 @@ public final class HoldemHand {
     }
 
     private Long fullMinimumRaiseTo() {
-        if (round.currentBet == 0) return config.bigBlind();
+        if (round.currentBet < config.bigBlind()) return config.bigBlind();
         try {
             return Math.addExact(round.currentBet, round.lastFullRaiseSize);
         } catch (ArithmeticException overflow) {
