@@ -8,7 +8,7 @@ import CrtOverlay from '../components/CrtOverlay'
 import Table from '../components/Table'
 import ActionBar from '../components/ActionBar'
 import ShowdownBanner from '../components/ShowdownBanner'
-import SoundToggle from '../components/SoundToggle'
+import SettingsButton from '../components/SettingsButton'
 import { serverNow, useGameStore } from '../store/gameStore'
 import { useReducedMotion } from '../hooks/useReducedMotion'
 import { useAnimationQueue } from '../hooks/useAnimationQueue'
@@ -115,7 +115,7 @@ export default function Room() {
           )}
         </div>
         <div className="room-topbar-actions">
-          <SoundToggle />
+          <SettingsButton />
           {room.viewer.canStand && (
             <button className="btn btn-dev btn-leave" onClick={() => void stand()}>
               Stand

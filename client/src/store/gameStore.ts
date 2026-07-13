@@ -61,7 +61,7 @@ export type GameStore = {
 
   // room commands (resolve with the server ack)
   stateSync: () => Promise<CommandAck>
-  createRoom: (name: string, maxSeats: number) => Promise<CommandAck>
+  createRoom: (name: string, maxSeats: number, privateTable: boolean) => Promise<CommandAck>
   joinRoom: (joinCode: string) => Promise<CommandAck>
   syncRoom: (roomId: string) => Promise<CommandAck>
   keepRoomAlive: () => Promise<CommandAck>
@@ -449,8 +449,8 @@ export const useGameStore = create<GameStore>()((set, get) => {
     stateSync() {
       return sendCommand('/app/state.sync', {})
     },
-    createRoom(name: string, maxSeats: number) {
-      return sendCommand('/app/room.create', { name, maxSeats })
+    createRoom(name: string, maxSeats: number, privateTable: boolean) {
+      return sendCommand('/app/room.create', { name, maxSeats, privateTable })
     },
     joinRoom(joinCode: string) {
       return sendCommand('/app/room.join', { joinCode })

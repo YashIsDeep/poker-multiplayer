@@ -6,9 +6,11 @@ import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SwirlBackground from '../components/SwirlBackground'
 import CrtOverlay from '../components/CrtOverlay'
-import SoundToggle from '../components/SoundToggle'
+import SettingsButton from '../components/SettingsButton'
 import { useGameStore } from '../store/gameStore'
+import { endSession } from '../lib/auth'
 import { playSound } from '../lib/sound'
+import { generateRandomTableName } from '../lib/tableNames'
 import '../styles/lobby.css'
 
 type Me = {
@@ -23,6 +25,7 @@ export default function Lobby() {
   const [creating, setCreating] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [busy, setBusy] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const navigate = useNavigate()
 
   const init = useGameStore((s) => s.init)
@@ -83,6 +86,19 @@ export default function Lobby() {
     if (code) join(code)
   }
 
+  const logout = async () => {
+    if (loggingOut) return
+    playSound('click')
+    setLoggingOut(true)
+    try {
+      await endSession()
+      window.location.assign('/')
+    } catch {
+      pushToast('warn', 'Logout failed', 'could not end the current session')
+      setLoggingOut(false)
+    }
+  }
+
   return (
     <div className="stage lobby-stage">
       <SwirlBackground />
@@ -99,10 +115,10 @@ export default function Lobby() {
               <span className="avatar" aria-hidden="true" />
             )}
             <b>{me?.displayName ?? '…'}</b>
-            <SoundToggle />
-            <a className="btn btn-dev logout" href="/logout">
-              Log out
-            </a>
+            <SettingsButton />
+            <button className="btn btn-dev logout" type="button" disabled={loggingOut} onClick={logout}>
+              {loggingOut ? 'Logging out…' : 'Log out'}
+            </button>
           </div>
         </header>
 
@@ -189,8 +205,9 @@ export default function Lobby() {
 }
 
 function CreateTableModal({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState('')
+  const [name, setName] = useState(generateRandomTableName)
   const [seats, setSeats] = useState(6)
+  const [privateTable, setPrivateTable] = useState(false)
   const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
   const createRoom = useGameStore((s) => s.createRoom)
@@ -200,7 +217,7 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
     const trimmed = name.trim()
     if (!trimmed || busy) return
     setBusy(true)
-    createRoom(trimmed, seats)
+    createRoom(trimmed, seats, privateTable)
       .then((ack) => {
         if (ack.ok && ack.roomId) {
           navigate(`/room/${ack.roomId}`)
@@ -241,6 +258,29 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
               +
             </button>
           </span>
+        </div>
+        <div className="visibility-field">
+          <span className="label">Visibility</span>
+          <div className="visibility-options" role="group" aria-label="Table visibility">
+            <button
+              type="button"
+              className={`visibility-option${privateTable ? '' : ' selected'}`}
+              aria-pressed={!privateTable}
+              onClick={() => setPrivateTable(false)}
+            >
+              <b>Public</b>
+              <span>Shown in the lobby</span>
+            </button>
+            <button
+              type="button"
+              className={`visibility-option${privateTable ? ' selected' : ''}`}
+              aria-pressed={privateTable}
+              onClick={() => setPrivateTable(true)}
+            >
+              <b>Private</b>
+              <span>Join by code only</span>
+            </button>
+          </div>
         </div>
         <div className="row">
           <button className="btn btn-dev" onClick={onClose}>

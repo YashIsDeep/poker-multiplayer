@@ -128,6 +128,7 @@
 }
 .join-code input {
   flex: 1;
+  width: 0; /* grow from zero so the intrinsic size can't overflow narrow screens */
   font: inherit;
   font-size: 19px;
   letter-spacing: 6px;
@@ -192,7 +193,69 @@
   text-align: center;
 }
 
+.visibility-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.visibility-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.visibility-option {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 12px;
+  color: var(--text-dim);
+  background: var(--panel-dark);
+  border: 2px solid var(--input-edge);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.visibility-option b {
+  color: var(--text);
+  font-size: 17px;
+}
+.visibility-option span {
+  font-size: 13px;
+}
+.visibility-option:hover {
+  border-color: var(--panel-edge);
+}
+.visibility-option.selected {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel-dark));
+  box-shadow: 0 0 0 1px var(--gold);
+}
+.visibility-option.selected b {
+  color: var(--gold);
+}
+.visibility-option:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
 @media (max-width: 700px) {
   .room-row { grid-template-columns: 1fr auto auto; }
   .room-stat:nth-of-type(2) { display: none; }
+}
+
+@media (max-width: 560px) {
+  .lobby-head {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 6px;
+  }
+  .user-chip b {
+    max-width: 38vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lobby-actions { flex-direction: column; }
 }

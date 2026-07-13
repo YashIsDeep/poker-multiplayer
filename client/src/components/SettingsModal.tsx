@@ -1,0 +1,98 @@
+// Settings modal (opened from the gear button). Currently houses the Sound
+// section — an on/off toggle and a volume slider — but is laid out as a
+// sectioned panel so more settings can slot in later.
+
+import { useEffect, useRef } from 'react'
+import type { CSSProperties } from 'react'
+import { playSound } from '../lib/sound'
+import { useSoundSettings } from '../hooks/useSoundSettings'
+
+export default function SettingsModal({ onClose }: { onClose: () => void }) {
+  const { muted, volume, setMuted, setVolume } = useSoundSettings()
+
+  // Throttle the audible preview so dragging the slider doesn't machine-gun it.
+  const lastPreview = useRef(0)
+  const previewLevel = () => {
+    const now = Date.now()
+    if (now - lastPreview.current < 140) return
+    lastPreview.current = now
+    playSound('call')
+  }
+
+  // Close on Escape.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const pct = Math.round(volume * 100)
+  const fillStyle = { '--fill': `${muted ? 0 : pct}%` } as CSSProperties
+
+  return (
+    <div
+      className="modalback"
+      data-testid="modal-settings"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="modal settings-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3>Settings</h3>
+
+        <section className="settings-section">
+          <div className="settings-section-head label">Sound</div>
+
+          <div className="field">
+            <span>Sound effects</span>
+            <button
+              type="button"
+              className={`btn btn-dev sound-switch${muted ? ' off' : ''}`}
+              aria-pressed={!muted}
+              onClick={() => {
+                const willUnmute = muted
+                setMuted(!muted)
+                if (willUnmute) playSound('notify')
+              }}
+            >
+              {muted ? '🔇 Off' : '🔊 On'}
+            </button>
+          </div>
+
+          <div className="field">
+            <span>Volume</span>
+            <input
+              type="range"
+              className="volume-slider"
+              min={0}
+              max={100}
+              step={1}
+              value={muted ? 0 : pct}
+              disabled={muted}
+              style={fillStyle}
+              aria-label="Volume"
+              onChange={(e) => {
+                setVolume(Number(e.target.value) / 100)
+                previewLevel()
+              }}
+            />
+            <b className="num settings-vol">{muted ? '—' : `${pct}%`}</b>
+          </div>
+        </section>
+
+        <div className="row">
+          <button className="btn btn-orange" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
