@@ -72,7 +72,8 @@ public final class RoomManager {
             Instant now = clock.instant();
             incrementEpoch(profile.userId());
             PokerRoom room = new PokerRoom(
-                    roomId, code, name, maxSeats, privateTable, now, config, clock, deckFactory);
+                    roomId, code, name, maxSeats, privateTable, profile.userId(), now,
+                    config, clock, deckFactory);
             room.members.put(profile.userId(), new PokerRoom.Member(profile, now, epoch(profile.userId())));
             room.assertInvariant();
             rooms.put(roomId, room);
@@ -340,6 +341,40 @@ public final class RoomManager {
                         null,
                         0,
                         epochsFor(room));
+            } finally {
+                room.lock.unlock();
+            }
+        } finally {
+            registryLock.unlock();
+        }
+    }
+
+    public RoomChange updateSettings(UUID userId, UUID roomId, RoomConfig config) {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(roomId, "roomId");
+        Objects.requireNonNull(config, "config");
+        registryLock.lock();
+        try {
+            PokerRoom room = requiredMemberRoom(userId, roomId);
+            room.lock.lock();
+            try {
+                if (!room.privateTable) {
+                    throw new RoomException(RoomError.SETTINGS_NOT_EDITABLE);
+                }
+                if (!room.creatorId.equals(userId)) {
+                    throw new RoomException(RoomError.NOT_ROOM_ADMIN);
+                }
+                if (room.config.equals(config)) {
+                    return change(RoomChange.Kind.SETTINGS_UPDATED, room, Set.of(userId),
+                            null, 0, Map.of(userId, epoch(userId)));
+                }
+                room.config = config;
+                room.game.updateConfig(config);
+                incrementRoomRevision(room);
+                touch(room, clock.instant());
+                room.assertInvariant();
+                return change(RoomChange.Kind.SETTINGS_UPDATED, room, memberIds(room),
+                        null, 0, epochsFor(room));
             } finally {
                 room.lock.unlock();
             }
@@ -762,7 +797,7 @@ public final class RoomManager {
         registryLock.lock();
         try {
             PokerRoom room = requiredMemberRoom(userId, roomId);
-            long buyIn = requestedBuyIn == 0 ? room.config.minBuyIn() : requestedBuyIn;
+            long buyIn = requestedBuyIn == 0 ? room.config.startingStack() : requestedBuyIn;
             room.config.validateBuyIn(buyIn);
             if (seat < 0 || seat >= room.maxSeats) {
                 throw new RoomException(RoomError.SEAT_OUT_OF_RANGE);

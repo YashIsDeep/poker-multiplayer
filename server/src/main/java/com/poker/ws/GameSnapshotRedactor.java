@@ -20,6 +20,7 @@ public final class GameSnapshotRedactor {
                 && hand.completionReason().orElse(null) == CompletionReason.SHOWDOWN;
         Map<Integer, PlayerSnapshot> players = new HashMap<>();
         if (hand != null) for (PlayerSnapshot p : hand.players()) players.put(p.seat(), p);
+        Map<Integer, String> positions = pokerPositions(hand);
 
         List<GameView.GameSeatView> seatViews = new ArrayList<>();
         for (TableSeatState tableSeat : game.seats()) {
@@ -35,11 +36,13 @@ public final class GameSnapshotRedactor {
                 ArrayList<Card> seven = new ArrayList<>(p.holeCards()); seven.addAll(hand.board());
                 rank = HandEvaluator.evaluate7(seven).describe();
             }
-            HandEvent.PlayerActed acted = game.lastActions().get(tableSeat.seat());
-            GameView.LastActionView last = acted == null ? null : new GameView.LastActionView(actionName(acted.action()),
-                    actionAmount(acted));
+            List<GameView.LastActionView> actions = game.roundActions()
+                    .getOrDefault(tableSeat.seat(), List.of()).stream()
+                    .map(GameSnapshotRedactor::actionView).toList();
+            GameView.LastActionView last = actions.isEmpty() ? null : actions.get(actions.size() - 1);
             seatViews.add(new GameView.GameSeatView(tableSeat.seat(), tableSeat.userId(), stack, status,
-                    committed, cards, last, rank));
+                    committed, cards, last, actions, positions.get(tableSeat.seat()), rank,
+                    tableSeat.rebuyRoundsRemaining(), tableSeat.rebought()));
         }
 
         LegalActions legal = game.legalActions();
@@ -49,8 +52,9 @@ public final class GameSnapshotRedactor {
                 legal.canFold(), legal.canCheck(), legal.canCall(), legal.callAmount(), legal.toCall(),
                 legal.canRaise(), legal.minimumRaiseTo(), legal.maximumRaiseTo()) : null;
         TableSeatState own = viewerSeat == null ? null : game.seats().stream().filter(s -> s.seat() == viewerSeat).findFirst().orElse(null);
-        Long rebuyMin = own != null && own.stack() == 0 ? room.config().minBuyIn() : null;
-        Long rebuyMax = own != null && own.stack() == 0 ? room.config().maxBuyIn() : null;
+        Long rebuyAmount = own != null && own.stack() == 0 && room.config().rebuysEnabled()
+                ? room.config().rebuyStack() : null;
+        Integer rebuyRoundsRemaining = own != null && own.stack() == 0 ? own.rebuyRoundsRemaining() : null;
 
         List<GameView.PotView> pots = hand == null ? List.of() : hand.pots().stream().map(p -> new GameView.PotView(
                 p.amount(), p.eligible().stream().map(id -> seatOf(players, id)).filter(Objects::nonNull).toList())).toList();
@@ -65,14 +69,55 @@ public final class GameSnapshotRedactor {
                 game.deadline() == null ? null : game.deadline().toEpochMilli(),
                 hand == null ? null : hand.buttonSeat(), hand == null ? null : hand.smallBlindSeat(),
                 hand == null ? null : hand.bigBlindSeat(), hand == null ? List.of() : hand.board().stream().map(Card::toString).toList(),
-                hand == null ? 0 : hand.currentBet(), pots, awards, seatViews,
-                new GameView.ViewerGameView(viewerSeat != null, viewerSeat, viewerCanAct, rebuyMin, rebuyMax, legalView),
+                hand == null ? 0 : hand.currentBet(), potTotal(hand), pots, awards, seatViews,
+                new GameView.ViewerGameView(viewerSeat != null, viewerSeat, viewerCanAct,
+                        rebuyAmount, rebuyRoundsRemaining, legalView),
                 minRaise, maxRaise, toCall);
     }
 
     private static Integer seatOf(Map<Integer, PlayerSnapshot> players, PlayerId id) {
         return players.values().stream().filter(p -> p.id().equals(id)).map(PlayerSnapshot::seat).findFirst().orElse(null);
     }
+
+    private static long potTotal(HandSnapshot hand) {
+        if (hand == null) return 0;
+        long total = 0;
+        for (Pot pot : hand.pots()) total = Math.addExact(total, pot.amount());
+        if (hand.pendingUnmatched().isPresent()) {
+            total = Math.addExact(total, hand.pendingUnmatched().orElseThrow().amount());
+        }
+        return total;
+    }
+
+    private static GameView.LastActionView actionView(HandEvent.PlayerActed acted) {
+        return new GameView.LastActionView(actionName(acted.action()), actionAmount(acted));
+    }
+
+    /** Labels active hand seats clockwise from the button using standard ring-game terms. */
+    private static Map<Integer, String> pokerPositions(HandSnapshot hand) {
+        if (hand == null) return Map.of();
+        List<Integer> occupied = hand.players().stream().map(PlayerSnapshot::seat).sorted().toList();
+        int count = occupied.size();
+        List<String> labels = switch (count) {
+            case 2 -> List.of("BN/SB", "BB");
+            case 3 -> List.of("BN", "SB", "BB");
+            case 4 -> List.of("BN", "SB", "BB", "CO");
+            case 5 -> List.of("BN", "SB", "BB", "UTG", "CO");
+            case 6 -> List.of("BN", "SB", "BB", "UTG", "MP", "CO");
+            case 7 -> List.of("BN", "SB", "BB", "UTG", "MP", "HJ", "CO");
+            case 8 -> List.of("BN", "SB", "BB", "UTG", "UTG+1", "MP", "HJ", "CO");
+            case 9 -> List.of("BN", "SB", "BB", "UTG", "UTG+1", "MP", "LJ", "HJ", "CO");
+            default -> throw new IllegalStateException("unsupported hand size: " + count);
+        };
+        int buttonIndex = occupied.indexOf(hand.buttonSeat());
+        if (buttonIndex < 0) throw new IllegalStateException("button is not an occupied seat");
+        Map<Integer, String> result = new HashMap<>();
+        for (int offset = 0; offset < count; offset++) {
+            result.put(occupied.get((buttonIndex + offset) % count), labels.get(offset));
+        }
+        return Map.copyOf(result);
+    }
+
     private static String actionName(PlayerAction action) {
         if (action instanceof PlayerAction.Fold) return "FOLD";
         if (action instanceof PlayerAction.Check) return "CHECK";

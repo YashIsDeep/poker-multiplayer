@@ -4,6 +4,7 @@ import com.poker.engine.game.HandEvent;
 import com.poker.engine.game.HandSnapshot;
 import com.poker.engine.game.LegalActions;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -16,7 +17,7 @@ public record GameState(
         HandSnapshot presentedHand,
         LegalActions legalActions,
         List<TableSeatState> seats,
-        Map<Integer, HandEvent.PlayerActed> lastActions,
+        Map<Integer, List<HandEvent.PlayerActed>> roundActions,
         long lifecycleSeq,
         long scheduleGeneration,
         Instant pausedSince,
@@ -24,6 +25,8 @@ public record GameState(
         boolean safeBoundary) {
     public GameState {
         seats = List.copyOf(seats);
-        lastActions = Map.copyOf(lastActions);
+        Map<Integer, List<HandEvent.PlayerActed>> copiedActions = new LinkedHashMap<>();
+        roundActions.forEach((seat, actions) -> copiedActions.put(seat, List.copyOf(actions)));
+        roundActions = Map.copyOf(copiedActions);
     }
 }

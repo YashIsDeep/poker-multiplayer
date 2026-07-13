@@ -9,6 +9,8 @@ public record RoomSnapshot(
         String joinCode,
         String name,
         int maxSeats,
+        boolean privateTable,
+        boolean canEditSettings,
         long membershipEpoch,
         long revision,
         Instant serverNow,

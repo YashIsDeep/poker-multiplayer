@@ -75,6 +75,10 @@ public final class RoomCommandService {
         return commit(roomManager.keepAlive(userId, roomId));
     }
 
+    public RoomCommandResult updateSettings(UUID userId, UUID roomId, RoomConfig config) {
+        return commit(roomManager.updateSettings(userId, roomId, config));
+    }
+
     public RoomCommandResult stateSync(UUID userId) {
         RoomChange change = roomManager.stateSync(userId);
         return new RoomCommandResult(change, PublicationReport.none());

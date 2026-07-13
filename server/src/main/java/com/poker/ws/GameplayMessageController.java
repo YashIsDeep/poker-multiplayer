@@ -137,6 +137,8 @@ public class GameplayMessageController {
             case ROOM_NOT_FOUND -> ErrorCode.ROOM_NOT_FOUND;
             case NOT_A_ROOM_MEMBER -> ErrorCode.NOT_A_ROOM_MEMBER;
             case INVALID_BUY_IN -> ErrorCode.INVALID_BUY_IN;
+            case NOT_ROOM_ADMIN -> ErrorCode.NOT_ROOM_ADMIN;
+            case SETTINGS_NOT_EDITABLE -> ErrorCode.SETTINGS_NOT_EDITABLE;
             case HAND_IN_PROGRESS -> ErrorCode.HAND_IN_PROGRESS;
             default -> ErrorCode.INVALID_REQUEST;
         };

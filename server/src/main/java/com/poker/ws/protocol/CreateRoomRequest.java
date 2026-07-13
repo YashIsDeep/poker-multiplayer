@@ -6,9 +6,9 @@ import jakarta.validation.constraints.NotBlank;
 
 public record CreateRoomRequest(@NotBlank String name, @Min(2) @Max(9) int maxSeats,
         boolean privateTable, long smallBlind, long bigBlind, long minBuyIn, long maxBuyIn,
-        int actionTimeoutSeconds)
+        int actionTimeoutSeconds, long startingStack, boolean rebuysEnabled, long rebuyStack)
         implements StrictProtocolObject {
     public CreateRoomRequest(String name, int maxSeats) {
-        this(name, maxSeats, false, 0, 0, 0, 0, 0);
+        this(name, maxSeats, false, 0, 0, 0, 0, 0, 0, false, 0);
     }
 }

@@ -31,6 +31,8 @@ class GameplayWiringTest {
         GameView bobView=redactor.redact(started.room(),bob);
         GameView spectatorView=redactor.redact(started.room(),spectator);
         GameView unknownView=redactor.redact(started.room(),null);
+        assertThat(aliceView.potTotal()).isEqualTo(
+                started.room().config().smallBlind()+started.room().config().bigBlind());
         assertThat(aliceView.seats().stream().filter(s->s.seat()==0).findFirst().orElseThrow().holeCards()).hasSize(2);
         assertThat(aliceView.seats().stream().filter(s->s.seat()==1).findFirst().orElseThrow().holeCards()).isNull();
         assertThat(bobView.seats().stream().filter(s->s.seat()==1).findFirst().orElseThrow().holeCards()).hasSize(2);
@@ -65,6 +67,58 @@ class GameplayWiringTest {
         assertThat(queued.room().game().seats().stream().filter(s->s.userId().equals(a)).findFirst().orElseThrow().standAfterHand()).isTrue();
     }
 
+    @Test void labelsSixHandedPositionsClockwiseFromTheButton() {
+        UUID[] players=IntStream.range(0,6).mapToObj(ignored->UUID.randomUUID()).toArray(UUID[]::new);
+        RoomChange frame=rooms.create(profile(players[0],"P0"),"Six max",6,RoomConfig.DEFAULT);
+        for(int i=1;i<players.length;i++) rooms.join(profile(players[i],"P"+i),frame.room().joinCodeValue());
+        for(int seat=0;seat<players.length;seat++) frame=rooms.takeSeat(players[seat],frame.roomId(),seat,500);
+
+        GameView view=new GameSnapshotRedactor().redact(startScheduled(frame).room(),players[0]);
+        assertThat(view.seats()).extracting(GameView.GameSeatView::seat,GameView.GameSeatView::position)
+                .containsExactly(
+                        tuple(0,"BN"),tuple(1,"SB"),tuple(2,"BB"),
+                        tuple(3,"UTG"),tuple(4,"MP"),tuple(5,"CO"));
+    }
+
+    @Test void recordsRepeatActionsAndClearsThemWhenTheStreetChanges() {
+        UUID a=UUID.randomUUID(),b=UUID.randomUUID(),c=UUID.randomUUID();
+        RoomChange frame=rooms.create(profile(a,"A"),"Action history",3,RoomConfig.DEFAULT);
+        rooms.join(profile(b,"B"),frame.room().joinCodeValue());
+        rooms.join(profile(c,"C"),frame.room().joinCodeValue());
+        rooms.takeSeat(a,frame.roomId(),0,500);
+        rooms.takeSeat(b,frame.roomId(),1,500);
+        frame=startScheduled(rooms.takeSeat(c,frame.roomId(),2,500));
+
+        GameState game=frame.room().game();
+        frame=rooms.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.RAISE_TO,30L);
+        game=frame.room().game();
+        frame=rooms.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.CALL,null);
+        game=frame.room().game();
+        frame=rooms.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.RAISE_TO,60L);
+        game=frame.room().game();
+        frame=rooms.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.CALL,null);
+        game=frame.room().game();
+        frame=rooms.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.CALL,null);
+
+        GameView preflop=new GameSnapshotRedactor().redact(frame.room(),a);
+        assertThat(preflop.seats().stream().filter(seat->seat.seat()==0).findFirst().orElseThrow().actions())
+                .extracting(GameView.LastActionView::action).containsExactly("RAISE_TO","CALL");
+        assertThat(preflop.seats().stream().filter(seat->seat.seat()==1).findFirst().orElseThrow().actions())
+                .extracting(GameView.LastActionView::action).containsExactly("CALL","CALL");
+
+        game=frame.room().game();
+        frame=rooms.advancePresentation(frame.roomId(),game.handId(),game.scheduleGeneration()).orElseThrow();
+        GameView flop=new GameSnapshotRedactor().redact(frame.room(),a);
+        assertThat(flop.phase()).isEqualTo("FLOP");
+        assertThat(flop.seats()).allMatch(seat->seat.actions().isEmpty()&&seat.lastAction()==null);
+
+        game=frame.room().game();
+        frame=rooms.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.CHECK,null);
+        GameView afterCheck=new GameSnapshotRedactor().redact(frame.room(),a);
+        assertThat(afterCheck.seats().stream().filter(seat->seat.seat()==1).findFirst().orElseThrow().actions())
+                .extracting(GameView.LastActionView::action).containsExactly("CHECK");
+    }
+
     @Test void repeatedSeatRequestMustUseOriginalBuyIn() {
         UUID user=UUID.randomUUID();
         RoomChange created=rooms.create(profile(user,"A"),"T",2,RoomConfig.DEFAULT);
@@ -73,6 +127,102 @@ class GameplayWiringTest {
         assertThatThrownBy(()->rooms.takeSeat(user,created.roomId(),0,600))
                 .isInstanceOf(RoomException.class)
                 .extracting(e->((RoomException)e).error()).isEqualTo(RoomError.ALREADY_SEATED);
+    }
+
+    @Test void leaveAndReturnRestoresLastTableBalance() {
+        UUID a=UUID.randomUUID(),b=UUID.randomUUID();
+        RoomChange frame=rooms.create(profile(a,"A"),"Balance ledger",2,RoomConfig.DEFAULT);
+        rooms.join(profile(b,"B"),frame.room().joinCodeValue());
+        rooms.takeSeat(a,frame.roomId(),0,500);
+        frame=startScheduled(rooms.takeSeat(b,frame.roomId(),1,500));
+
+        GameState game=frame.room().game();
+        UUID returningUser=actor(game);
+        frame=advanceToComplete(rooms,rooms.act(
+                returningUser,frame.roomId(),game.actionSeq(),GameAction.FOLD,null));
+        TableSeatState finalSeat=frame.room().game().seats().stream()
+                .filter(seat->seat.userId().equals(returningUser)).findFirst().orElseThrow();
+        long lastBalance=finalSeat.stack();
+        String joinCode=frame.room().joinCodeValue();
+
+        rooms.leave(returningUser,frame.roomId());
+        rooms.join(profile(returningUser,"Returning"),joinCode);
+        RoomChange returned=rooms.takeSeat(returningUser,frame.roomId(),finalSeat.seat(),1_000);
+
+        assertThat(returned.room().game().seats().stream()
+                .filter(seat->seat.userId().equals(returningUser)).findFirst().orElseThrow().stack())
+                .isEqualTo(lastBalance)
+                .isNotEqualTo(1_000);
+    }
+
+    @Test void bustedSeatWaitsFiveRoundsAndUsesLatestConfiguredRebuyStack() {
+        RoomManager table=new RoomManager(clock,new JoinCodeGenerator(new java.util.Random(11)),
+                ()->deckWithPrefix("2c","As","Kh","2d","Ah","Qh","3c","4c","5d","7h","8c","9s","Tc","Jd"));
+        UUID a=UUID.randomUUID(),b=UUID.randomUUID(),c=UUID.randomUUID();
+        RoomChange frame=table.create(profile(a,"A"),"Cooldown",3,RoomConfig.DEFAULT,true);
+        table.join(profile(b,"B"),frame.room().joinCodeValue());
+        table.join(profile(c,"C"),frame.room().joinCodeValue());
+        table.takeSeat(a,frame.roomId(),0,200);
+        table.takeSeat(b,frame.roomId(),1,200);
+        frame=startScheduled(table,table.takeSeat(c,frame.roomId(),2,200));
+
+        GameState game=frame.room().game();
+        frame=table.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.RAISE_TO,200L);
+        game=frame.room().game();
+        frame=table.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.FOLD,null);
+        game=frame.room().game();
+        frame=table.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.CALL,null);
+        frame=advanceToComplete(table,frame);
+
+        TableSeatState busted=frame.room().game().seats().stream()
+                .filter(seat->seat.status()==TableSeatStatus.BUSTED).findFirst().orElseThrow();
+        UUID bustedUser=busted.userId();
+        UUID roomId=frame.roomId();
+        assertThat(busted.rebuyRoundsRemaining()).isEqualTo(5);
+        GameView bustedView=new GameSnapshotRedactor().redact(frame.room(),bustedUser);
+        assertThat(bustedView.viewer().rebuyAmount()).isEqualTo(200);
+        assertThat(bustedView.viewer().rebuyRoundsRemaining()).isEqualTo(5);
+
+        int bustedSeat=busted.seat();
+        String joinCode=frame.room().joinCodeValue();
+        table.leave(bustedUser,roomId);
+        table.join(profile(bustedUser,"Returned busted player"),joinCode);
+        frame=table.takeSeat(bustedUser,roomId,bustedSeat,200);
+        TableSeatState returnedBusted=frame.room().game().seats().stream()
+                .filter(seat->seat.userId().equals(bustedUser)).findFirst().orElseThrow();
+        assertThat(returnedBusted)
+                .extracting(TableSeatState::stack,TableSeatState::status,
+                        TableSeatState::rebuyRoundsRemaining)
+                .containsExactly(0L,TableSeatStatus.BUSTED,5);
+
+        assertThatThrownBy(()->table.rebuy(bustedUser,roomId,200))
+                .isInstanceOf(GameException.class)
+                .extracting(e->((GameException)e).error()).isEqualTo(GameError.REBUY_NOT_AVAILABLE);
+
+        for(int roundsRemaining=4;roundsRemaining>=0;roundsRemaining--){
+            GameState completed=frame.room().game();
+            frame=table.nextHand(frame.roomId(),completed.handId(),completed.scheduleGeneration()).orElseThrow();
+            frame=startScheduled(table,frame);
+            game=frame.room().game();
+            frame=table.act(actor(game),frame.roomId(),game.actionSeq(),GameAction.FOLD,null);
+            frame=advanceToComplete(table,frame);
+            TableSeatState cooling=frame.room().game().seats().stream()
+                    .filter(seat->seat.userId().equals(bustedUser)).findFirst().orElseThrow();
+            assertThat(cooling.rebuyRoundsRemaining()).isEqualTo(roundsRemaining);
+        }
+
+        table.updateSettings(a,roomId,RoomConfig.table(10,200,true,350));
+        assertThat(new GameSnapshotRedactor().redact(
+                table.room(roomId).orElseThrow(),bustedUser).viewer().rebuyAmount()).isEqualTo(350);
+        assertThatThrownBy(()->table.rebuy(bustedUser,roomId,200))
+                .isInstanceOf(GameException.class)
+                .extracting(e->((GameException)e).error()).isEqualTo(GameError.INVALID_BUY_IN);
+        RoomChange rebought=table.rebuy(bustedUser,roomId,350);
+        assertThat(rebought.room().game().seats().stream()
+                .filter(seat->seat.userId().equals(bustedUser)).findFirst().orElseThrow())
+                .extracting(TableSeatState::stack,TableSeatState::status,
+                        TableSeatState::rebuyRoundsRemaining,TableSeatState::rebought)
+                .containsExactly(350L,TableSeatStatus.ACTIVE,0,true);
     }
 
     @Test void stalePresentationGenerationCannotSkipRunoutFrames() {
@@ -189,10 +339,33 @@ class GameplayWiringTest {
     }
 
     private RoomChange startScheduled(RoomChange waiting) {
+        return startScheduled(rooms,waiting);
+    }
+
+    private RoomChange startScheduled(RoomManager manager,RoomChange waiting) {
         GameState game=waiting.room().game();
         clock.advance(Duration.ofSeconds(2));
-        return rooms.startHand(
+        return manager.startHand(
                 waiting.roomId(),game.lifecycleSeq(),game.scheduleGeneration()).orElseThrow();
+    }
+
+    private static RoomChange advanceToComplete(RoomManager manager,RoomChange frame){
+        while(frame.room().game().presentedHand().phase()!=HandPhase.COMPLETE){
+            GameState game=frame.room().game();
+            frame=manager.advancePresentation(
+                    frame.roomId(),game.handId(),game.scheduleGeneration()).orElseThrow();
+        }
+        return frame;
+    }
+
+    private static Deck deckWithPrefix(String... cards){
+        List<Card> ordered=new ArrayList<>();
+        for(String card:cards) ordered.add(Card.parse(card));
+        for(int code=0;code<52;code++){
+            Card card=new Card(code);
+            if(!ordered.contains(card)) ordered.add(card);
+        }
+        return Deck.of(ordered);
     }
 
     private static MemberProfile profile(UUID id,String name){return new MemberProfile(id,name,null);}

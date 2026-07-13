@@ -21,8 +21,9 @@ final class PokerRoom {
     final String name;
     final int maxSeats;
     final boolean privateTable;
+    final UUID creatorId;
     final Instant createdAt;
-    final RoomConfig config;
+    RoomConfig config;
     final TableGame game;
     final ReentrantLock lock = new ReentrantLock();
     final Map<UUID, Member> members = new HashMap<>();
@@ -35,12 +36,13 @@ final class PokerRoom {
     Instant lastActivityAt;
 
     PokerRoom(RoomId id, JoinCode joinCode, String name, int maxSeats, boolean privateTable,
-              Instant createdAt, RoomConfig config, Clock clock, DeckFactory decks) {
+              UUID creatorId, Instant createdAt, RoomConfig config, Clock clock, DeckFactory decks) {
         this.id = Objects.requireNonNull(id, "id");
         this.joinCode = Objects.requireNonNull(joinCode, "joinCode");
         this.name = Objects.requireNonNull(name, "name");
         this.maxSeats = maxSeats;
         this.privateTable = privateTable;
+        this.creatorId = Objects.requireNonNull(creatorId, "creatorId");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         this.config = Objects.requireNonNull(config, "config");
         this.game = new TableGame(config, maxSeats, clock, decks);
@@ -72,7 +74,9 @@ final class PokerRoom {
                 java.util.Arrays.asList(seats.clone()),
                 config,
                 game.snapshot(),
-                lastActivityAt);
+                lastActivityAt,
+                privateTable,
+                creatorId);
     }
 
     LobbyRoomState lobbyState() {

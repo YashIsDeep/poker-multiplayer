@@ -17,6 +17,7 @@ import com.poker.ws.protocol.StateSyncView;
 import com.poker.ws.protocol.SyncRoomRequest;
 import com.poker.ws.protocol.SyncStateRequest;
 import com.poker.ws.protocol.TakeSeatRequest;
+import com.poker.ws.protocol.UpdateRoomSettingsRequest;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.Objects;
@@ -66,11 +67,19 @@ public class RoomMessageController {
             Principal principal) {
         return execute(envelope.requestId(), CommandType.ROOM_CREATE, principal, user -> {
             CreateRoomRequest p = envelope.payload();
-            boolean defaultConfig = p.smallBlind() == 0 && p.bigBlind() == 0
-                    && p.minBuyIn() == 0 && p.maxBuyIn() == 0
-                    && p.actionTimeoutSeconds() == 0;
-            RoomConfig config = defaultConfig ? RoomConfig.DEFAULT : new RoomConfig(
-                    p.smallBlind(), p.bigBlind(), p.minBuyIn(), p.maxBuyIn(), p.actionTimeoutSeconds());
+            RoomConfig config;
+            if (!p.privateTable()) {
+                config = RoomConfig.PUBLIC_DEFAULT;
+            } else if (p.startingStack() > 0 || p.rebuyStack() > 0) {
+                config = RoomConfig.table(
+                        p.bigBlind(), p.startingStack(), p.rebuysEnabled(), p.rebuyStack());
+            } else if (p.smallBlind() > 0 || p.minBuyIn() > 0 || p.maxBuyIn() > 0
+                    || p.actionTimeoutSeconds() > 0) {
+                config = new RoomConfig(
+                        p.smallBlind(), p.bigBlind(), p.minBuyIn(), p.maxBuyIn(), p.actionTimeoutSeconds());
+            } else {
+                config = RoomConfig.PUBLIC_DEFAULT;
+            }
             RoomCommandResult result = service.create(
                     user.profile(), p.name(), p.maxSeats(), config, p.privateTable());
             return ack(envelope.requestId(), CommandType.ROOM_CREATE, result);
@@ -123,6 +132,21 @@ public class RoomMessageController {
             RoomCommandResult result = service.keepAlive(
                     user.userId(), envelope.payload().roomId());
             return ack(envelope.requestId(), CommandType.ROOM_KEEP_ALIVE, result);
+        });
+    }
+
+    @MessageMapping("/room.update-settings")
+    @AdmittedCommand(CommandType.ROOM_UPDATE_SETTINGS)
+    @SendToUser(destinations = "/queue/acks", broadcast = false)
+    public CommandAck updateSettings(
+            @Valid @Payload CommandEnvelope<UpdateRoomSettingsRequest> envelope,
+            Principal principal) {
+        return execute(envelope.requestId(), CommandType.ROOM_UPDATE_SETTINGS, principal, user -> {
+            UpdateRoomSettingsRequest p = envelope.payload();
+            RoomCommandResult result = service.updateSettings(
+                    user.userId(), p.roomId(), RoomConfig.table(
+                            p.bigBlind(), p.startingStack(), p.rebuysEnabled(), p.rebuyStack()));
+            return ack(envelope.requestId(), CommandType.ROOM_UPDATE_SETTINGS, result);
         });
     }
 
@@ -190,6 +214,8 @@ public class RoomMessageController {
             case NOT_SEATED -> ErrorCode.NOT_SEATED;
             case JOIN_CODE_EXHAUSTED -> ErrorCode.JOIN_CODE_EXHAUSTED;
             case INVALID_BUY_IN -> ErrorCode.INVALID_BUY_IN;
+            case NOT_ROOM_ADMIN -> ErrorCode.NOT_ROOM_ADMIN;
+            case SETTINGS_NOT_EDITABLE -> ErrorCode.SETTINGS_NOT_EDITABLE;
             case HAND_IN_PROGRESS -> ErrorCode.HAND_IN_PROGRESS;
             case INVALID_ROOM_NAME, INVALID_MAX_SEATS, INVALID_JOIN_CODE, INVALID_ROOM_CONFIG -> ErrorCode.INVALID_REQUEST;
             case INTERNAL_ERROR -> ErrorCode.INTERNAL_ERROR;

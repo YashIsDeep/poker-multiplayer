@@ -10,5 +10,6 @@ public record RoomMemberView(
         Instant joinedAt,
         Integer seat,
         boolean connected,
-        Instant disconnectedSince) {
+        Instant disconnectedSince,
+        boolean admin) {
 }

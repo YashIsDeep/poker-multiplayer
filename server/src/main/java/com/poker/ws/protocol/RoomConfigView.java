@@ -5,4 +5,7 @@ public record RoomConfigView(
         long bigBlind,
         long minBuyIn,
         long maxBuyIn,
-        int actionTimeoutSeconds) {}
+        int actionTimeoutSeconds,
+        long startingStack,
+        boolean rebuysEnabled,
+        long rebuyStack) {}

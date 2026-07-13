@@ -49,12 +49,13 @@ public final class RoomSnapshotMapper {
         if (viewer == null) {
             throw new IllegalArgumentException("viewer is not a room member");
         }
-        List<RoomMemberView> members = state.members().stream().map(this::member).toList();
+        List<RoomMemberView> members = state.members().stream()
+                .map(member -> member(member, state.creatorId())).toList();
         List<SeatView> seats = new ArrayList<>(state.maxSeats());
         for (int seat = 0; seat < state.maxSeats(); seat++) {
             seats.add(new SeatView(seat, state.seats().get(seat)));
         }
-        RoomMemberView viewerView = member(viewer);
+        RoomMemberView viewerView = member(viewer, state.creatorId());
         ViewerRoomState viewerState = new ViewerRoomState(
                 viewerId,
                 viewerView,
@@ -67,6 +68,8 @@ public final class RoomSnapshotMapper {
                 state.joinCodeValue(),
                 state.name(),
                 state.maxSeats(),
+                state.privateTable(),
+                state.privateTable() && state.creatorId().equals(viewerId),
                 membershipEpoch,
                 state.revision(),
                 now,
@@ -78,7 +81,10 @@ public final class RoomSnapshotMapper {
                         state.config().bigBlind(),
                         state.config().minBuyIn(),
                         state.config().maxBuyIn(),
-                        state.config().actionTimeoutSeconds()),
+                        state.config().actionTimeoutSeconds(),
+                        state.config().startingStack(),
+                        state.config().rebuysEnabled(),
+                        state.config().rebuyStack()),
                 viewerState,
                 gameRedactor.redact(state, viewerId));
     }
@@ -110,7 +116,7 @@ public final class RoomSnapshotMapper {
                 room.createdAt());
     }
 
-    private RoomMemberView member(MemberState member) {
+    private RoomMemberView member(MemberState member, UUID creatorId) {
         return new RoomMemberView(
                 member.userId(),
                 member.displayName(),
@@ -118,7 +124,8 @@ public final class RoomSnapshotMapper {
                 member.joinedAt(),
                 member.seat(),
                 member.connected(),
-                member.disconnectedSince());
+                member.disconnectedSince(),
+                creatorId.equals(member.userId()));
     }
 
     public RoomExitNotice disconnectedExit(UUID roomId, long membershipEpoch, Instant now) {
