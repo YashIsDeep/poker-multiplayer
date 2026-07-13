@@ -22,7 +22,7 @@ export default function ConnectionBanner() {
   return (
     <div className="connbanner offline" role="alert" data-testid="banner-offline">
       Offline — couldn&#39;t reach the table
-      <button className="retry" onClick={manualRetry}>
+      <button className="retry" data-sound="retry" onClick={manualRetry}>
         Retry
       </button>
     </div>

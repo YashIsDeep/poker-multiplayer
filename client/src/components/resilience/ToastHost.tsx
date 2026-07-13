@@ -40,10 +40,16 @@ export default function ToastHost() {
           <span
             className="x"
             role="button"
+            data-sound="close"
             tabIndex={0}
             aria-label="Dismiss"
             onClick={() => dismissToast(toast.id)}
-            onKeyDown={(e) => e.key === 'Enter' && dismissToast(toast.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.currentTarget.click()
+              }
+            }}
           >
             ✕
           </span>

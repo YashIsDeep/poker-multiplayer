@@ -44,23 +44,33 @@ export default function Landing() {
             onChange={(e) => setGuestName(e.target.value)}
             autoFocus
           />
-          <button className="btn btn-green" type="submit" disabled={!guestName.trim()}>
+          <button
+            className="btn btn-green"
+            type="submit"
+            data-sound="confirm"
+            disabled={!guestName.trim()}
+          >
             Play
           </button>
-          <button className="btn-plain" type="button" onClick={() => setGuestMode(false)}>
+          <button
+            className="btn-plain"
+            type="button"
+            data-sound="close"
+            onClick={() => setGuestMode(false)}
+          >
             back
           </button>
         </form>
       ) : (
         <div className="landing-actions">
-          <a className="btn btn-red" href="/oauth2/authorization/google">
+          <a className="btn btn-red" data-sound="confirm" href="/oauth2/authorization/google">
             Sign in with Google
           </a>
-          <a className="btn btn-blue" href="/oauth2/authorization/discord">
+          <a className="btn btn-blue" data-sound="confirm" href="/oauth2/authorization/discord">
             Sign in with Discord
           </a>
           {import.meta.env.DEV && (
-            <button className="btn btn-green" onClick={() => setGuestMode(true)}>
+            <button className="btn btn-green" data-sound="open" onClick={() => setGuestMode(true)}>
               Sign in as Guest
             </button>
           )}

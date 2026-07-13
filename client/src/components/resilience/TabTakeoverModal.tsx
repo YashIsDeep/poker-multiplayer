@@ -18,10 +18,10 @@ export default function TabTakeoverModal() {
           the same seat.
         </p>
         <div className="row">
-          <button className="btn btn-blue" onClick={claimThisTab}>
+          <button className="btn btn-blue" data-sound="confirm" onClick={claimThisTab}>
             Use here instead
           </button>
-          <button className="btn btn-dev" onClick={() => window.close()}>
+          <button className="btn btn-dev" data-sound="exit" onClick={() => window.close()}>
             Close tab
           </button>
         </div>

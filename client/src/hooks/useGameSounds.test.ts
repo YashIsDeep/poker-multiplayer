@@ -11,7 +11,11 @@ function seat(overrides: Partial<GameSeat> = {}): GameSeat {
     committed: 10,
     holeCards: null,
     lastAction: null,
+    actions: [],
+    position: 'BN',
     finalHandRank: null,
+    rebuyRoundsRemaining: 0,
+    rebought: false,
     ...overrides,
   }
 }
@@ -33,6 +37,7 @@ function game(overrides: Partial<Game> = {}): Game {
     maxRaiseTo: 100,
     toCall: 10,
     currentBet: 10,
+    potTotal: 20,
     pots: [{ amount: 20, eligibleSeats: [0, 1] }],
     awards: [],
     seats: [seat({ seat: 0 }), seat({ seat: 1, userId: 'bob' })],
@@ -40,8 +45,8 @@ function game(overrides: Partial<Game> = {}): Game {
       seated: true,
       seat: 0,
       canAct: false,
-      rebuyMinimum: null,
-      rebuyMaximum: null,
+      rebuyAmount: null,
+      rebuyRoundsRemaining: null,
       legalActions: null,
     },
     ...overrides,
@@ -82,6 +87,19 @@ describe('deriveSoundEvents', () => {
     expect(deriveSoundEvents(prev, folded, 1)).toEqual(['fold'])
   })
 
+  it('does not repeat the viewer action already played by its button', () => {
+    const prev = game()
+    const called = game({
+      seats: [
+        seat({ seat: 0, lastAction: { action: 'CALL', amount: 10 } }),
+        seat({ seat: 1, userId: 'bob' }),
+      ],
+    })
+
+    expect(deriveSoundEvents(prev, called, 0)).toEqual([])
+    expect(deriveSoundEvents(prev, called, null)).toEqual(['call'])
+  })
+
   it('suppresses action sounds on a bulk resync of many seats', () => {
     const prev = game({ seats: [seat({ seat: 0 }), seat({ seat: 1 }), seat({ seat: 2 })] })
     const bulk = game({
@@ -98,7 +116,14 @@ describe('deriveSoundEvents', () => {
     const prev = game({ actingSeat: 1 })
     const mine = game({
       actingSeat: 0,
-      viewer: { seated: true, seat: 0, canAct: true, rebuyMinimum: null, rebuyMaximum: null, legalActions: null },
+      viewer: {
+        seated: true,
+        seat: 0,
+        canAct: true,
+        rebuyAmount: null,
+        rebuyRoundsRemaining: null,
+        legalActions: null,
+      },
     })
     expect(deriveSoundEvents(prev, mine, 0)).toContain('yourTurn')
     // no repeat when it was already your turn

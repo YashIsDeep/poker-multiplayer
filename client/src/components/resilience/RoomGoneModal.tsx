@@ -21,6 +21,7 @@ export default function RoomGoneModal() {
         <div className="row">
           <button
             className="btn btn-blue"
+            data-sound="close"
             onClick={() => {
               acknowledge()
               navigate('/lobby')

@@ -40,6 +40,7 @@ export default function RoomClosedModal() {
         <div className="row">
           <button
             className="btn btn-blue"
+            data-sound="close"
             onClick={() => {
               acknowledge()
               navigate('/lobby')

@@ -5,9 +5,18 @@
 // simply no-op safely without an AudioContext.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { soundEngine, playSound } from './sound'
+import { bindGlobalClickSound, soundEngine, playSound } from './sound'
+
+function annotatedClick(sound: string): Event {
+  const event = new Event('click')
+  Object.defineProperty(event, 'composedPath', {
+    value: () => [{ getAttribute: (name: string) => (name === 'data-sound' ? sound : null) }],
+  })
+  return event
+}
 
 afterEach(() => {
+  vi.restoreAllMocks()
   // reset to defaults so tests don't leak state between cases
   soundEngine.setMuted(false)
   soundEngine.setVolume(0.7)
@@ -61,5 +70,22 @@ describe('soundEngine preferences', () => {
     expect(() => playSound('win')).not.toThrow()
     soundEngine.setMuted(true)
     expect(() => playSound('click')).not.toThrow()
+  })
+
+  it('plays one semantic sound per annotated click and falls back safely', () => {
+    const target = new EventTarget()
+    const play = vi.spyOn(soundEngine, 'play').mockImplementation(() => {})
+    const unbind = bindGlobalClickSound(target)
+
+    target.dispatchEvent(annotatedClick('confirm'))
+    target.dispatchEvent(new Event('click'))
+
+    expect(play).toHaveBeenCalledTimes(2)
+    expect(play).toHaveBeenNthCalledWith(1, 'confirm')
+    expect(play).toHaveBeenNthCalledWith(2, 'click')
+
+    unbind()
+    target.dispatchEvent(annotatedClick('exit'))
+    expect(play).toHaveBeenCalledTimes(2)
   })
 })

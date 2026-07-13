@@ -55,11 +55,12 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               className={`btn btn-dev sound-switch${muted ? ' off' : ''}`}
+              data-sound={muted ? 'toggleOn' : 'toggleOff'}
               aria-pressed={!muted}
               onClick={() => {
                 const willUnmute = muted
                 setMuted(!muted)
-                if (willUnmute) playSound('notify')
+                if (willUnmute) playSound('toggleOn')
               }}
             >
               {muted ? '🔇 Off' : '🔊 On'}
@@ -88,7 +89,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         </section>
 
         <div className="row">
-          <button className="btn btn-orange" onClick={onClose}>
+          <button className="btn btn-orange" data-sound="close" onClick={onClose}>
             Done
           </button>
         </div>

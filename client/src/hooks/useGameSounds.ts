@@ -53,13 +53,17 @@ export function deriveSoundEvents(
   // Player actions: a seat's lastAction changing to a new non-null value.
   if (sameHand) {
     const actionSounds: SoundName[] = []
+    let changedActionCount = 0
     for (const seat of game.seats) {
       const before = prev.seats.find((s) => s.seat === seat.seat)?.lastAction ?? null
       if (seat.lastAction && !sameAction(before, seat.lastAction)) {
-        actionSounds.push(ACTION_SOUND[seat.lastAction.action])
+        changedActionCount += 1
+        // The viewer's action button already played this effect immediately.
+        // Snapshot-derived sounds are for the other players at the table.
+        if (seat.seat !== yourSeat) actionSounds.push(ACTION_SOUND[seat.lastAction.action])
       }
     }
-    if (actionSounds.length > 0 && actionSounds.length <= MAX_ACTION_SOUNDS) {
+    if (actionSounds.length > 0 && changedActionCount <= MAX_ACTION_SOUNDS) {
       events.push(...actionSounds)
     }
   }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { bindAutoUnlock } from './lib/sound'
+import { bindAutoUnlock, bindGlobalClickSound } from './lib/sound'
 import {
   rememberPostLoginRedirect,
   takePostLoginRedirect,
@@ -78,8 +78,13 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 export default function App() {
   // Resume the Web Audio context on the first user gesture so the earliest
-  // sound effect isn't swallowed by the browser autoplay policy.
-  useEffect(() => bindAutoUnlock(), [])
+  // sound effect isn't swallowed by the browser autoplay policy. A capture-
+  // phase listener also resolves one semantic click sound across the entire
+  // app, including controls that stop propagation or are added in the future.
+  useEffect(() => {
+    bindAutoUnlock()
+    return bindGlobalClickSound()
+  }, [])
 
   return (
     <BrowserRouter>

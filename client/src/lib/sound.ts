@@ -7,6 +7,16 @@
 
 export type SoundName =
   | 'click' // generic UI blip
+  | 'tick' // small value/preset adjustment
+  | 'open' // open a panel or begin a flow
+  | 'close' // close a panel or go back
+  | 'confirm' // submit or accept an operation
+  | 'toggleOn' // enable a setting
+  | 'toggleOff' // disable a setting
+  | 'retry' // reconnect / try again
+  | 'exit' // leave a seat, table, session, or tab
+  | 'seat' // take a seat or sit back in
+  | 'rebuy' // buy a fresh chip stack
   | 'deal' // new hand — cards riffled out
   | 'card' // a single community card flips
   | 'check' // a player knocks / checks
@@ -18,6 +28,10 @@ export type SoundName =
   | 'winBig' // pot awarded to you
   | 'notify' // soft positive confirmation (seat taken, room joined)
   | 'error' // rejected action / error toast
+
+export function isSoundName(value: string | null): value is SoundName {
+  return value !== null && value in RECIPES
+}
 
 type Prefs = { muted: boolean; volume: number }
 
@@ -154,6 +168,29 @@ export function bindAutoUnlock() {
   window.addEventListener('touchstart', handler, { passive: true })
 }
 
+// Resolve the nearest semantic sound in the click's composed path. Components
+// declare intent with data-sound; unannotated clicks retain the generic guardrail.
+export function soundForClick(event: Event): SoundName {
+  for (const target of event.composedPath()) {
+    const candidate = target as { getAttribute?: (name: string) => string | null }
+    const sound = candidate.getAttribute?.('data-sound') ?? null
+    if (isSoundName(sound)) return sound
+  }
+  return 'click'
+}
+
+// One capture-phase boundary plays exactly one resolved sound for the whole
+// app, including controls that stop propagation and controls added later.
+export function bindGlobalClickSound(
+  target: EventTarget | null = typeof window === 'undefined' ? null : window,
+) {
+  if (!target) return () => {}
+
+  const handler = (event: Event) => soundEngine.play(soundForClick(event))
+  target.addEventListener('click', handler, { capture: true })
+  return () => target.removeEventListener('click', handler, { capture: true })
+}
+
 // ---------- low-level voice helpers ----------
 
 type ToneOpts = {
@@ -243,6 +280,48 @@ function chip(at: number, gain = 0.22) {
 const RECIPES: Record<SoundName, () => void> = {
   click() {
     tone({ freq: 660, type: 'square', dur: 0.05, gain: 0.14, glideTo: 880, release: 0.05 })
+  },
+  tick() {
+    tone({ freq: 980, type: 'square', dur: 0.025, gain: 0.1, glideTo: 1120, release: 0.025 })
+  },
+  open() {
+    tone({ freq: 420, type: 'square', dur: 0.06, gain: 0.13, glideTo: 560, release: 0.06 })
+    tone({ freq: 700, type: 'triangle', start: 0.055, dur: 0.08, gain: 0.16, release: 0.08 })
+  },
+  close() {
+    tone({ freq: 700, type: 'square', dur: 0.06, gain: 0.12, glideTo: 520, release: 0.06 })
+    tone({ freq: 360, type: 'triangle', start: 0.05, dur: 0.08, gain: 0.14, release: 0.08 })
+  },
+  confirm() {
+    tone({ freq: 523, type: 'triangle', dur: 0.08, gain: 0.18, release: 0.08 })
+    tone({ freq: 784, type: 'triangle', start: 0.075, dur: 0.11, gain: 0.2, release: 0.11 })
+  },
+  toggleOn() {
+    tone({ freq: 480, type: 'square', dur: 0.04, gain: 0.12, release: 0.04 })
+    tone({ freq: 760, type: 'square', start: 0.045, dur: 0.05, gain: 0.14, release: 0.05 })
+  },
+  toggleOff() {
+    tone({ freq: 720, type: 'square', dur: 0.04, gain: 0.12, release: 0.04 })
+    tone({ freq: 400, type: 'square', start: 0.045, dur: 0.05, gain: 0.12, release: 0.05 })
+  },
+  retry() {
+    for (const [index, freq] of [360, 480, 640].entries()) {
+      tone({ freq, type: 'square', start: index * 0.055, dur: 0.05, gain: 0.12, release: 0.05 })
+    }
+  },
+  exit() {
+    noise({ dur: 0.13, gain: 0.1, filter: 'lowpass', freq: 900, sweepTo: 260 })
+    tone({ freq: 330, type: 'triangle', dur: 0.14, gain: 0.16, glideTo: 165, release: 0.14 })
+  },
+  seat() {
+    tone({ freq: 145, type: 'sine', dur: 0.09, gain: 0.22, release: 0.09 })
+    chip(0.035, 0.18)
+  },
+  rebuy() {
+    chip(0, 0.18)
+    chip(0.045, 0.2)
+    chip(0.09, 0.22)
+    tone({ freq: 784, type: 'triangle', start: 0.13, dur: 0.12, gain: 0.18, release: 0.12 })
   },
   deal() {
     // a quick riffle: five staggered card whisks
