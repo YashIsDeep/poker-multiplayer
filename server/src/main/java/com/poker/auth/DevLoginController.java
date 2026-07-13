@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@Profile("dev")
+@Profile({"dev", "local-auth"})
 public class DevLoginController {
     private final UserProvisioningService provisioningService;
     private final SecurityContextRepository securityContextRepository;

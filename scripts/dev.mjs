@@ -9,8 +9,15 @@ const oauthVariables = [
   'DISCORD_CLIENT_SECRET',
 ]
 
-const configuredVariables = oauthVariables.filter((name) => process.env[name]?.trim())
-const missingVariables = oauthVariables.filter((name) => !process.env[name]?.trim())
+const oauthDisabled = ['false', '0', 'off', 'no'].includes(
+  process.env.OAUTH_ENABLED?.trim().toLowerCase(),
+)
+const configuredVariables = oauthDisabled
+  ? []
+  : oauthVariables.filter((name) => process.env[name]?.trim())
+const missingVariables = oauthDisabled
+  ? oauthVariables
+  : oauthVariables.filter((name) => !process.env[name]?.trim())
 
 if (configuredVariables.length > 0 && missingVariables.length > 0) {
   console.error(
@@ -20,9 +27,11 @@ if (configuredVariables.length > 0 && missingVariables.length > 0) {
   process.exit(1)
 }
 
-const profiles = missingVariables.length === 0 ? 'dev,oauth' : 'dev'
+const profiles = !oauthDisabled && missingVariables.length === 0 ? 'dev,oauth' : 'dev'
 
-if (profiles === 'dev') {
+if (oauthDisabled) {
+  console.log('OAuth is disabled; starting with the local dev login only.')
+} else if (profiles === 'dev') {
   console.log('OAuth credentials are not configured; starting with the local dev login only.')
 }
 

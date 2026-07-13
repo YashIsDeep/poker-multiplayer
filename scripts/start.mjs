@@ -4,6 +4,10 @@ import { resolve } from 'node:path'
 
 const targetDirectory = resolve('server', 'target')
 
+function isDisabled(value) {
+  return ['false', '0', 'off', 'no'].includes(value?.trim().toLowerCase())
+}
+
 if (!existsSync(targetDirectory)) {
   console.error('Production build not found. Run `npm run build` first.')
   process.exit(1)
@@ -19,7 +23,19 @@ if (jars.length === 0) {
   process.exit(1)
 }
 
-const profiles = process.env.SPRING_PROFILES_ACTIVE?.trim() || 'oauth'
+const oauthEnabled = !isDisabled(process.env.OAUTH_ENABLED)
+const configuredProfiles = process.env.SPRING_PROFILES_ACTIVE?.trim()
+const profiles = configuredProfiles || (oauthEnabled ? 'oauth' : 'local-auth')
+
+if (!oauthEnabled && profiles.split(',').some((profile) => profile.trim() === 'oauth')) {
+  console.error('OAUTH_ENABLED=false cannot be used with SPRING_PROFILES_ACTIVE=oauth.')
+  process.exit(1)
+}
+
+if (!oauthEnabled) {
+  console.log('OAuth is disabled; using the local guest-login profile.')
+}
+
 const child = spawn(
   'java',
   [

@@ -19,6 +19,20 @@ npm run dev
 
 Client: http://127.0.0.1:5173 (proxies `/api`, `/auth`, `/oauth2`, `/login`, `/logout`, `/ws` to the server on :8080).
 
+To share the development client remotely, run:
+
+```
+npm run dev:proxy
+```
+
+This starts the same local stack and publishes the Vite origin, including the
+API and WebSocket proxy, through a temporary localtunnel URL. The URL is
+printed in the terminal. Set `TUNNEL_PROVIDER=cloudflared` or
+`TUNNEL_PROVIDER=ngrok` to use an installed tunnel client instead. Temporary
+tunnels are for development only; OAuth providers still need the exact public
+callback URL registered, so the local dev login is the simplest way to test a
+shared tunnel.
+
 Development uses a standalone local H2 server on `127.0.0.1:9092`. `npm run
 dev` starts it automatically. If it is already running, the command asks before
 restarting it and otherwise reuses the running database. You can also manage it
@@ -34,6 +48,8 @@ Copy `.env.example` to `.env`. Populate all four OAuth credentials to test
 Google and Discord login, or leave all four blank to run locally with only the
 development login. The root commands load `.env` automatically; a partially
 filled OAuth configuration is rejected with the missing variable names.
+Set `OAUTH_ENABLED=false` for a temporary local guest-login mode without
+Google or Discord credentials.
 
 To delete the local H2 database and start fresh, stop the application and the
 database, then run:
@@ -51,6 +67,19 @@ Flyway recreates the schema the next time the server starts.
 npm run build
 npm run start
 ```
+
+To expose the packaged application through the same temporary tunnel:
+
+```
+npm run build
+npm run prod:proxy
+```
+
+This targets the Spring application on port `8080` and adds the public tunnel
+origin to the production WebSocket allow-list. Configure the tunnel provider
+with the same `TUNNEL_PROVIDER` settings used by `dev:proxy`.
+With `OAUTH_ENABLED=false`, the packaged server uses the local guest login
+instead of OAuth. Do not expose that mode to untrusted users.
 
 The production build packages the React app inside the Spring Boot jar and
 serves the complete application from port `8080` by default. Set
