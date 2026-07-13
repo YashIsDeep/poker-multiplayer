@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.poker.room.JoinCodeGenerator;
 import com.poker.room.MemberProfile;
+import com.poker.room.RoomConfig;
 import com.poker.room.RoomManager;
 import com.poker.room.application.RoomEventSink;
 import com.poker.room.application.ScheduledGameplayCoordinator;
@@ -72,11 +73,15 @@ class RoomIdleCoordinatorTest {
     }
 
     @Test
-    void reconciliationSweepExecutesAnOverdueMissedCleanup() {
+    void reconciliationSweepExpiresPrivateTableAtOneHourOfInactivity() {
         Fixture fixture = new Fixture();
         fixture.coordinator.reconcile(fixture.roomId);
-        fixture.clock.set(fixture.now.plusSeconds(3600));
 
+        fixture.clock.set(fixture.now.plusSeconds(3599));
+        fixture.coordinator.sweep();
+        assertThat(fixture.rooms.room(fixture.roomId)).isPresent();
+
+        fixture.clock.set(fixture.now.plusSeconds(3600));
         fixture.coordinator.sweep();
 
         assertThat(fixture.rooms.room(fixture.roomId)).isEmpty();
@@ -94,7 +99,9 @@ class RoomIdleCoordinatorTest {
 
         @SuppressWarnings("unchecked")
         Fixture() {
-            roomId = rooms.create(new MemberProfile(user, "A", null), "T", 2).roomId();
+            roomId = rooms.create(
+                    new MemberProfile(user, "A", null), "T", 2,
+                    RoomConfig.DEFAULT, true).roomId();
             TaskScheduler scheduler = mock(TaskScheduler.class);
             when(scheduler.schedule(any(Runnable.class), any(Instant.class))).thenAnswer(invocation -> {
                 callbacks.add(invocation.getArgument(0));

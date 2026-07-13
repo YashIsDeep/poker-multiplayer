@@ -71,7 +71,8 @@ public class RoomMessageController {
                     && p.actionTimeoutSeconds() == 0;
             RoomConfig config = defaultConfig ? RoomConfig.DEFAULT : new RoomConfig(
                     p.smallBlind(), p.bigBlind(), p.minBuyIn(), p.maxBuyIn(), p.actionTimeoutSeconds());
-            RoomCommandResult result = service.create(user.profile(), p.name(), p.maxSeats(), config);
+            RoomCommandResult result = service.create(
+                    user.profile(), p.name(), p.maxSeats(), config, p.privateTable());
             return ack(envelope.requestId(), CommandType.ROOM_CREATE, result);
         });
     }

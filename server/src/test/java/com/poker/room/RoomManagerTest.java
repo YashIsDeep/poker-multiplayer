@@ -90,6 +90,25 @@ class RoomManagerTest {
     }
 
     @Test
+    void privateRoomIsHiddenFromLobbyButJoinableByCode() {
+        RoomManager manager = new RoomManager(CLOCK, codes("ABC234"));
+        MemberProfile alice = profile("Alice");
+        MemberProfile bob = profile("Bob");
+
+        RoomChange created = manager.create(
+                alice, "Invite only", 6, RoomConfig.DEFAULT, true);
+
+        assertEquals(0, created.lobby().rooms().size());
+        assertEquals(0, manager.lobby().rooms().size());
+
+        RoomChange joined = manager.join(bob, created.room().joinCodeValue());
+
+        assertEquals(2, joined.room().memberCount());
+        assertEquals(0, joined.lobby().rooms().size());
+        assertEquals(1, manager.roomCount());
+    }
+
+    @Test
     void spectatorCanJoinWhenAllSeatsAreTaken() {
         RoomManager manager = new RoomManager(CLOCK, codes("ABC234"));
         MemberProfile alice = profile("Alice");

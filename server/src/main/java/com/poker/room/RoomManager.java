@@ -49,10 +49,15 @@ public final class RoomManager {
     }
 
     public RoomChange create(MemberProfile profile, String rawName, int maxSeats) {
-        return create(profile, rawName, maxSeats, RoomConfig.DEFAULT);
+        return create(profile, rawName, maxSeats, RoomConfig.DEFAULT, false);
     }
 
     public RoomChange create(MemberProfile profile, String rawName, int maxSeats, RoomConfig config) {
+        return create(profile, rawName, maxSeats, config, false);
+    }
+
+    public RoomChange create(MemberProfile profile, String rawName, int maxSeats,
+            RoomConfig config, boolean privateTable) {
         Objects.requireNonNull(profile, "profile");
         Objects.requireNonNull(config, "config");
         String name = normalizeName(rawName);
@@ -66,7 +71,8 @@ public final class RoomManager {
             JoinCode code = allocateCode();
             Instant now = clock.instant();
             incrementEpoch(profile.userId());
-            PokerRoom room = new PokerRoom(roomId, code, name, maxSeats, now, config, clock, deckFactory);
+            PokerRoom room = new PokerRoom(
+                    roomId, code, name, maxSeats, privateTable, now, config, clock, deckFactory);
             room.members.put(profile.userId(), new PokerRoom.Member(profile, now, epoch(profile.userId())));
             room.assertInvariant();
             rooms.put(roomId, room);
@@ -976,7 +982,7 @@ public final class RoomManager {
 
     private void updateLobbyEntry(PokerRoom room) {
         LobbyRoomState state = room.lobbyState();
-        if (state.connectedMemberCount() == 0) lobbyRooms.remove(room.id);
+        if (room.privateTable || state.connectedMemberCount() == 0) lobbyRooms.remove(room.id);
         else lobbyRooms.put(room.id, state);
     }
 

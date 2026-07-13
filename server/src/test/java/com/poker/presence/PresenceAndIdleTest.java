@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.poker.room.JoinCodeGenerator;
 import com.poker.room.MemberProfile;
 import com.poker.room.RoomChange;
+import com.poker.room.RoomConfig;
 import com.poker.room.RoomManager;
 import java.time.Clock;
 import java.time.Duration;
@@ -118,18 +119,25 @@ class PresenceAndIdleTest {
     }
 
     @Test
-    void connectedButUnusedTableClosesAtInactivityDeadline() {
+    void privateTableClosesAfterOneHourOfInactivity() {
         Instant now = Instant.parse("2026-07-13T00:00:00Z");
         RoomManager rooms = roomsAt(now);
         UUID user = UUID.randomUUID();
-        RoomChange created = rooms.create(new MemberProfile(user, "A", null), "T", 2);
+        RoomChange created = rooms.create(
+                new MemberProfile(user, "A", null), "T", 2, RoomConfig.DEFAULT, true);
         RoomManager.CleanupIntent intent = intent(rooms, created.roomId());
         assertThat(intent.due()).isEqualTo(now.plus(INACTIVITY));
+
+        assertThat(rooms.cleanupDue(
+                created.roomId(), intent.generation(), intent.due(), intent.due().minusMillis(1),
+                TABLE_GRACE, MEMBER_GRACE, INACTIVITY).change()).isNull();
+        assertThat(rooms.room(created.roomId())).isPresent();
 
         RoomChange closed = rooms.cleanupDue(
                 created.roomId(), intent.generation(), intent.due(), intent.due(),
                 TABLE_GRACE, MEMBER_GRACE, INACTIVITY).change();
         assertThat(closed.kind()).isEqualTo(RoomChange.Kind.IDLE_CLOSED);
+        assertThat(rooms.room(created.roomId())).isEmpty();
     }
 
     @Test

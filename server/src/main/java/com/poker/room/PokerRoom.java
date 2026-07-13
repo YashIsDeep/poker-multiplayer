@@ -20,6 +20,7 @@ final class PokerRoom {
     final JoinCode joinCode;
     final String name;
     final int maxSeats;
+    final boolean privateTable;
     final Instant createdAt;
     final RoomConfig config;
     final TableGame game;
@@ -33,12 +34,13 @@ final class PokerRoom {
     Instant allDisconnectedSince;
     Instant lastActivityAt;
 
-    PokerRoom(RoomId id, JoinCode joinCode, String name, int maxSeats, Instant createdAt,
-              RoomConfig config, Clock clock, DeckFactory decks) {
+    PokerRoom(RoomId id, JoinCode joinCode, String name, int maxSeats, boolean privateTable,
+              Instant createdAt, RoomConfig config, Clock clock, DeckFactory decks) {
         this.id = Objects.requireNonNull(id, "id");
         this.joinCode = Objects.requireNonNull(joinCode, "joinCode");
         this.name = Objects.requireNonNull(name, "name");
         this.maxSeats = maxSeats;
+        this.privateTable = privateTable;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         this.config = Objects.requireNonNull(config, "config");
         this.game = new TableGame(config, maxSeats, clock, decks);

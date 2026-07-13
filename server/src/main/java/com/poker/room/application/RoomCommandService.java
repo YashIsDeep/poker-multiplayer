@@ -42,6 +42,11 @@ public final class RoomCommandService {
         return commit(roomManager.create(profile, name, maxSeats, config));
     }
 
+    public RoomCommandResult create(MemberProfile profile, String name, int maxSeats,
+            RoomConfig config, boolean privateTable) {
+        return commit(roomManager.create(profile, name, maxSeats, config, privateTable));
+    }
+
     public RoomCommandResult join(MemberProfile profile, String joinCode) {
         return commit(roomManager.join(profile, joinCode));
     }
