@@ -1,6 +1,8 @@
 node_modules/
 target/
 dist/
+test-results/
+playwright-report/
 data/
 .env
 *.log

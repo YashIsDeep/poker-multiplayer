@@ -26,6 +26,23 @@
      and add an @font-face named 'm6x11' to switch the whole app over. */
   --font-pixel: 'm6x11', 'Pixelify Sans', monospace;
 
+  /* green felt — grass take on the Balatro felt (T7 table-green.html) */
+  --felt-1: #2e8b52;
+  --felt-2: #1c5c36;
+  --felt-3: #123f24;
+
+  --panel-dark: #232e3b;
+  --orange-deep: #cf7a15;
+  --green-deep: #2f9a70;
+  --amber-warn: #c98a00;
+
+  /* dark form-field fills + faint placeholder text (lobby inputs, join code) */
+  --input-bg: #1c2530;
+  --input-edge: #3d4a59;
+  --text-faint: #5c6b7a;
+
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+
   --radius-panel: 12px;
   --radius-card: 8px;
   --outline-text:

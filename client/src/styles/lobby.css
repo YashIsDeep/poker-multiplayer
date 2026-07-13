@@ -1,0 +1,198 @@
+/* Lobby skin (from tasks/task8/design/mockup.html lobby screen). */
+
+.lobby-stage { z-index: 0; }
+
+.lobby-scroll {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 18px;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+.lobby-head {
+  width: min(860px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lobby-logo {
+  font-size: 34px;
+  font-weight: 700;
+  transform: rotate(-2deg);
+  padding: 8px 18px 12px;
+  text-shadow: -2px -2px 0 #101722, 2px 2px 0 var(--red-deep);
+}
+.lobby-logo .lt-o { color: var(--gold); }
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 10px;
+}
+.user-chip b { font-size: 19px; }
+.user-chip .logout {
+  font-size: 13px;
+  padding: 5px 10px 7px;
+  text-decoration: none;
+}
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  image-rendering: pixelated;
+  background:
+    linear-gradient(45deg, var(--blue) 25%, transparent 25%) 0 0 / 10px 10px,
+    linear-gradient(-45deg, var(--gold) 25%, transparent 25%) 0 0 / 10px 10px,
+    var(--red);
+  border: 2px solid var(--panel-edge);
+  object-fit: cover;
+}
+
+.lobby-main {
+  width: min(860px, 100%);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.lobby-main h2 {
+  margin: 0 0 2px;
+  font-size: 24px;
+  text-shadow: var(--outline-text);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.live-dot {
+  font-size: 13px;
+  color: var(--green);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.live-dot::before {
+  content: '●';
+  margin-right: 6px;
+  animation: blink 1.6s steps(2) infinite;
+}
+.live-dot.off { color: var(--orange); }
+
+.lobby-empty { color: var(--text-dim); font-size: 16px; }
+
+.room-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  gap: 18px;
+  align-items: center;
+  background: var(--panel-dark);
+  border: 2px solid var(--input-edge);
+  border-radius: 10px;
+  padding: 13px 18px;
+  transition: transform 0.08s ease, border-color 0.08s ease;
+}
+.room-row:hover {
+  transform: translateX(4px);
+  border-color: var(--panel-edge);
+}
+.room-name {
+  font-size: 20px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.room-stat { text-align: right; }
+.room-stat .label { display: block; margin-bottom: 1px; }
+.room-stat b { font-size: 18px; }
+.seats-full b { color: var(--red); }
+.btn-join { font-size: 17px; padding: 8px 20px 12px; }
+
+.lobby-actions {
+  width: min(860px, 100%);
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+}
+.btn-create { font-size: 21px; flex: 0 0 auto; }
+.join-code {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  padding: 8px 12px;
+  align-items: center;
+}
+.join-code input {
+  flex: 1;
+  font: inherit;
+  font-size: 19px;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 2px solid var(--input-edge);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 60px;
+}
+.join-code input:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+.join-code input::placeholder {
+  color: var(--text-faint);
+  letter-spacing: 3px;
+}
+.btn-code-join { font-size: 16px; padding: 8px 18px 11px; }
+
+/* create-room modal (shared .modalback/.modal live in resilience.css) */
+.field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.field input[type='text'] {
+  font: inherit;
+  font-size: 17px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 2px solid var(--input-edge);
+  border-radius: 8px;
+  padding: 6px 10px;
+  max-width: 220px;
+}
+.field input[type='text']:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stepper button {
+  font: inherit;
+  font-size: 20px;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+  background: var(--panel-dark);
+  color: var(--text);
+  border: 2px solid var(--panel-edge);
+  border-radius: 8px;
+}
+.stepper b {
+  font-size: 22px;
+  min-width: 34px;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .room-row { grid-template-columns: 1fr auto auto; }
+  .room-stat:nth-of-type(2) { display: none; }
+}

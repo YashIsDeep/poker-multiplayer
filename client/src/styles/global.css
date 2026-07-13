@@ -18,6 +18,13 @@ body {
   text-shadow: var(--outline-text);
 }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
 main {
   min-height: 100%;
   display: flex;
@@ -141,4 +148,24 @@ main {
   bottom: 12px;
   color: var(--text-dim);
   font-size: 14px;
+}
+
+/* Touch devices: guarantee a 44px tap target on the compact button variants
+   (the base .btn is already ~44px; these paddings otherwise land near 32px). */
+@media (pointer: coarse) {
+  .btn,
+  .btn-leave,
+  .btn-join,
+  .btn-code-join,
+  .btn-plain,
+  .pill,
+  .stepper button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .stepper button {
+    min-width: 44px;
+  }
 }

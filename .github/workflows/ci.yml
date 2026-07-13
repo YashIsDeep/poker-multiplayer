@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            client/package-lock.json
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          npm.cmd ci
+          npm.cmd --prefix client ci
+
+      - name: Server tests
+        run: npm.cmd test
+
+      - name: Client unit tests
+        run: npm.cmd --prefix client run test
+
+      - name: Client production build
+        run: npm.cmd --prefix client run build
+
+      - name: Install Playwright Chromium
+        run: npm.cmd --prefix client exec -- playwright install chromium
+
+      - name: Browser E2E
+        run: npm.cmd --prefix client run e2e:ci
+
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            client/test-results
+            client/playwright-report
+          if-no-files-found: ignore

@@ -1,0 +1,393 @@
+<title>T7 — Functional Room (no polish)</title>
+<style>
+  /* ============================================================
+     T7 FUNCTIONAL MOCKUP — deliberately unstyled.
+     Goal: prove the snapshot->view plumbing and the control state
+     machine. System fonts, flat borders, no Balatro skin. The
+     arcade look (swirl, CRT, pixel cards, juice) is T8's job and
+     drops on top of this same information architecture.
+     ============================================================ */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    font: 14px/1.4 system-ui, "Segoe UI", Roboto, sans-serif;
+    color: #111; background: #f4f5f7;
+  }
+  h1, h2, h3 { margin: 0 0 6px; }
+  code, .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .muted { color: #667; }
+  .wrap { max-width: 940px; margin: 0 auto; }
+
+  /* --- mock control strip (not part of the app) --- */
+  .mockbar {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    padding: 8px 10px; margin-bottom: 14px;
+    background: #fff; border: 1px solid #cdd3da; border-radius: 6px;
+  }
+  .mockbar b { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #556; margin-right: 4px; }
+  .mockbar button {
+    font: inherit; font-size: 13px; cursor: pointer;
+    border: 1px solid #bcc4cc; background: #eef1f4; border-radius: 5px; padding: 4px 10px;
+  }
+  .mockbar button.on { background: #2e6fd6; color: #fff; border-color: #2e6fd6; }
+  .mockbar .sep { width: 1px; height: 20px; background: #cdd3da; margin: 0 4px; }
+
+  /* --- room shell --- */
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; background: #fff; border: 1px solid #cdd3da; border-radius: 6px; margin-bottom: 12px;
+  }
+  .topbar .rmeta span { margin-right: 14px; }
+  .topbar .rmeta b { font-family: ui-monospace, monospace; }
+  .conn { font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid; }
+  .conn.ok  { color: #1a7f43; border-color: #1a7f43; background: #eafaf0; }
+  .conn.bad { color: #b23; border-color: #b23; background: #fdecec; }
+
+  .table {
+    background: #fff; border: 1px solid #cdd3da; border-radius: 6px; padding: 14px;
+    margin-bottom: 12px;
+  }
+
+  /* board + pot */
+  .center { text-align: center; margin: 6px 0 16px; }
+  .pot { font-size: 15px; margin-bottom: 8px; }
+  .pot b { font-family: ui-monospace, monospace; }
+  .pot .side { color: #667; font-size: 13px; }
+  .board { display: inline-flex; gap: 6px; }
+  .street { font-size: 12px; color: #889; margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* generic card = plain rectangle with label */
+  .card {
+    width: 40px; height: 56px; border: 1px solid #333; border-radius: 4px;
+    background: #fff; display: inline-flex; align-items: center; justify-content: center;
+    font-family: ui-monospace, monospace; font-size: 15px; font-weight: 600;
+  }
+  .card.red { color: #c00; }
+  .card.back { background: #d8dee6; color: #99a; border-style: dashed; }
+  .card.slot { border-style: dashed; border-color: #bcc4cc; color: #ccd; }
+  .card.sm { width: 30px; height: 42px; font-size: 12px; }
+  .card.win { outline: 2px solid #1a7f43; outline-offset: 1px; }
+
+  /* seats as a plain grid (position on ellipse is a T8 concern) */
+  .seats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .seat {
+    border: 1px solid #cdd3da; border-radius: 6px; padding: 8px 10px; background: #fafbfc;
+    position: relative; min-height: 84px;
+  }
+  .seat.empty { border-style: dashed; color: #99a; display: flex; align-items: center; justify-content: center; }
+  .seat.you { border-color: #2e6fd6; }
+  .seat.actor { border-color: #d98a00; box-shadow: 0 0 0 2px #ffe1a6; }
+  .seat.folded { opacity: .5; }
+  .seat.winner { border-color: #1a7f43; box-shadow: 0 0 0 2px #b6ecc8; }
+  .seat .who { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .seat .stack { font-family: ui-monospace, monospace; }
+  .seat .last { font-size: 12px; color: #667; min-height: 15px; }
+  .seat .betline { font-size: 12px; color: #333; }
+  .seat .betline b { font-family: ui-monospace, monospace; }
+  .seat .holes { display: flex; gap: 4px; margin-top: 4px; }
+  .tag {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
+    border: 1px solid #bcc4cc; border-radius: 3px; padding: 0 4px; color: #556; background: #eef1f4;
+  }
+  .tag.dealer { background: #333; color: #fff; border-color: #333; }
+  .tag.allin { background: #fdecec; color: #b23; border-color: #e7a; }
+  .tag.sitout { background: #f4efe0; color: #96731a; }
+  .tag.disc { background: #eee; color: #889; }
+  .countdown { font-family: ui-monospace, monospace; font-size: 12px; color: #d98a00; }
+  .countdown.low { color: #b23; font-weight: 700; }
+
+  /* --- action area (the control state machine) --- */
+  .actions { background: #fff; border: 1px solid #cdd3da; border-radius: 6px; padding: 12px; }
+  .actions h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: #556; }
+  .btnrow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .btnrow button {
+    font: inherit; font-size: 15px; cursor: pointer; padding: 8px 16px;
+    border: 1px solid #999; border-radius: 5px; background: #eef1f4;
+  }
+  .btnrow button.primary { background: #2e6fd6; color: #fff; border-color: #2e6fd6; }
+  .btnrow button.danger  { background: #fff; color: #b23; border-color: #d88; }
+  .btnrow button:disabled { opacity: .45; cursor: not-allowed; }
+  .raise { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .raise input[type=range] { flex: 1; min-width: 160px; }
+  .raise .amt { font-family: ui-monospace, monospace; font-size: 15px; min-width: 70px; }
+  .raise .presets button { font: inherit; font-size: 12px; padding: 3px 8px; cursor: pointer;
+    border: 1px solid #bcc4cc; border-radius: 4px; background: #eef1f4; }
+  .clampnote { font-size: 12px; color: #667; margin-top: 6px; }
+  .waiting { color: #667; font-style: italic; }
+
+  /* rebuy / sit-out inline panel */
+  .rebuy { border: 1px dashed #d98a00; background: #fffbf0; border-radius: 6px; padding: 10px; margin-top: 8px; }
+  .rebuy .btnrow { margin-bottom: 0; }
+
+  .note { font-size: 12px; color: #667; margin-top: 10px; }
+  .note b { color: #334; }
+</style>
+
+<div class="wrap">
+  <h1 style="font-size:18px">T7 · Functional Room <span class="muted" style="font-weight:400">— plumbing proof, no polish</span></h1>
+
+  <div class="mockbar">
+    <b>seats</b>
+    <button data-n="2" class="seatbtn">2p</button>
+    <button data-n="6" class="seatbtn on">6p</button>
+    <button data-n="9" class="seatbtn">9p</button>
+    <span class="sep"></span>
+    <b>state</b>
+    <button data-s="turn"     class="statebtn on">Your turn</button>
+    <button data-s="wait"     class="statebtn">Waiting</button>
+    <button data-s="showdown" class="statebtn">Showdown</button>
+    <button data-s="busted"   class="statebtn">Busted → rebuy</button>
+    <button data-s="sitout"   class="statebtn">Sitting out</button>
+    <span class="sep"></span>
+    <b>conn</b>
+    <button data-c="ok"  class="connbtn on">online</button>
+    <button data-c="bad" class="connbtn">reconnecting</button>
+  </div>
+
+  <div class="topbar">
+    <div class="rmeta">
+      <span>Room <b id="t-room">MID123</b></span>
+      <span>blinds <b id="t-blinds">5/10</b></span>
+      <span>hand <b id="t-hand">#42</b></span>
+      <span>phase <b id="t-phase">FLOP</b></span>
+    </div>
+    <span class="conn ok" id="t-conn">● online</span>
+  </div>
+
+  <div class="table">
+    <div class="center">
+      <div class="pot">pot <b id="t-pot">340</b> <span class="side" id="t-potside"></span></div>
+      <div class="board" id="t-board"></div>
+      <div class="street" id="t-street">flop</div>
+    </div>
+    <div class="seats" id="t-seats"></div>
+  </div>
+
+  <div class="actions" id="t-actions"></div>
+
+  <p class="note">
+    <b>What this proves:</b> one server <code>snapshot</code> drives everything above (seats, stacks, bets, board, pot, dealer, turn + <code>deadline</code>).
+    The action row is the full client state machine: <b>your turn</b> shows fold / check-or-call / raise-to clamped to
+    <code>[minRaiseTo, maxRaiseTo]</code>; every act attaches the current <code>actionSeq</code>. Other states collapse the row to a status line.
+    Deliberately ugly — <b>T8</b> reskins this exact structure (elliptical seats, pixel cards, juice) with zero data changes.
+  </p>
+</div>
+
+<script>
+  const SUIT = { s:'♠', h:'♥', d:'♦', c:'♣' };
+  const RED = { h:1, d:1 };
+
+  function card(code, cls='') {
+    if (code === null)   return `<span class="card slot ${cls}">·</span>`;
+    if (code === 'back') return `<span class="card back ${cls}">?</span>`;
+    const r = code.slice(0,-1), s = code.slice(-1);
+    return `<span class="card ${RED[s]?'red':''} ${cls}">${r}${SUIT[s]}</span>`;
+  }
+
+  // seat 0 is always YOU (server rotates you to index 0 in the per-viewer snapshot)
+  const ROSTER6 = [
+    { name:'yash',  stack:1850, you:true, holes:['As','Kd'] },
+    { name:'alice', stack:2430, bet:120, last:'bet 120', actor:true },
+    { name:'bob',   stack:990,  folded:true, last:'fold' },
+    { name:'carl',  stack:3120, bet:120, last:'call 120', dealer:true },
+    { name:'dana',  stack:0,    bet:560, last:'all-in 560', allin:true },
+    { name:'eve',   stack:760,  last:'check', disc:true },
+  ];
+  const ROSTER2 = [
+    { name:'yash',  stack:1850, you:true, holes:['As','Kd'] },
+    { name:'alice', stack:2430, bet:120, last:'raise 120', dealer:true, actor:true },
+  ];
+  function roster(n) {
+    if (n === 2) return ROSTER2;
+    if (n === 6) return ROSTER6;
+    return ROSTER6.concat([
+      { name:'frank', stack:2010, sitout:true },
+      { name:'gus',   stack:1555, folded:true, last:'fold' },
+      { name:'hana',  stack:880,  bet:120, last:'call 120' },
+    ]);
+  }
+
+  const STATE = {
+    turn:     { board:['Kh','9c','2d',null,null], pot:340, street:'flop' },
+    wait:     { board:['Kh','9c','2d',null,null], pot:340, street:'flop', meLast:'call 120' },
+    showdown: { board:['Kh','9c','2d','9s','Qc'], pot:2180, street:'river',
+                reveal:{ alice:['Kd','9d'] }, winner:'alice', winCards:['Kh','9c','9s'] },
+    busted:   { board:['Kh','9c','2d',null,null], pot:340, street:'flop', meBust:true },
+    sitout:   { board:['Kh','9c','2d',null,null], pot:340, street:'flop', meSitout:true },
+  };
+
+  let seatN = 6, st = 'turn', conn = 'ok';
+
+  function render() {
+    const s = STATE[st], R = roster(seatN).slice();
+    if (s.meSitout) R[0] = { ...R[0], sitout:true, holes:null };
+    if (s.meBust)   R[0] = { ...R[0], stack:0, busted:true, holes:null };
+
+    document.getElementById('t-pot').textContent = s.pot.toLocaleString();
+    document.getElementById('t-potside').textContent =
+      (st!=='showdown' && R.some(p=>p.allin)) ? '(main 1,290 · side 890)' : '';
+    document.getElementById('t-phase').textContent = s.street.toUpperCase();
+    document.getElementById('t-street').textContent = s.street;
+    document.getElementById('t-board').innerHTML =
+      s.board.map(c => card(c ? c : null, s.winCards && c && s.winCards.includes(c) ? 'win' : '')).join('');
+
+    const cEl = document.getElementById('t-conn');
+    cEl.className = 'conn ' + (conn==='ok'?'ok':'bad');
+    cEl.textContent = conn==='ok' ? '● online' : '● reconnecting…';
+
+    // seats
+    document.getElementById('t-seats').innerHTML = R.map((p,i) => {
+      const isActor = (st==='turn' && p.you) || (st==='wait' && p.actor) || (st==='showdown'===false && false);
+      const actorNow = (st==='turn' && p.you) || (st==='wait' && p.actor);
+      const cls = ['seat',
+        p.you?'you':'', p.folded?'folded':'',
+        actorNow?'actor':'',
+        (st==='showdown' && s.winner===p.name)?'winner':''].join(' ');
+      const tags = [
+        p.dealer?'<span class="tag dealer">D</span>':'',
+        p.allin?'<span class="tag allin">all-in</span>':'',
+        p.sitout?'<span class="tag sitout">sit-out</span>':'',
+        p.busted?'<span class="tag sitout">busted</span>':'',
+        p.disc?'<span class="tag disc">offline</span>':'',
+      ].join('');
+      // hole cards: yours face-up; others hidden unless showdown reveal
+      let holes = '';
+      if (p.you && p.holes) holes = `<div class="holes">${p.holes.map(c=>card(c)).join('')}</div>`;
+      else if (st==='showdown' && s.reveal && s.reveal[p.name])
+        holes = `<div class="holes">${s.reveal[p.name].map(c=>card(c,'sm')).join('')}</div>`;
+      else if (!p.folded && !p.sitout && !p.busted)
+        holes = `<div class="holes">${card('back','sm')}${card('back','sm')}</div>`;
+
+      const lastLine = (p.you && s.meLast) ? s.meLast : (p.last || '');
+      const countdown = actorNow
+        ? `<span class="countdown${st==='turn'?' ':''}" id="cd-${i}">0:18</span>` : '';
+      return `<div class="${cls}">
+        <div class="who">${p.name}${p.you?' (you)':''} ${tags} ${countdown}</div>
+        <div class="stack">stack ${p.allin?'0 (all-in)':p.stack.toLocaleString()}</div>
+        <div class="betline">${p.bet?('bet <b>'+p.bet.toLocaleString()+'</b>'):''}</div>
+        <div class="last">${lastLine}</div>
+        ${holes}
+      </div>`;
+    }).join('');
+
+    // pad empties up to a fixed grid for readability
+    renderActions(s, R[0]);
+    if (actorTimer) clearInterval(actorTimer);
+    if (st==='turn') startCountdown();
+  }
+
+  function renderActions(s, me) {
+    const el = document.getElementById('t-actions');
+    if (conn === 'bad') {
+      el.innerHTML = `<h3>Action</h3><p class="waiting">Connection lost — reconnecting and re-syncing… controls are locked until the snapshot returns. (full reconnect UX is T10)</p>`;
+      return;
+    }
+    if (st === 'busted') {
+      el.innerHTML = `<h3>You busted out</h3>
+        <div class="rebuy">
+          <p style="margin:0 0 8px">Stack is 0. Rebuy to keep your seat, or stand up.</p>
+          <div class="raise" style="margin-bottom:8px">
+            <span>rebuy</span>
+            <input type="range" min="400" max="2000" step="10" value="1000" id="rebuy-slider">
+            <span class="amt" id="rebuy-amt">1,000</span>
+          </div>
+          <div class="btnrow">
+            <button class="primary">Rebuy 1,000</button>
+            <button class="danger">Stand up</button>
+          </div>
+        </div>`;
+      const rs = document.getElementById('rebuy-slider');
+      rs.oninput = () => document.getElementById('rebuy-amt').textContent = (+rs.value).toLocaleString();
+      return;
+    }
+    if (st === 'sitout') {
+      el.innerHTML = `<h3>Sitting out</h3>
+        <p class="waiting">You are sitting out — dealt out of hands.</p>
+        <div class="btnrow"><button class="primary">I'm back (sit in)</button><button class="danger">Stand up</button></div>`;
+      return;
+    }
+    if (st === 'showdown') {
+      el.innerHTML = `<h3>Showdown</h3>
+        <p><b>${STATE.showdown.winner}</b> wins <b class="mono">2,180</b> — Two pair, Kings and Nines. Next hand in <span class="mono">3s…</span></p>
+        <div class="btnrow"><button>Sit out next hand</button></div>`;
+      return;
+    }
+    if (st === 'wait') {
+      el.innerHTML = `<h3>Action</h3>
+        <p class="waiting">Waiting for <b>alice</b> to act…</p>
+        <div class="btnrow">
+          <button disabled>Fold</button><button disabled>Check / Call</button><button disabled>Raise to…</button>
+        </div>
+        <p class="clampnote">You already acted this street: <b>call 120</b>. Pre-actions (check/fold) would live here later.</p>`;
+      return;
+    }
+    // st === 'turn' — full control state machine
+    const toCall = 0;            // you already match alice's 120 in this snapshot? demo as facing a bet:
+    const facing = 120;         // amount to call
+    const minRaiseTo = 240, maxRaiseTo = 1850; // == your stack (all-in cap)
+    el.innerHTML = `<h3>Your turn — act within <span class="countdown" id="cd-main">0:18</span></h3>
+      <div class="btnrow">
+        <button class="danger">Fold</button>
+        <button>Call <span class="mono">${facing}</span></button>
+        <button class="primary" id="raise-btn">Raise to <span class="mono" id="raise-btn-amt">360</span></button>
+      </div>
+      <div class="raise">
+        <div class="presets">
+          <button data-f="min">min</button>
+          <button data-f="half">½ pot</button>
+          <button data-f="pot">pot</button>
+          <button data-f="allin">all-in</button>
+        </div>
+        <input type="range" id="raise-slider" min="${minRaiseTo}" max="${maxRaiseTo}" step="10" value="360">
+        <span class="amt" id="raise-amt">360</span>
+      </div>
+      <p class="clampnote">raise-to clamped to <code>[${minRaiseTo}, ${maxRaiseTo}]</code> — min-raise .. your stack (all-in). Sends <code>{action:"raiseTo", amount, actionSeq}</code>.</p>`;
+
+    const slider = document.getElementById('raise-slider');
+    const sync = () => {
+      const v = +slider.value;
+      document.getElementById('raise-amt').textContent = v.toLocaleString();
+      document.getElementById('raise-btn-amt').textContent = v.toLocaleString();
+    };
+    slider.oninput = sync;
+    document.querySelectorAll('.presets button').forEach(b => b.onclick = () => {
+      const pot = STATE.turn.pot, f = b.dataset.f;
+      slider.value = f==='min' ? minRaiseTo
+        : f==='half' ? Math.min(facing + Math.round((pot+facing)/2/10)*10, maxRaiseTo)
+        : f==='pot'  ? Math.min(facing + pot + facing, maxRaiseTo)
+        : maxRaiseTo;
+      sync();
+    });
+    sync();
+  }
+
+  // countdown just to show the deadline concept (server sends absolute deadline; client counts down)
+  let actorTimer = null;
+  function startCountdown() {
+    let sec = 18;
+    actorTimer = setInterval(() => {
+      sec--;
+      if (sec < 0) { clearInterval(actorTimer); return; }
+      const label = `0:${String(sec).padStart(2,'0')}`;
+      document.querySelectorAll('.countdown').forEach(e => {
+        e.textContent = label;
+        e.classList.toggle('low', sec <= 5);
+      });
+    }, 1000);
+  }
+
+  document.querySelectorAll('.seatbtn').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.seatbtn').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); seatN = +b.dataset.n; render();
+  });
+  document.querySelectorAll('.statebtn').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.statebtn').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); st = b.dataset.s; render();
+  });
+  document.querySelectorAll('.connbtn').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.connbtn').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); conn = b.dataset.c; render();
+  });
+
+  render();
+</script>

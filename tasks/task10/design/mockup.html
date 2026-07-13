@@ -1,0 +1,203 @@
+<title>T10 — Client resilience UX</title>
+<style>
+  /* ============================================================
+     T10 FUNCTIONAL MOCKUP — resilience & failure-state UX.
+     Overlays that sit on top of the T7 room / T8 table:
+     connection banner, toasts, room-closed redirect, multi-tab
+     takeover. Plain styling on purpose (T8 reskins later).
+     ============================================================ */
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; font:14px/1.45 system-ui,"Segoe UI",Roboto,sans-serif; color:#111; background:#f4f5f7; }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.5px; color:#556; margin:18px 0 8px; }
+  .muted { color:#667; font-weight:400; }
+  code,.mono { font-family:ui-monospace,Consolas,monospace; }
+
+  .mockbar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:8px 10px; margin-bottom:14px;
+    background:#fff; border:1px solid #cdd3da; border-radius:6px; }
+  .mockbar b { font-size:12px; text-transform:uppercase; color:#556; margin-right:4px; }
+  .mockbar button { font:inherit; font-size:13px; cursor:pointer; border:1px solid #bcc4cc; background:#eef1f4; border-radius:5px; padding:4px 10px; }
+  .mockbar button.on { background:#2e6fd6; color:#fff; border-color:#2e6fd6; }
+
+  /* the fake app viewport we overlay onto */
+  .viewport {
+    position:relative; height:420px; border:1px solid #cdd3da; border-radius:8px; overflow:hidden;
+    background:
+      repeating-linear-gradient(45deg,#e9edf1 0 12px,#eef1f4 12px 24px);
+  }
+  .viewport .stub {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px;
+    color:#8a94a0; font-size:13px; text-align:center;
+  }
+  .viewport.dimmed .stub { filter: blur(1px) brightness(.9); }
+
+  /* connection banner — top, pinned, non-blocking */
+  .connbanner {
+    position:absolute; top:0; left:0; right:0; z-index:5;
+    display:flex; align-items:center; gap:10px; justify-content:center;
+    padding:8px 12px; font-size:13px; color:#fff; background:#c98a00;
+  }
+  .connbanner .spin { width:12px; height:12px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .connbanner.offline { background:#b23; }
+  .connbanner .retry { margin-left:8px; font:inherit; font-size:12px; background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.5); border-radius:4px; padding:2px 8px; cursor:pointer; }
+
+  /* toast stack — bottom-right */
+  .toasts { position:absolute; right:12px; bottom:12px; z-index:8; display:flex; flex-direction:column; gap:8px; width:300px; }
+  .toast { border-radius:6px; padding:10px 12px; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,.2);
+    display:flex; gap:8px; align-items:flex-start; animation:slidein .2s ease; }
+  @keyframes slidein { from { transform: translateX(20px); opacity:0; } }
+  .toast .x { margin-left:auto; cursor:pointer; opacity:.8; }
+  .toast.info  { background:#2e6fd6; }
+  .toast.warn  { background:#c98a00; }
+  .toast.error { background:#b23; }
+  .toast.ok    { background:#1a7f43; }
+  .toast small { display:block; opacity:.85; margin-top:2px; }
+
+  /* blocking modal — room closed / kicked to lobby / takeover */
+  .modalback { position:absolute; inset:0; z-index:10; background:rgba(20,25,32,.55); display:flex; align-items:center; justify-content:center; }
+  .modal { background:#fff; border-radius:8px; padding:20px 22px; width:min(420px,90%); box-shadow:0 12px 40px rgba(0,0,0,.3); }
+  .modal h3 { margin:0 0 8px; font-size:17px; }
+  .modal p { margin:0 0 14px; color:#445; }
+  .modal .row { display:flex; gap:10px; }
+  .modal button { font:inherit; font-size:14px; cursor:pointer; padding:8px 16px; border-radius:5px; border:1px solid #999; background:#eef1f4; }
+  .modal button.primary { background:#2e6fd6; color:#fff; border-color:#2e6fd6; }
+  .modal .count { font-family:ui-monospace,monospace; }
+
+  .none { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#8a94a0; font-size:13px; }
+
+  .matrix { width:100%; border-collapse:collapse; font-size:13px; background:#fff; border:1px solid #cdd3da; border-radius:6px; overflow:hidden; }
+  .matrix th,.matrix td { text-align:left; padding:8px 10px; border-bottom:1px solid #e6eaee; vertical-align:top; }
+  .matrix th { background:#f0f3f6; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#556; }
+  .matrix tr:last-child td { border-bottom:none; }
+  .matrix code { background:#f0f3f6; padding:1px 4px; border-radius:3px; }
+</style>
+
+<div class="wrap">
+  <h1>T10 · Client resilience UX <span class="muted">— overlays on the room, + reconnect / room-closed / multi-tab</span></h1>
+
+  <div class="mockbar">
+    <b>scenario</b>
+    <button data-s="none"       class="scbtn on">healthy</button>
+    <button data-s="reconnect"  class="scbtn">reconnecting (mid-hand)</button>
+    <button data-s="offline"    class="scbtn">offline (retries exhausted)</button>
+    <button data-s="toast"      class="scbtn">toasts</button>
+    <button data-s="closed"     class="scbtn">room closed → lobby</button>
+    <button data-s="notfound"   class="scbtn">ROOM_NOT_FOUND</button>
+    <button data-s="takeover"   class="scbtn">multi-tab takeover</button>
+  </div>
+
+  <div class="viewport" id="vp">
+    <div class="stub">
+      <div>[ Room / table screen — T7 functional, T8 skinned ]</div>
+      <div class="mono" style="font-size:12px">the resilience layer renders on top of whatever screen you're on</div>
+    </div>
+  </div>
+
+  <h2>Behaviour matrix</h2>
+  <table class="matrix">
+    <tr><th>Event</th><th>Source</th><th>UX response</th><th>Recovery</th></tr>
+    <tr>
+      <td>Socket drop mid-hand</td><td>STOMP <code>onWebSocketClose</code></td>
+      <td>Amber banner “Reconnecting…”, controls locked, table dimmed (last snapshot kept visible)</td>
+      <td>Auto-retry w/ backoff; on reconnect, re-subscribe → server resends full snapshot → banner clears, controls re-enable from fresh <code>actionSeq</code></td>
+    </tr>
+    <tr>
+      <td>Retries exhausted</td><td>store backoff cap</td>
+      <td>Red banner “Offline”, manual <b>Retry</b> button</td>
+      <td>Manual retry restarts backoff cycle</td>
+    </tr>
+    <tr>
+      <td><code>room.closed</code> broadcast</td><td>server (host left / GC)</td>
+      <td>Blocking modal, 3s auto-redirect countdown → Lobby</td>
+      <td>Snapshot cleared; navigate to <code>/lobby</code></td>
+    </tr>
+    <tr>
+      <td><code>ROOM_NOT_FOUND</code> ack</td><td>server (join/act after kill/GC)</td>
+      <td>Error toast + modal “This table is gone”</td>
+      <td>Redirect to Lobby; lobby list refetched</td>
+    </tr>
+    <tr>
+      <td>Same user joins from 2nd tab</td><td>server single-session policy</td>
+      <td>Older tab shows takeover modal “Opened in another tab”, socket closed, controls frozen</td>
+      <td>Read-only until user clicks <b>Use here</b> (re-grabs the session) — one active tab wins</td>
+    </tr>
+    <tr>
+      <td>Hard refresh mid-hand</td><td>page reload</td>
+      <td>Brief “Connecting…” splash</td>
+      <td>Session cookie re-auths handshake → rejoin-as-resync → same seat, current snapshot</td>
+    </tr>
+    <tr>
+      <td>Non-fatal action reject</td><td>ack <code>error</code> (e.g. not-your-turn, stale <code>actionSeq</code>)</td>
+      <td>Warn toast; controls reconcile to latest snapshot (no local optimistic stick)</td>
+      <td>User re-acts against fresh state</td>
+    </tr>
+  </table>
+
+  <p class="muted" style="font-size:12.5px;margin-top:12px">
+    Full two-browser E2E script (Playwright, from the plan) lives in <code>README.md</code> beside this file — it drives the healthy hand plus the kill-server / refresh / double-tab paths above.
+  </p>
+</div>
+
+<script>
+  const vp = document.getElementById('vp');
+  const STUB = vp.innerHTML;
+
+  function set(s) {
+    vp.className = 'viewport' + (['reconnect','offline','closed','notfound','takeover'].includes(s) ? ' dimmed' : '');
+    vp.innerHTML = STUB;
+
+    if (s === 'reconnect') {
+      vp.insertAdjacentHTML('beforeend',
+        `<div class="connbanner"><span class="spin"></span> Reconnecting… holding your seat, controls locked</div>`);
+    }
+    if (s === 'offline') {
+      vp.insertAdjacentHTML('beforeend',
+        `<div class="connbanner offline">Offline — couldn't reach the table<button class="retry">Retry</button></div>`);
+    }
+    if (s === 'toast') {
+      vp.insertAdjacentHTML('beforeend', `<div class="toasts">
+        <div class="toast ok">Bought in for 1,000<span class="x">✕</span></div>
+        <div class="toast info">alice joined seat 3<span class="x">✕</span></div>
+        <div class="toast warn">Not your turn<small>controls re-synced to current hand</small><span class="x">✕</span></div>
+        <div class="toast error">Action rejected — hand already moved on<span class="x">✕</span></div>
+      </div>`);
+    }
+    if (s === 'closed') {
+      vp.insertAdjacentHTML('beforeend', `<div class="modalback"><div class="modal">
+        <h3>Table closed</h3>
+        <p>The host left and this table was shut down. Taking you back to the lobby in <span class="count" id="cd">3</span>s…</p>
+        <div class="row"><button class="primary">Back to lobby now</button></div>
+      </div></div>`);
+      let n=3; const el=document.getElementById('cd');
+      const t=setInterval(()=>{ n--; if(el) el.textContent=n; if(n<=0) clearInterval(t); },1000);
+    }
+    if (s === 'notfound') {
+      vp.insertAdjacentHTML('beforeend', `<div class="toasts"><div class="toast error">ROOM_NOT_FOUND<small>that table no longer exists</small><span class="x">✕</span></div></div>
+        <div class="modalback"><div class="modal">
+          <h3>This table is gone</h3>
+          <p>It may have been closed or the server restarted. Your seat and chips for this table are cleared.</p>
+          <div class="row"><button class="primary">Back to lobby</button></div>
+        </div></div>`);
+    }
+    if (s === 'takeover') {
+      vp.insertAdjacentHTML('beforeend', `<div class="modalback"><div class="modal">
+        <h3>Opened in another tab</h3>
+        <p>Your game is now active in a newer tab. This one is read-only to avoid double-acting on the same seat.</p>
+        <div class="row"><button class="primary">Use here instead</button><button>Close tab</button></div>
+      </div></div>`);
+    }
+    if (s === 'none') {
+      // healthy: nothing overlaid
+    }
+    // wire toast dismiss
+    vp.querySelectorAll('.toast .x').forEach(x => x.onclick = () => x.closest('.toast').remove());
+  }
+
+  document.querySelectorAll('.scbtn').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.scbtn').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); set(b.dataset.s);
+  });
+  set('none');
+</script>

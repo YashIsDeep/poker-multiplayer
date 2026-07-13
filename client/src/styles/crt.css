@@ -1,0 +1,34 @@
+/* T8 — CRT overlay: scanlines + animated film grain + vignette.
+   Values from the approved table-green.html (grain .11, steps(4) jitter). */
+
+.crt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.crt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.13) 0 1px, transparent 1px 3px);
+  opacity: 0.5;
+}
+
+.crt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--grain);
+  opacity: 0.11;
+  animation: grainshift 1.2s steps(4) infinite;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 41;
+  background: radial-gradient(115% 95% at 50% 45%, transparent 55%, rgba(5, 10, 18, 0.55) 100%);
+}
