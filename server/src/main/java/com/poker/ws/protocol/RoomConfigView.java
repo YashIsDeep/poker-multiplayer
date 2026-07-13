@@ -8,4 +8,5 @@ public record RoomConfigView(
         int actionTimeoutSeconds,
         long startingStack,
         boolean rebuysEnabled,
-        long rebuyStack) {}
+        long rebuyStack,
+        int rebuyDelayHands) {}

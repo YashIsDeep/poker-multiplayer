@@ -66,10 +66,12 @@ class RoomSettingsTest {
         assertThat(RoomConfig.PUBLIC_DEFAULT.startingStack()).isEqualTo(10_000_000);
         assertThat(RoomConfig.PUBLIC_DEFAULT.rebuyStack()).isEqualTo(10_000_000);
         assertThat(RoomConfig.PUBLIC_DEFAULT.rebuysEnabled()).isFalse();
+        assertThat(RoomConfig.PUBLIC_DEFAULT.rebuyDelayHands()).isEqualTo(5);
         RoomConfig trillionChipTable = RoomConfig.table(
-                1_000_000_000, 1_000_000_000_000L, true, 500_000_000_000L);
+                1_000_000_000, 1_000_000_000_000L, true, 500_000_000_000L, 10);
         assertThat(trillionChipTable.startingStack()).isEqualTo(1_000_000_000_000L);
         assertThat(trillionChipTable.rebuyStack()).isEqualTo(500_000_000_000L);
+        assertThat(trillionChipTable.rebuyDelayHands()).isEqualTo(10);
     }
 
     private static RoomManager manager(long seed) {

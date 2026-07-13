@@ -56,6 +56,8 @@ public class StompErrorHandler {
             case "/app/room.join" -> CommandType.ROOM_JOIN;
             case "/app/room.leave" -> CommandType.ROOM_LEAVE;
             case "/app/room.sync" -> CommandType.ROOM_SYNC;
+            case "/app/room.keep-alive" -> CommandType.ROOM_KEEP_ALIVE;
+            case "/app/room.update-settings" -> CommandType.ROOM_UPDATE_SETTINGS;
             case "/app/room.take-seat" -> CommandType.ROOM_TAKE_SEAT;
             case "/app/room.stand" -> CommandType.ROOM_STAND;
             case "/app/game.act" -> CommandType.GAME_ACT;

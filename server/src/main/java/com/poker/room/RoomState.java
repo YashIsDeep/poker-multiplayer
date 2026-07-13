@@ -27,7 +27,8 @@ public record RoomState(
                      long revision, List<MemberState> members, List<UUID> seats) {
         this(id, joinCode, name, maxSeats, createdAt, revision, members, seats, RoomConfig.DEFAULT,
                 new GameState(TableStatus.WAITING, 0, 0, null, null, null,
-                        List.of(), java.util.Map.of(), 1, 1, null, null, true), createdAt);
+                        List.of(), java.util.Map.of(), java.util.Map.of(),
+                        1, 1, null, null, null, null, List.of(), true), createdAt);
     }
     public RoomState(RoomId id, JoinCode joinCode, String name, int maxSeats, Instant createdAt,
                      long revision, List<MemberState> members, List<UUID> seats, RoomConfig config,

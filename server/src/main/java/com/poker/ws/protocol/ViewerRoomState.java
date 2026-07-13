@@ -8,5 +8,9 @@ public record ViewerRoomState(
         boolean seated,
         Integer seat,
         boolean canTakeSeat,
-        boolean canStand) {
+        boolean canStand,
+        boolean busted,
+        Long rebuyAmount,
+        Integer rebuyHandsRemaining,
+        Long rebuyOfferDeadline) {
 }

@@ -42,7 +42,7 @@ public final class GameSnapshotRedactor {
             GameView.LastActionView last = actions.isEmpty() ? null : actions.get(actions.size() - 1);
             seatViews.add(new GameView.GameSeatView(tableSeat.seat(), tableSeat.userId(), stack, status,
                     committed, cards, last, actions, positions.get(tableSeat.seat()), rank,
-                    tableSeat.rebuyRoundsRemaining(), tableSeat.rebought()));
+                    tableSeat.rebuyHandsRemaining(), tableSeat.rebought()));
         }
 
         LegalActions legal = game.legalActions();
@@ -54,7 +54,7 @@ public final class GameSnapshotRedactor {
         TableSeatState own = viewerSeat == null ? null : game.seats().stream().filter(s -> s.seat() == viewerSeat).findFirst().orElse(null);
         Long rebuyAmount = own != null && own.stack() == 0 && room.config().rebuysEnabled()
                 ? room.config().rebuyStack() : null;
-        Integer rebuyRoundsRemaining = own != null && own.stack() == 0 ? own.rebuyRoundsRemaining() : null;
+        Integer rebuyHandsRemaining = own != null && own.stack() == 0 ? own.rebuyHandsRemaining() : null;
 
         List<GameView.PotView> pots = hand == null ? List.of() : hand.pots().stream().map(p -> new GameView.PotView(
                 p.amount(), p.eligible().stream().map(id -> seatOf(players, id)).filter(Objects::nonNull).toList())).toList();
@@ -71,7 +71,7 @@ public final class GameSnapshotRedactor {
                 hand == null ? null : hand.bigBlindSeat(), hand == null ? List.of() : hand.board().stream().map(Card::toString).toList(),
                 hand == null ? 0 : hand.currentBet(), potTotal(hand), pots, awards, seatViews,
                 new GameView.ViewerGameView(viewerSeat != null, viewerSeat, viewerCanAct,
-                        rebuyAmount, rebuyRoundsRemaining, legalView),
+                        rebuyAmount, rebuyHandsRemaining, legalView),
                 minRaise, maxRaise, toCall);
     }
 

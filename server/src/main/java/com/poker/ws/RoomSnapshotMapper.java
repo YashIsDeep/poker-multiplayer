@@ -4,6 +4,7 @@ import com.poker.room.LobbyRoomState;
 import com.poker.room.LobbyState;
 import com.poker.room.MemberState;
 import com.poker.room.RoomState;
+import com.poker.room.TablePlayerState;
 import com.poker.presence.RoomIdleProperties;
 import com.poker.ws.protocol.LobbyRoomView;
 import com.poker.ws.protocol.LobbySnapshot;
@@ -56,13 +57,21 @@ public final class RoomSnapshotMapper {
             seats.add(new SeatView(seat, state.seats().get(seat)));
         }
         RoomMemberView viewerView = member(viewer, state.creatorId());
+        TablePlayerState player = state.game().players().get(viewerId);
+        boolean busted = player != null && player.stack() == 0;
+        boolean hasEmergencyOffer = busted && viewerId.equals(state.game().rebuyOfferUserId());
         ViewerRoomState viewerState = new ViewerRoomState(
                 viewerId,
                 viewerView,
                 viewer.seated(),
                 viewer.seat(),
-                viewer.seat() == null,
-                viewer.seat() != null);
+                viewer.seat() == null && !busted,
+                viewer.seat() != null,
+                busted,
+                busted && state.config().rebuysEnabled() ? state.config().rebuyStack() : null,
+                busted ? player.rebuyHandsRemaining() : null,
+                hasEmergencyOffer && state.game().rebuyOfferExpiresAt() != null
+                        ? state.game().rebuyOfferExpiresAt().toEpochMilli() : null);
         return new RoomSnapshot(
                 state.roomId(),
                 state.joinCodeValue(),
@@ -84,7 +93,8 @@ public final class RoomSnapshotMapper {
                         state.config().actionTimeoutSeconds(),
                         state.config().startingStack(),
                         state.config().rebuysEnabled(),
-                        state.config().rebuyStack()),
+                        state.config().rebuyStack(),
+                        state.config().rebuyDelayHands()),
                 viewerState,
                 gameRedactor.redact(state, viewerId));
     }

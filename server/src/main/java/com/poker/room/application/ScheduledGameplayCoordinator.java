@@ -119,6 +119,12 @@ public final class ScheduledGameplayCoordinator {
                     roomId, generation,
                     () -> rooms.nextHand(roomId, handId, generation)));
         }
+        if (game.rebuyOfferUserId() != null && game.rebuyOfferExpiresAt() != null) {
+            UUID offeredUserId = game.rebuyOfferUserId();
+            return new ScheduleIntent(game.rebuyOfferExpiresAt(), () -> runCurrent(
+                    roomId, generation,
+                    () -> rooms.rotateEmergencyRebuyOffer(roomId, generation, offeredUserId)));
+        }
         return null;
     }
 

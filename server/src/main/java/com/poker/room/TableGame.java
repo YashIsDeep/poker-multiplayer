@@ -9,13 +9,17 @@ import java.util.*;
 /** Room-lock-confined adapter around the pure HoldemHand engine. */
 final class TableGame {
     private static final long INTER_HAND_DELAY_SECONDS = 2;
-    private static final int REBUY_COOLDOWN_ROUNDS = 5;
+    private static final long EMERGENCY_REBUY_OFFER_SECONDS = 5;
+    private static final int MAX_HAND_HISTORIES = 20;
     private RoomConfig config;
     private final int maxSeats;
     private final Clock clock;
     private final DeckFactory decks;
     private final Map<Integer, TableSeatState> seats = new HashMap<>();
-    private final Map<UUID, PlayerBalance> playerBalances = new HashMap<>();
+    private final Map<UUID, TablePlayerState> players = new HashMap<>();
+    private final Set<UUID> roomMembers = new HashSet<>();
+    private final ArrayDeque<UUID> emergencyRebuyQueue = new ArrayDeque<>();
+    private final ArrayDeque<HandHistory> completedHistories = new ArrayDeque<>();
     private final Map<Integer, List<HandEvent.PlayerActed>> roundActions = new HashMap<>();
     private final ArrayDeque<HandTransition> presentation = new ArrayDeque<>();
     private HoldemHand hand;
@@ -31,6 +35,11 @@ final class TableGame {
     private Instant pausedNextHandAt;
     private Instant pausedSince;
     private Integer lastButton;
+    private long bustOrder;
+    private UUID rebuyOfferUserId;
+    private Instant rebuyOfferExpiresAt;
+    private HandHistory currentHistory;
+    private long historyEventSeq;
 
     TableGame(RoomConfig config, int maxSeats, Clock clock, DeckFactory decks) {
         this.config = config; this.maxSeats = maxSeats; this.clock = clock; this.decks = decks;
@@ -38,6 +47,17 @@ final class TableGame {
 
     void updateConfig(RoomConfig config) {
         this.config = Objects.requireNonNull(config, "config");
+        refreshEmergencyRebuyOffer();
+    }
+
+    void memberJoined(UUID userId) {
+        roomMembers.add(Objects.requireNonNull(userId, "userId"));
+        refreshEmergencyRebuyOffer();
+    }
+
+    void memberLeft(UUID userId) {
+        roomMembers.remove(Objects.requireNonNull(userId, "userId"));
+        refreshEmergencyRebuyOffer();
     }
 
     void seat(int seat, UUID userId, long buyIn) {
@@ -47,22 +67,26 @@ final class TableGame {
             if (existing.userId().equals(userId) && existing.initialBuyIn() == buyIn) return;
             throw new RoomException(RoomError.ALREADY_SEATED);
         }
-        PlayerBalance previousBalance = playerBalances.get(userId);
+        TablePlayerState previousBalance = players.get(userId);
+        if (previousBalance != null && previousBalance.stack() == 0) {
+            throw new GameException(GameError.REBUY_NOT_AVAILABLE);
+        }
         long balance = previousBalance == null ? buyIn : previousBalance.stack();
         long previousLifecycle = lifecycleSeq;
         seats.put(seat, new TableSeatState(
                 seat, userId, buyIn, balance,
                 balance == 0 ? TableSeatStatus.BUSTED : TableSeatStatus.ACTIVE,
                 false, false, null,
-                previousBalance == null ? 0 : previousBalance.rebuyRoundsRemaining(),
+                previousBalance == null ? 0 : previousBalance.rebuyHandsRemaining(),
                 previousBalance != null && previousBalance.rebought()));
         try {
+            refreshEmergencyRebuyOffer();
             lifecycle();
             scheduleStartIfReady();
         } catch (RuntimeException ex) {
             seats.remove(seat);
-            if (previousBalance == null) playerBalances.remove(userId);
-            else playerBalances.put(userId, previousBalance);
+            if (previousBalance == null) players.remove(userId);
+            else players.put(userId, previousBalance);
             lifecycleSeq = previousLifecycle;
             throw ex;
         }
@@ -81,6 +105,7 @@ final class TableGame {
             return false;
         }
         seats.remove(seat);
+        refreshEmergencyRebuyOffer();
         lifecycle();
         scheduleStartIfReady();
         return true;
@@ -88,6 +113,7 @@ final class TableGame {
 
     void removeAtBoundary(int seat) {
         seats.remove(seat);
+        refreshEmergencyRebuyOffer();
         lifecycle();
         scheduleStartIfReady();
     }
@@ -131,6 +157,7 @@ final class TableGame {
             return false;
         }
         seats.remove(seat);
+        refreshEmergencyRebuyOffer();
         lifecycle();
         scheduleStartIfReady();
         return true;
@@ -144,16 +171,34 @@ final class TableGame {
         scheduleStartIfReady();
     }
 
-    void rebuy(int seat, long amount) {
-        TableSeatState state = required(seat);
-        if (!config.rebuysEnabled() || state.stack() > 0 || state.rebuyRoundsRemaining() > 0
-                || (hand != null && playerInHand(seat))) {
+    void rebuy(UUID userId, long amount) {
+        TablePlayerState player = players.get(userId);
+        boolean stillOnTable = seats.values().stream().anyMatch(seat -> seat.userId().equals(userId));
+        boolean emergencyOffer = userId.equals(rebuyOfferUserId)
+                && rebuyOfferExpiresAt != null && clock.instant().isBefore(rebuyOfferExpiresAt);
+        if (!config.rebuysEnabled() || player == null || player.stack() > 0
+                || (player.rebuyHandsRemaining() > 0 && !emergencyOffer) || stillOnTable) {
             throw new GameException(GameError.REBUY_NOT_AVAILABLE);
         }
         if (amount != config.rebuyStack()) throw new GameException(GameError.INVALID_BUY_IN);
-        seats.put(seat, copy(state, state.status(), state.sitOutAfterHand(), state.standAfterHand(), amount));
+        players.put(userId, new TablePlayerState(amount, 0, true, 0));
+        refreshEmergencyRebuyOffer();
         lifecycle();
-        if (hand == null) applyBoundary();
+    }
+
+    boolean rotateEmergencyRebuyOffer(long expectedGeneration, UUID expectedUser) {
+        if (scheduleGeneration != expectedGeneration || !Objects.equals(rebuyOfferUserId, expectedUser)
+                || rebuyOfferExpiresAt == null || clock.instant().isBefore(rebuyOfferExpiresAt)) {
+            return false;
+        }
+        UUID expired = emergencyRebuyQueue.pollFirst();
+        if (expired != null) emergencyRebuyQueue.addLast(expired);
+        rebuyOfferUserId = emergencyRebuyQueue.peekFirst();
+        rebuyOfferExpiresAt = rebuyOfferUserId == null
+                ? null : clock.instant().plusSeconds(EMERGENCY_REBUY_OFFER_SECONDS);
+        scheduleGeneration = increment(scheduleGeneration);
+        lifecycle();
+        return true;
     }
 
     void act(UUID userId, long expectedSeq, GameAction action, Long amount) {
@@ -210,6 +255,7 @@ final class TableGame {
             roundActions.clear();
         }
         presented = step.snapshotAfter();
+        appendHistory(step);
         for (HandEvent event : step.events()) {
             if (event instanceof HandEvent.PlayerActed acted) {
                 roundActions.computeIfAbsent(acted.seat(), ignored -> new ArrayList<>()).add(acted);
@@ -224,14 +270,12 @@ final class TableGame {
     }
 
     private void finishHand() {
+        archiveCurrentHistory();
+        players.replaceAll((userId, player) -> player.stack() == 0 && player.rebuyHandsRemaining() > 0
+                ? new TablePlayerState(0, player.rebuyHandsRemaining() - 1,
+                        player.rebought(), player.bustedOrder())
+                : player);
         Map<Integer, TableSeatState> replacement = new HashMap<>(seats);
-        for (TableSeatState old : seats.values()) {
-            if (old.status() == TableSeatStatus.BUSTED && old.rebuyRoundsRemaining() > 0) {
-                replacement.put(old.seat(), copy(old, old.status(), old.sitOutAfterHand(),
-                        old.standAfterHand(), old.pendingRebuy(), old.stack(),
-                        old.rebuyRoundsRemaining() - 1));
-            }
-        }
         for (PlayerSnapshot player : presented.players()) {
             TableSeatState old = replacement.get(player.seat());
             if (old != null) {
@@ -239,7 +283,7 @@ final class TableGame {
                 replacement.put(player.seat(), copy(old,
                         player.stack() == 0 ? TableSeatStatus.BUSTED : TableSeatStatus.ACTIVE,
                         old.sitOutAfterHand(), old.standAfterHand(), old.pendingRebuy(), player.stack(),
-                        newlyBusted ? REBUY_COOLDOWN_ROUNDS : old.rebuyRoundsRemaining()));
+                        newlyBusted ? config.rebuyDelayHands() : old.rebuyHandsRemaining()));
             }
         }
         seats.clear(); seats.putAll(replacement);
@@ -262,13 +306,15 @@ final class TableGame {
         for (Integer seat : new ArrayList<>(seats.keySet())) {
             TableSeatState old = seats.get(seat);
             if (old.standAfterHand()) { seats.remove(seat); continue; }
+            if (old.stack() == 0) { seats.remove(seat); continue; }
             long stack = old.pendingRebuy() == null ? old.stack() : old.pendingRebuy();
             TableSeatStatus next = old.sitOutAfterHand() ? TableSeatStatus.SITTING_OUT
                     : stack == 0 ? TableSeatStatus.BUSTED : old.status() == TableSeatStatus.SITTING_OUT ? old.status() : TableSeatStatus.ACTIVE;
             seats.put(seat, copy(old, next, false, false, null, stack,
-                    stack > 0 ? 0 : old.rebuyRoundsRemaining(),
+                    stack > 0 ? 0 : old.rebuyHandsRemaining(),
                     old.rebought() || old.pendingRebuy() != null));
         }
+        refreshEmergencyRebuyOffer();
         lifecycle();
         scheduleStartIfReady();
     }
@@ -285,6 +331,7 @@ final class TableGame {
         } catch (RuntimeException ex) {
             hand = null;
             presented = null;
+            currentHistory = null;
             presentation.clear();
             roundActions.clear();
             deadline = null;
@@ -318,6 +365,7 @@ final class TableGame {
         if (pausedSince != null && !clock.instant().isBefore(pausedSince.plusSeconds(300))) {
             hand = null;
             presented = null;
+            currentHistory = null;
             presentation.clear();
             roundActions.clear();
             deadline = null;
@@ -358,7 +406,13 @@ final class TableGame {
         int button = nextButton(eligible);
         List<PlayerAtSeat> players = eligible.stream().map(s -> new PlayerAtSeat(PlayerId.of(s.userId().toString()), s.seat(), s.stack())).toList();
         HoldemHand started = HoldemHand.start(new HandConfig(config.smallBlind(), config.bigBlind(), maxSeats), players, button, decks.create());
-        hand = started; presented = started.snapshot(); lastButton = button; handId = increment(handId); roundActions.clear(); presentation.clear();
+        hand = started;
+        presented = started.snapshot();
+        lastButton = button;
+        handId = increment(handId);
+        beginHistory(eligible, started);
+        roundActions.clear();
+        presentation.clear();
         status = TableStatus.RUNNING;
         nextActionOpportunity();
         lifecycle();
@@ -407,9 +461,14 @@ final class TableGame {
 
     GameState snapshot() {
         LegalActions legal = hand == null || deadline == null ? null : hand.legalActions().orElse(null);
+        List<HandHistory> histories = new ArrayList<>(completedHistories.size() + 1);
+        if (currentHistory != null) histories.add(currentHistory);
+        histories.addAll(completedHistories);
         return new GameState(status, handId, actionSeq, deadline, presented, legal,
                 seats.values().stream().sorted(Comparator.comparingInt(TableSeatState::seat)).toList(),
-                roundActions, lifecycleSeq, scheduleGeneration, pausedSince, nextHandAt,
+                players, roundActions, lifecycleSeq, scheduleGeneration, pausedSince, nextHandAt,
+                rebuyOfferUserId, rebuyOfferExpiresAt,
+                histories,
                 hand == null && presentation.isEmpty());
     }
 
@@ -426,24 +485,122 @@ final class TableGame {
         lifecycleSeq = increment(lifecycleSeq);
     }
     private void rememberPlayerBalances() {
-        for (TableSeatState seat : seats.values()) {
-            playerBalances.put(seat.userId(), new PlayerBalance(
-                    seat.stack(), seat.rebuyRoundsRemaining(), seat.rebought()));
+        for (TableSeatState seat : seats.values().stream()
+                .sorted(Comparator.comparingInt(TableSeatState::seat)).toList()) {
+            TablePlayerState previous = players.get(seat.userId());
+            long order = 0;
+            if (seat.stack() == 0) {
+                order = previous != null && previous.stack() == 0
+                        ? previous.bustedOrder() : increment(bustOrder);
+                bustOrder = Math.max(bustOrder, order);
+            }
+            players.put(seat.userId(), new TablePlayerState(
+                    seat.stack(), seat.rebuyHandsRemaining(), seat.rebought(), order));
         }
     }
-    private record PlayerBalance(long stack, int rebuyRoundsRemaining, boolean rebought) {}
+
+    private void refreshEmergencyRebuyOffer() {
+        Set<UUID> seatedUsers = seats.values().stream().map(TableSeatState::userId)
+                .collect(java.util.stream.Collectors.toSet());
+        long fundedSeats = seats.values().stream().filter(seat -> seat.stack() > 0).count();
+        boolean fundedOffTable = players.entrySet().stream()
+                .anyMatch(entry -> roomMembers.contains(entry.getKey())
+                        && entry.getValue().stack() > 0 && !seatedUsers.contains(entry.getKey()));
+        List<UUID> eligible = players.entrySet().stream()
+                .filter(entry -> roomMembers.contains(entry.getKey())
+                        && entry.getValue().stack() == 0)
+                .sorted(Comparator.comparingLong(entry -> entry.getValue().bustedOrder()))
+                .map(Map.Entry::getKey).toList();
+        if (!config.rebuysEnabled() || fundedSeats != 1 || fundedOffTable || eligible.isEmpty()) {
+            clearEmergencyRebuyOffer();
+            return;
+        }
+        emergencyRebuyQueue.removeIf(userId -> !eligible.contains(userId));
+        for (UUID userId : eligible) {
+            if (!emergencyRebuyQueue.contains(userId)) emergencyRebuyQueue.addLast(userId);
+        }
+        if (!Objects.equals(rebuyOfferUserId, emergencyRebuyQueue.peekFirst())
+                || rebuyOfferExpiresAt == null) {
+            rebuyOfferUserId = emergencyRebuyQueue.peekFirst();
+            rebuyOfferExpiresAt = clock.instant().plusSeconds(EMERGENCY_REBUY_OFFER_SECONDS);
+            scheduleGeneration = increment(scheduleGeneration);
+        }
+    }
+
+    private void clearEmergencyRebuyOffer() {
+        emergencyRebuyQueue.clear();
+        if (rebuyOfferUserId != null || rebuyOfferExpiresAt != null) {
+            rebuyOfferUserId = null;
+            rebuyOfferExpiresAt = null;
+            scheduleGeneration = increment(scheduleGeneration);
+        }
+    }
+
+    private void beginHistory(List<TableSeatState> eligible, HoldemHand started) {
+        Instant now = clock.instant();
+        historyEventSeq = 0;
+        List<HandHistoryEvent> events = new ArrayList<>();
+        for (HandTransition transition : started.initialTransitions()) {
+            appendEvents(events, transition, now);
+        }
+        List<HandHistory.Player> historyPlayers = eligible.stream()
+                .map(seat -> new HandHistory.Player(seat.userId(), seat.seat(), seat.stack()))
+                .toList();
+        currentHistory = new HandHistory(
+                handId, now,
+                presented.phase() == HandPhase.COMPLETE ? now : null,
+                config.smallBlind(), config.bigBlind(), historyPlayers, events, presented);
+    }
+
+    private void appendHistory(HandTransition transition) {
+        if (currentHistory == null) return;
+        List<HandHistoryEvent> events = new ArrayList<>(currentHistory.events());
+        Instant now = clock.instant();
+        appendEvents(events, transition, now);
+        Instant completedAt = transition.snapshotAfter().phase() == HandPhase.COMPLETE
+                ? now : currentHistory.completedAt();
+        currentHistory = new HandHistory(
+                currentHistory.handId(), currentHistory.startedAt(), completedAt,
+                currentHistory.smallBlind(), currentHistory.bigBlind(), currentHistory.players(),
+                events, transition.snapshotAfter());
+    }
+
+    private void appendEvents(
+            List<HandHistoryEvent> destination,
+            HandTransition transition,
+            Instant occurredAt) {
+        for (HandEvent event : transition.events()) {
+            HandPhase phase = event instanceof HandEvent.StreetDealt dealt
+                    ? dealt.phase() : transition.snapshotAfter().phase();
+            historyEventSeq = increment(historyEventSeq);
+            destination.add(new HandHistoryEvent(historyEventSeq, occurredAt, phase, event));
+        }
+    }
+
+    private void archiveCurrentHistory() {
+        if (currentHistory == null) return;
+        Instant completedAt = currentHistory.completedAt() == null
+                ? clock.instant() : currentHistory.completedAt();
+        HandHistory completed = new HandHistory(
+                currentHistory.handId(), currentHistory.startedAt(), completedAt,
+                currentHistory.smallBlind(), currentHistory.bigBlind(), currentHistory.players(),
+                currentHistory.events(), presented);
+        completedHistories.addFirst(completed);
+        while (completedHistories.size() > MAX_HAND_HISTORIES) completedHistories.removeLast();
+        currentHistory = null;
+    }
     private static long increment(long value) { try { return Math.incrementExact(value); } catch (ArithmeticException ex) { throw new IllegalStateException("sequence overflow", ex); } }
     private static TableSeatState copy(TableSeatState s, TableSeatStatus status, boolean out, boolean stand, Long rebuy) { return copy(s,status,out,stand,rebuy,s.stack()); }
     private static TableSeatState copy(TableSeatState s, TableSeatStatus status, boolean out, boolean stand, Long rebuy, long stack) {
-        return copy(s, status, out, stand, rebuy, stack, s.rebuyRoundsRemaining());
+        return copy(s, status, out, stand, rebuy, stack, s.rebuyHandsRemaining());
     }
     private static TableSeatState copy(TableSeatState s, TableSeatStatus status, boolean out, boolean stand,
-                                       Long rebuy, long stack, int rebuyRoundsRemaining) {
-        return copy(s, status, out, stand, rebuy, stack, rebuyRoundsRemaining, s.rebought());
+                                       Long rebuy, long stack, int rebuyHandsRemaining) {
+        return copy(s, status, out, stand, rebuy, stack, rebuyHandsRemaining, s.rebought());
     }
     private static TableSeatState copy(TableSeatState s, TableSeatStatus status, boolean out, boolean stand,
-                                       Long rebuy, long stack, int rebuyRoundsRemaining, boolean rebought) {
+                                       Long rebuy, long stack, int rebuyHandsRemaining, boolean rebought) {
         return new TableSeatState(s.seat(), s.userId(), s.initialBuyIn(), stack, status, out, stand,
-                rebuy, rebuyRoundsRemaining, rebought);
+                rebuy, rebuyHandsRemaining, rebought);
     }
 }

@@ -2,6 +2,7 @@ package com.poker.ws;
 
 import com.poker.room.RoomException;
 import com.poker.room.RoomConfig;
+import com.poker.room.GameException;
 import com.poker.room.application.RoomCommandResult;
 import com.poker.room.application.RoomCommandService;
 import com.poker.ws.protocol.CommandAck;
@@ -72,7 +73,8 @@ public class RoomMessageController {
                 config = RoomConfig.PUBLIC_DEFAULT;
             } else if (p.startingStack() > 0 || p.rebuyStack() > 0) {
                 config = RoomConfig.table(
-                        p.bigBlind(), p.startingStack(), p.rebuysEnabled(), p.rebuyStack());
+                        p.bigBlind(), p.startingStack(), p.rebuysEnabled(), p.rebuyStack(),
+                        p.rebuyDelayHands());
             } else if (p.smallBlind() > 0 || p.minBuyIn() > 0 || p.maxBuyIn() > 0
                     || p.actionTimeoutSeconds() > 0) {
                 config = new RoomConfig(
@@ -145,7 +147,8 @@ public class RoomMessageController {
             UpdateRoomSettingsRequest p = envelope.payload();
             RoomCommandResult result = service.updateSettings(
                     user.userId(), p.roomId(), RoomConfig.table(
-                            p.bigBlind(), p.startingStack(), p.rebuysEnabled(), p.rebuyStack()));
+                            p.bigBlind(), p.startingStack(), p.rebuysEnabled(), p.rebuyStack(),
+                            p.rebuyDelayHands()));
             return ack(envelope.requestId(), CommandType.ROOM_UPDATE_SETTINGS, result);
         });
     }
@@ -186,6 +189,8 @@ public class RoomMessageController {
             return CommandAck.failure(requestId, command, ErrorCode.UNAUTHENTICATED);
         } catch (RoomException ex) {
             return CommandAck.failure(requestId, command, mapError(ex));
+        } catch (GameException ex) {
+            return CommandAck.failure(requestId, command, ErrorCode.valueOf(ex.error().name()));
         } catch (RuntimeException ex) {
             String correlationId = java.util.UUID.randomUUID().toString();
             log.warn("Unexpected STOMP command failure correlationId={} command={}", correlationId, command, ex);

@@ -75,6 +75,7 @@ public final class RoomManager {
                     roomId, code, name, maxSeats, privateTable, profile.userId(), now,
                     config, clock, deckFactory);
             room.members.put(profile.userId(), new PokerRoom.Member(profile, now, epoch(profile.userId())));
+            room.game.memberJoined(profile.userId());
             room.assertInvariant();
             rooms.put(roomId, room);
             roomsByCode.put(code, roomId);
@@ -131,6 +132,7 @@ public final class RoomManager {
                 Instant now = clock.instant();
                 incrementEpoch(profile.userId());
                 room.members.put(profile.userId(), new PokerRoom.Member(profile, now, epoch(profile.userId())));
+                room.game.memberJoined(profile.userId());
                 room.allDisconnectedSince = null;
                 touch(room, now);
                 roomsByUser.put(profile.userId(), roomId);
@@ -193,6 +195,7 @@ public final class RoomManager {
                     room.game.removeAtBoundary(member.seat);
                     room.seats[member.seat] = null;
                 }
+                room.game.memberLeft(userId);
                 roomsByUser.remove(userId);
                 incrementEpoch(userId);
                 incrementRoomRevision(room);
@@ -396,7 +399,7 @@ public final class RoomManager {
     }
 
     public RoomChange rebuy(UUID userId, UUID roomId, long amount) {
-        return gameplay(roomId, userId, room -> room.game.rebuy(requiredSeat(room, userId), amount));
+        return gameplay(roomId, userId, room -> room.game.rebuy(userId, amount));
     }
 
     public Optional<RoomChange> timeout(UUID roomId, long handId, long actionSeq, UUID actor) {
@@ -459,6 +462,12 @@ public final class RoomManager {
             }
             return true;
         });
+    }
+
+    public Optional<RoomChange> rotateEmergencyRebuyOffer(
+            UUID roomId, long scheduleGeneration, UUID offeredUserId) {
+        return gameplayCallback(roomId,
+                room -> room.game.rotateEmergencyRebuyOffer(scheduleGeneration, offeredUserId));
     }
 
     private RoomChange gameplay(UUID rawRoomId, UUID userId, java.util.function.Consumer<PokerRoom> mutation) {
@@ -888,6 +897,7 @@ public final class RoomManager {
             member.seat = null;
         }
         room.members.remove(member.userId);
+        room.game.memberLeft(member.userId);
         roomsByUser.remove(member.userId);
         incrementEpoch(member.userId);
         incrementRoomRevision(room);

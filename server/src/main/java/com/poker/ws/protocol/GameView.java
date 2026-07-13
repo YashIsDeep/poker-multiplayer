@@ -23,7 +23,7 @@ public record GameView(
     public record GameSeatView(int seat, UUID userId, long stack, String seatStatus, long committed,
                                List<String> holeCards, LastActionView lastAction,
                                List<LastActionView> actions, String position, String finalHandRank,
-                               int rebuyRoundsRemaining, boolean rebought) {
+                               int rebuyHandsRemaining, boolean rebought) {
         public GameSeatView {
             holeCards = holeCards == null ? null : List.copyOf(holeCards);
             actions = List.copyOf(actions);
@@ -32,5 +32,5 @@ public record GameView(
     public record LegalActionsView(boolean canFold, boolean canCheck, boolean canCall, long callAmount,
                                    long toCall, boolean canRaise, long minRaiseTo, long maxRaiseTo) {}
     public record ViewerGameView(boolean seated, Integer seat, boolean canAct, Long rebuyAmount,
-                                 Integer rebuyRoundsRemaining, LegalActionsView legalActions) {}
+                                 Integer rebuyHandsRemaining, LegalActionsView legalActions) {}
 }

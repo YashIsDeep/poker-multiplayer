@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /** Immutable trusted projection captured under the room lock; never serialized directly. */
 public record GameState(
@@ -17,16 +18,22 @@ public record GameState(
         HandSnapshot presentedHand,
         LegalActions legalActions,
         List<TableSeatState> seats,
+        Map<UUID, TablePlayerState> players,
         Map<Integer, List<HandEvent.PlayerActed>> roundActions,
         long lifecycleSeq,
         long scheduleGeneration,
         Instant pausedSince,
         Instant nextHandAt,
+        UUID rebuyOfferUserId,
+        Instant rebuyOfferExpiresAt,
+        List<HandHistory> handHistories,
         boolean safeBoundary) {
     public GameState {
         seats = List.copyOf(seats);
+        players = Map.copyOf(players);
         Map<Integer, List<HandEvent.PlayerActed>> copiedActions = new LinkedHashMap<>();
         roundActions.forEach((seat, actions) -> copiedActions.put(seat, List.copyOf(actions)));
         roundActions = Map.copyOf(copiedActions);
+        handHistories = List.copyOf(handHistories);
     }
 }

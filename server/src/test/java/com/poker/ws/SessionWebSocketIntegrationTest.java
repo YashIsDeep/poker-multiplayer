@@ -12,6 +12,7 @@ import com.poker.room.RoomManager;
 import com.poker.ws.protocol.CommandEnvelope;
 import com.poker.ws.protocol.CreateRoomRequest;
 import com.poker.ws.protocol.SyncStateRequest;
+import com.poker.ws.protocol.UpdateRoomSettingsRequest;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -172,6 +173,18 @@ class SessionWebSocketIntegrationTest {
         assertTrue(createAck.path("ok").asBoolean());
         assertEquals(createAck.path("roomId"), roomSnapshot.path("roomId"));
         assertEquals(1, lobbySnapshot.path("rooms").size());
+
+        String settingsRequestId = UUID.randomUUID().toString();
+        session.send("/app/room.update-settings", new CommandEnvelope<>(
+                settingsRequestId,
+                new UpdateRoomSettingsRequest(
+                        UUID.fromString(createAck.path("roomId").asText()),
+                        100_000, 10_000_000, true, 10_000_000, 5)));
+        JsonNode settingsAck = acks.poll(10, TimeUnit.SECONDS);
+        assertNotNull(settingsAck);
+        assertEquals(settingsRequestId, settingsAck.path("requestId").asText());
+        assertFalse(settingsAck.path("ok").asBoolean());
+        assertEquals("SETTINGS_NOT_EDITABLE", settingsAck.path("error").asText());
 
         HttpResponse<Void> logout = http.send(
                 HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/logout"))
