@@ -1,0 +1,18 @@
+/* PixelifyClear: a 3-glyph override font (2 / 5 / 8 only), redrawn in clean
+   5x7 pixel forms on Pixelify Sans's grid + metrics. Listed FIRST in
+   --font-pixel so these three digits use it and every other character falls
+   through to Pixelify Sans via normal per-glyph font fallback. Separate files
+   keep regular labels and bold chip stacks optically balanced. */
+@font-face {
+  font-family: 'PixelifyClear';
+  src: url('../assets/pixelify-clear.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PixelifyClear';
+  src: url('../assets/pixelify-clear-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}

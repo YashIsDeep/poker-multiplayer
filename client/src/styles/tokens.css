@@ -24,9 +24,9 @@
   --suit-red: #c01818;
   --suit-dark: #2e3444;
 
-  /* Drop m6x11.ttf (managore.itch.io/m6x11, Balatro's font) into src/assets
-     and add an @font-face named 'm6x11' to switch the whole app over. */
-  --font-pixel: 'm6x11', 'Pixelify Sans', monospace;
+  /* PixelifyClear (fonts.css) overrides only 2/5/8 with clearer glyphs;
+     Pixelify Sans renders everything else, monospace is the last resort. */
+  --font-pixel: 'PixelifyClear', 'Pixelify Sans', monospace;
 
   /* green felt — grass take on the Balatro felt (T7 table-green.html) */
   --felt-1: #2e8b52;
