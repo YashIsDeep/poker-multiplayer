@@ -18,6 +18,30 @@ body {
   text-shadow: var(--outline-text);
 }
 
+/* The full-viewport stage and its WebGL swirl background live here — in the
+   globally imported stylesheet — rather than in table.css. Both the Lobby and
+   the Room render <SwirlBackground>, so the positioning and the gradient
+   fallback must load on every route, not only where table.css happens to be
+   pulled in. When they lived in table.css the lobby's #swirl was left unstyled
+   (a 300x150 canvas stranded top-left) over a white stage. */
+.stage {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh; /* dvh tracks the visible viewport so a bottom bar never hides
+                     behind mobile browser chrome; vh is the fallback */
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 40%, var(--swirl-1) 0%, var(--swirl-2) 70%, #0e1826 100%);
+}
+
+#swirl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
@@ -48,8 +72,11 @@ main {
 
 .landing-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 16px;
   margin-top: 16px;
+  padding: 0 8px;
 }
 
 .btn {
@@ -104,9 +131,12 @@ main {
 
 .guest-form {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 16px;
   margin-top: 16px;
   align-items: center;
+  padding: 0 8px;
 }
 
 .guest-input {
@@ -119,6 +149,7 @@ main {
   border-radius: var(--radius-panel);
   outline: none;
   width: 240px;
+  max-width: 100%;
 }
 
 .guest-input:focus {
@@ -183,6 +214,28 @@ main {
   color: var(--gold);
   min-width: 48px;
   text-align: right;
+}
+
+.settings-history-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 12px;
+  text-align: left;
+}
+.settings-history-button > span:first-child {
+  color: var(--gold);
+  font-size: 24px;
+}
+.settings-history-button > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+.settings-history-button small {
+  color: var(--text-dim);
+  font-size: 12px;
+  text-transform: none;
 }
 
 /* ----- reusable table settings controls ----- */

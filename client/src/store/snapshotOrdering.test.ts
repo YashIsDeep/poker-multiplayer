@@ -54,6 +54,7 @@ function snapshot(overrides: Partial<RoomSnapshot> & { membershipEpoch: number; 
       startingStack: 200,
       rebuysEnabled: true,
       rebuyStack: 200,
+      rebuyDelayHands: 5,
     },
     viewer: {
       userId: 'u-1',
@@ -62,6 +63,10 @@ function snapshot(overrides: Partial<RoomSnapshot> & { membershipEpoch: number; 
       seat: 0,
       canTakeSeat: false,
       canStand: true,
+      busted: false,
+      rebuyAmount: null,
+      rebuyHandsRemaining: null,
+      rebuyOfferDeadline: null,
     },
     game: null,
     ...overrides,
@@ -99,7 +104,7 @@ function makeGame(actionSeq: number): Game {
       actions: [],
       position: 'BN',
       finalHandRank: null,
-      rebuyRoundsRemaining: 0,
+      rebuyHandsRemaining: 0,
       rebought: false,
     }],
     viewer: {
@@ -107,7 +112,7 @@ function makeGame(actionSeq: number): Game {
       seat: 0,
       canAct: true,
       rebuyAmount: null,
-      rebuyRoundsRemaining: null,
+      rebuyHandsRemaining: null,
       legalActions: {
         canFold: true,
         canCheck: false,

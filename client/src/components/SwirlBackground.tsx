@@ -7,8 +7,14 @@ import { useEffect, useRef } from 'react'
 
 const VERTEX_SHADER = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}'
 
+// highp is required, not cosmetic: the value-noise hash below is
+// fract(sin(dot(p,·))*43758.5453). Under mediump the ~64-wide quantization
+// step at that magnitude collapses the hash to a handful of values, so the fbm
+// degenerates into coarse bands that the radial rotation wraps into concentric
+// rings — the "dead eye". Desktop GPUs mask this by running mediump as highp;
+// phones/Intel/ARM honor mediump and break. See highp guard in the effect.
 const FRAGMENT_SHADER = `
-precision mediump float;
+precision highp float;
 uniform float t; uniform vec2 r;
 float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
@@ -44,6 +50,12 @@ export default function SwirlBackground() {
       gl = null
     }
     if (!gl) return // CSS gradient fallback stays visible
+
+    // The fragment shader needs highp (see FRAGMENT_SHADER note). If the device
+    // can't offer it, don't draw the mediump-mangled version — leave the CSS
+    // gradient, which looks intentional rather than broken.
+    const highp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT)
+    if (!highp || highp.precision < 1) return
 
     const compile = (type: number, source: string): WebGLShader | null => {
       const shader = gl.createShader(type)

@@ -14,7 +14,7 @@ function seat(overrides: Partial<GameSeat> = {}): GameSeat {
     actions: [],
     position: 'BN',
     finalHandRank: null,
-    rebuyRoundsRemaining: 0,
+    rebuyHandsRemaining: 0,
     rebought: false,
     ...overrides,
   }
@@ -46,7 +46,7 @@ function game(overrides: Partial<Game> = {}): Game {
       seat: 0,
       canAct: false,
       rebuyAmount: null,
-      rebuyRoundsRemaining: null,
+      rebuyHandsRemaining: null,
       legalActions: null,
     },
     ...overrides,
@@ -121,7 +121,7 @@ describe('deriveSoundEvents', () => {
         seat: 0,
         canAct: true,
         rebuyAmount: null,
-        rebuyRoundsRemaining: null,
+        rebuyHandsRemaining: null,
         legalActions: null,
       },
     })

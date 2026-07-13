@@ -60,7 +60,7 @@ export type RoomMemberView = {
   admin: boolean
 }
 
-export type SeatView = { seat: number; userId: string }
+export type SeatView = { seat: number; userId: string | null }
 
 export type ViewerRoomState = {
   userId: string
@@ -69,6 +69,11 @@ export type ViewerRoomState = {
   seat: number | null
   canTakeSeat: boolean
   canStand: boolean
+  busted: boolean
+  rebuyAmount: number | null
+  rebuyHandsRemaining: number | null
+  /** Five-second emergency offer deadline when only one funded player remains seated. */
+  rebuyOfferDeadline: number | null
 }
 
 export type RoomConfig = {
@@ -80,11 +85,12 @@ export type RoomConfig = {
   startingStack: number
   rebuysEnabled: boolean
   rebuyStack: number
+  rebuyDelayHands: number
 }
 
 export type TableSettings = Pick<
   RoomConfig,
-  'bigBlind' | 'startingStack' | 'rebuysEnabled' | 'rebuyStack'
+  'bigBlind' | 'startingStack' | 'rebuysEnabled' | 'rebuyStack' | 'rebuyDelayHands'
 >
 
 export type RoomSnapshot = {
@@ -174,8 +180,8 @@ export type GameSeat = {
   /** Standard poker position for this hand; null when the seat is not in the hand. */
   position: 'BN/SB' | 'BN' | 'SB' | 'BB' | 'UTG' | 'UTG+1' | 'MP' | 'LJ' | 'HJ' | 'CO' | null
   finalHandRank: string | null
-  /** Completed table rounds still required before this busted seat may rebuy. */
-  rebuyRoundsRemaining: number
+  /** Completed hands still required before this busted player may rebuy. */
+  rebuyHandsRemaining: number
   /** True once at least one accepted rebuy has been applied to this seat. */
   rebought: boolean
 }
@@ -219,10 +225,65 @@ export type Game = {
     canAct: boolean
     /** The seat's original buy-in; the only accepted rebuy amount. */
     rebuyAmount: number | null
-    rebuyRoundsRemaining: number | null
+    rebuyHandsRemaining: number | null
     legalActions: LegalActions | null
   }
 }
+
+// ---------- On-demand hand-history API ----------
+
+export type HandHistoryPlayer = {
+  seat: number
+  userId: string
+  displayName: string
+  startingStack: number
+  endingStack: number
+  netChange: number
+  won: number
+  folded: boolean
+  holeCards: string[] | null
+  finalHandRank: string | null
+}
+
+export type HandHistoryEvent = {
+  sequence: number
+  occurredAt: string
+  phase: GamePhase
+  type:
+    | 'BLIND_POSTED'
+    | 'PLAYER_ACTED'
+    | 'UNCALLED_BET_REFUNDED'
+    | 'STREET_DEALT'
+    | 'POT_AWARDED'
+    | 'HAND_COMPLETED'
+  seat: number | null
+  action: string | null
+  amount: number | null
+  total: number | null
+  stackAfter: number | null
+  cards: string[]
+  potIndex: number | null
+  potAmount: number | null
+  winners: { seat: number; amount: number }[]
+}
+
+export type HandHistory = {
+  handId: number
+  startedAt: string
+  completedAt: string | null
+  phase: GamePhase
+  completionReason: 'FOLD_WIN' | 'SHOWDOWN' | null
+  buttonSeat: number
+  smallBlindSeat: number
+  bigBlindSeat: number
+  smallBlind: number
+  bigBlind: number
+  board: string[]
+  players: HandHistoryPlayer[]
+  events: HandHistoryEvent[]
+}
+
+export type HandHistoryResponse = { roomId: string; hands: HandHistory[] }
 
 // ---------- Client-side helper shapes ----------
 

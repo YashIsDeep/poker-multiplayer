@@ -16,6 +16,7 @@ export default function TableSettingsModal({ onClose }: { onClose: () => void })
     startingStack: room?.config.startingStack ?? room?.config.minBuyIn ?? 10_000_000,
     rebuysEnabled: room?.config.rebuysEnabled ?? true,
     rebuyStack: room?.config.rebuyStack ?? room?.config.minBuyIn ?? 10_000_000,
+    rebuyDelayHands: room?.config.rebuyDelayHands ?? 5,
   }))
   const error = tableSettingsError(settings)
 
@@ -52,7 +53,8 @@ export default function TableSettingsModal({ onClose }: { onClose: () => void })
           <span className="admin-shield large" aria-hidden="true">A</span>
         </div>
         <p className="settings-note">
-          Blind changes start next hand. Stack changes apply only to future seats and rebuys.
+          Blind changes start next hand. Stack changes apply to future seats and rebuys;
+          delay changes apply to future busts.
         </p>
         <TableSettingsFields value={settings} onChange={setSettings} disabled={busy} />
         {error && <p className="settings-error" role="alert">{error}</p>}

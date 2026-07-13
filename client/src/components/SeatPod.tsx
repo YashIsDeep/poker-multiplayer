@@ -32,6 +32,21 @@ function actionLabel(action: LastAction): string {
     : verb
 }
 
+/** Only players captured in the current hand receive face-down hole cards. */
+export function displayedHoleCards(
+  gameSeat: GameSeat | null,
+  showdown: boolean,
+): (string | null)[] | null {
+  const status = gameSeat?.seatStatus
+  const cannotHoldCards =
+    status === 'FOLDED' || status === 'SITTING_OUT' || status === 'BUSTED'
+  if (gameSeat?.holeCards?.length && !cannotHoldCards) return gameSeat.holeCards
+  if (gameSeat?.position !== null && gameSeat?.position !== undefined && !cannotHoldCards && !showdown) {
+    return ['back', 'back']
+  }
+  return null
+}
+
 export default function SeatPod(props: SeatPodProps) {
   const {
     seat,
@@ -87,13 +102,9 @@ export default function SeatPod(props: SeatPodProps) {
     .filter(Boolean)
     .join(' ')
 
-  // Hole cards: own face-up, others face-down while live, revealed at showdown.
-  let cards: (string | null)[] | null = null
-  if (gameSeat?.holeCards && gameSeat.holeCards.length > 0 && !folded && !sitout && !busted) {
-    cards = gameSeat.holeCards
-  } else if (gameSeat && !folded && !sitout && !busted && status !== undefined && !showdown) {
-    cards = ['back', 'back']
-  }
+  // `position` is assigned only to the immutable participant set captured
+  // when the hand starts. A player taking a live table seat mid-hand must wait.
+  const cards = displayedHoleCards(gameSeat, showdown)
 
   return (
     <div className={seatClasses} data-seat={seat}>
@@ -116,7 +127,7 @@ export default function SeatPod(props: SeatPodProps) {
           {sitout && <span className="badge sitout-b">Sitting out</span>}
           {busted && (
             <span className="badge sitout-b">
-              Busted{(gameSeat?.rebuyRoundsRemaining ?? 0) > 0 ? ` · ${gameSeat?.rebuyRoundsRemaining}R` : ''}
+              Busted{(gameSeat?.rebuyHandsRemaining ?? 0) > 0 ? ` · ${gameSeat?.rebuyHandsRemaining}H` : ''}
             </span>
           )}
           {offline && <span className="badge offline-b">Offline</span>}

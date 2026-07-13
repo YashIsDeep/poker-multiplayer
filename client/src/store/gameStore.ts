@@ -44,6 +44,8 @@ export type GameStore = {
   game: Game | null
   yourSeat: number | null
   myHoleCards: string[] | null
+  /** Set only by a fresh create/join/rebuy ack; reconnect and refresh never reopen the prompt. */
+  autoSeatRoomId: string | null
 
   /** Monotonic tick bumped on every EMA update so hooks depending on serverNow re-derive. */
   clockTick: number
@@ -85,6 +87,7 @@ export type GameStore = {
   // ui helpers
   pushToast: (type: ToastType, message: string, detail?: string) => void
   dismissToast: (id: number) => void
+  dismissAutoSeat: () => void
   acknowledgeRoomClosed: () => void
   acknowledgeRoomGone: () => void
 
@@ -198,6 +201,13 @@ export const useGameStore = create<GameStore>()((set, get) => {
       ...extractView(snapshot),
     }
 
+    if (
+      state.autoSeatRoomId === snapshot.roomId &&
+      (snapshot.viewer.seated || !snapshot.viewer.canTakeSeat)
+    ) {
+      next.autoSeatRoomId = null
+    }
+
     // A snapshot with a newer actionSeq invalidates any in-flight action.
     const pending = state.pendingAction
     if (
@@ -226,7 +236,14 @@ export const useGameStore = create<GameStore>()((set, get) => {
       set({ membershipEpoch: epoch })
       applyRoomSnapshot(view.room)
     } else {
-      set({ membershipEpoch: epoch, ...({ room: null, game: null, yourSeat: null, myHoleCards: null }) })
+      set({
+        membershipEpoch: epoch,
+        room: null,
+        game: null,
+        yourSeat: null,
+        myHoleCards: null,
+        autoSeatRoomId: null,
+      })
     }
   }
 
@@ -288,6 +305,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
       yourSeat: null,
       myHoleCards: null,
       pendingAction: null,
+      autoSeatRoomId: null,
       roomClosed: !wasVoluntary && notice.reason === 'IDLE_TIMEOUT',
       roomGone: !wasVoluntary && notice.reason === 'DISCONNECTED_TIMEOUT',
     })
@@ -408,6 +426,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
     game: null,
     yourSeat: null,
     myHoleCards: null,
+    autoSeatRoomId: null,
     clockTick: 0,
     pendingAction: null,
     toasts: [],
@@ -456,11 +475,33 @@ export const useGameStore = create<GameStore>()((set, get) => {
     stateSync() {
       return sendCommand('/app/state.sync', {})
     },
-    createRoom(name: string, maxSeats: number, privateTable: boolean, settings?: TableSettings) {
-      return sendCommand('/app/room.create', { name, maxSeats, privateTable, ...settings })
+    async createRoom(name: string, maxSeats: number, privateTable: boolean, settings?: TableSettings) {
+      const ack = await sendCommand('/app/room.create', { name, maxSeats, privateTable, ...settings })
+      const room = get().room
+      if (
+        ack.ok &&
+        ack.roomId &&
+        room?.roomId === ack.roomId &&
+        !room.viewer.seated &&
+        room.viewer.canTakeSeat
+      ) {
+        set({ autoSeatRoomId: ack.roomId })
+      }
+      return ack
     },
-    joinRoom(joinCode: string) {
-      return sendCommand('/app/room.join', { joinCode })
+    async joinRoom(joinCode: string) {
+      const ack = await sendCommand('/app/room.join', { joinCode })
+      const room = get().room
+      if (
+        ack.ok &&
+        ack.roomId &&
+        room?.roomId === ack.roomId &&
+        !room.viewer.seated &&
+        room.viewer.canTakeSeat
+      ) {
+        set({ autoSeatRoomId: ack.roomId })
+      }
+      return ack
     },
     syncRoom(roomId: string) {
       return sendCommand('/app/room.sync', { roomId })
@@ -483,7 +524,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
         const ack = await sendCommand('/app/room.leave', { roomId })
         if (ack.ok) {
           recoveryRoomId = null
-          set({ ...extractView(null), pendingAction: null })
+          set({ ...extractView(null), pendingAction: null, autoSeatRoomId: null })
         }
         return ack
       } finally {
@@ -493,13 +534,15 @@ export const useGameStore = create<GameStore>()((set, get) => {
         }, 5000)
       }
     },
-    takeSeat(seat: number) {
+    async takeSeat(seat: number) {
       const roomId = requireRoomId()
       if (!roomId) return Promise.reject(new Error('not in a room'))
       const config = get().room?.config
       const buyIn = config?.startingStack ?? config?.minBuyIn
       if (!buyIn) return Promise.reject(new Error('room buy-in configuration is unavailable'))
-      return sendCommand('/app/room.take-seat', { roomId, seat, buyIn })
+      const ack = await sendCommand('/app/room.take-seat', { roomId, seat, buyIn })
+      if (ack.ok) set({ autoSeatRoomId: null })
+      return ack
     },
     stand() {
       const roomId = requireRoomId()
@@ -542,12 +585,14 @@ export const useGameStore = create<GameStore>()((set, get) => {
 
     rebuy(amount: number) {
       const roomId = requireRoomId()
-      const viewer = get().game?.viewer
+      const viewer = get().room?.viewer
+      const emergencyOffer = viewer?.rebuyOfferDeadline != null
+        && clockNow() < viewer.rebuyOfferDeadline
       if (
         !roomId ||
         get().pendingAction ||
         viewer?.rebuyAmount == null ||
-        viewer.rebuyRoundsRemaining !== 0 ||
+        (viewer.rebuyHandsRemaining !== 0 && !emergencyOffer) ||
         !Number.isFinite(amount) ||
         Math.round(amount) !== viewer.rebuyAmount
       ) return
@@ -556,7 +601,18 @@ export const useGameStore = create<GameStore>()((set, get) => {
       set({ pendingAction: { type: 'rebuy', amount: normalizedAmount, requestId, sentAt: clockNow() } })
       if (mockMode) return
       sendCommand(GAME_REBUY_DESTINATION, { roomId, amount: normalizedAmount }, requestId)
-        .then(() => set({ pendingAction: null }))
+        .then((ack) => {
+          set({ pendingAction: null })
+          const room = get().room
+          if (
+            ack.ok &&
+            room?.roomId === roomId &&
+            !room.viewer.seated &&
+            room.viewer.canTakeSeat
+          ) {
+            set({ autoSeatRoomId: roomId })
+          }
+        })
         .catch(() => set({ pendingAction: null }))
     },
 
@@ -576,6 +632,9 @@ export const useGameStore = create<GameStore>()((set, get) => {
     dismissToast(id: number) {
       set({ toasts: get().toasts.filter((t) => t.id !== id) })
     },
+    dismissAutoSeat() {
+      set({ autoSeatRoomId: null })
+    },
 
     acknowledgeRoomClosed() {
       set({ roomClosed: false })
@@ -588,6 +647,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
         yourSeat: null,
         myHoleCards: null,
         pendingAction: null,
+        autoSeatRoomId: null,
       })
       void get().stateSync().catch(() => {})
     },

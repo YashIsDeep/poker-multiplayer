@@ -4,7 +4,13 @@
 import { useState } from 'react'
 import SettingsModal from './SettingsModal'
 
-export default function SettingsButton({ className = '' }: { className?: string }) {
+export default function SettingsButton({
+  className = '',
+  onHandHistory,
+}: {
+  className?: string
+  onHandHistory?: () => void
+}) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -21,7 +27,19 @@ export default function SettingsButton({ className = '' }: { className?: string 
       >
         <span aria-hidden="true">⚙️</span>
       </button>
-      {open && <SettingsModal onClose={() => setOpen(false)} />}
+      {open && (
+        <SettingsModal
+          onClose={() => setOpen(false)}
+          onHandHistory={
+            onHandHistory
+              ? () => {
+                  setOpen(false)
+                  onHandHistory()
+                }
+              : undefined
+          }
+        />
+      )}
     </>
   )
 }

@@ -47,6 +47,7 @@ function baseRoom(seatCount: number): Omit<RoomSnapshot, 'game'> {
       startingStack: 200,
       rebuysEnabled: true,
       rebuyStack: 200,
+      rebuyDelayHands: 5,
     },
     viewer: {
       userId: 'u-yash',
@@ -55,6 +56,10 @@ function baseRoom(seatCount: number): Omit<RoomSnapshot, 'game'> {
       seat: 0,
       canTakeSeat: false,
       canStand: true,
+      busted: false,
+      rebuyAmount: null,
+      rebuyHandsRemaining: null,
+      rebuyOfferDeadline: null,
     },
   }
 }
@@ -87,7 +92,7 @@ function gameSeats(seatCount: number, buttonSeat: number, specs: SeatSpec[]): Ga
       actions: [],
       position: POSITION_LABELS[seatCount][(i - buttonSeat + seatCount) % seatCount],
       finalHandRank: null,
-      rebuyRoundsRemaining: 0,
+      rebuyHandsRemaining: 0,
       rebought: false,
       ...spec,
     } as GameSeat
@@ -132,7 +137,7 @@ function makeGame(seatCount: number, overrides: Partial<Game>, specs: SeatSpec[]
       seat: 0,
       canAct,
       rebuyAmount: null,
-      rebuyRoundsRemaining: null,
+      rebuyHandsRemaining: null,
       legalActions: canAct
         ? {
             canFold: true,
@@ -208,12 +213,12 @@ function staticState(state: string, seatCount: number): Game {
             seat: 0,
             canAct: false,
             rebuyAmount: 400,
-            rebuyRoundsRemaining: 5,
+            rebuyHandsRemaining: 5,
             legalActions: null,
           },
         },
         [
-          { seat: 0, seatStatus: 'BUSTED', stack: 0, rebuyRoundsRemaining: 5 },
+          { seat: 0, seatStatus: 'BUSTED', stack: 0, rebuyHandsRemaining: 5 },
           ...COMMON_SPECS.slice(1),
         ],
       )
@@ -235,7 +240,24 @@ export function startMockDriver(state: string, search: URLSearchParams) {
   store.__setMockMode(true)
 
   if (state !== 'hand') {
-    apply(baseRoom(seatCount), staticState(state, seatCount))
+    const room = baseRoom(seatCount)
+    if (state === 'busted') {
+      room.members[0] = { ...room.members[0], seat: null }
+      room.seats[0] = { seat: 0, userId: null }
+      room.viewer = {
+        ...room.viewer,
+        member: room.members[0],
+        seated: false,
+        seat: null,
+        canTakeSeat: false,
+        canStand: false,
+        busted: true,
+        rebuyAmount: 400,
+        rebuyHandsRemaining: 5,
+        rebuyOfferDeadline: Date.now() + 5_000,
+      }
+    }
+    apply(room, staticState(state, seatCount))
     applyResilienceState(search.get('resilience'))
     return
   }

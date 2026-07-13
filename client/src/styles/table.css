@@ -2,31 +2,15 @@
    Structure (T7): stage, stadium felt, superellipse seats, pods, cards, action bar.
    Juice (T8): deal stagger, chip fly, pot pop, pod pulse, timer warning. */
 
-.stage {
-  position: relative;
-  width: 100%;
-  height: 100vh;
-  height: 100dvh; /* dvh tracks the visible viewport so the bottom action bar
-                     never hides behind mobile browser chrome; vh is the fallback */
-  overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 40%, var(--swirl-1) 0%, var(--swirl-2) 70%, #0e1826 100%);
-}
-
-/* Bands the room chrome occupies; useTableFit keeps every seat pod out of
-   them. --chrome-bottom reserves the tallest action-bar state so the table
-   does not rescale as the bar cycles turn/wait/showdown. */
+/* The base .stage and #swirl rules live in global.css so the swirl background
+   loads on every route. Bands below are the room-only chrome reservation;
+   useTableFit keeps every seat pod out of them. --chrome-bottom reserves the
+   tallest action-bar state so the table does not rescale as the bar cycles
+   turn/wait/showdown. */
 .room-stage {
   --chrome-top: 64px;
   --chrome-bottom: 196px;
   --chrome-right: 0px;
-}
-
-#swirl {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
 }
 
 .num { font-variant-numeric: tabular-nums; }
@@ -71,10 +55,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   pointer-events: none;
 }
 
 .room-tag {
+  min-width: 0; /* the tag truncates before the action buttons get pushed off-screen */
+  overflow: hidden;
   padding: 6px 14px 8px;
   font-size: 16px;
   display: flex;
@@ -83,6 +70,26 @@
   pointer-events: auto;
 }
 .room-tag .label { font-size: 11px; }
+.room-code {
+  appearance: none;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.room-code:hover {
+  background: rgba(242, 193, 78, 0.15);
+  color: var(--gold);
+}
+.room-code:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
 .table-config-chip {
   padding: 2px 6px 3px;
   border: 1px solid var(--panel-edge);
@@ -91,9 +98,12 @@
   font-size: 11px;
   white-space: nowrap;
 }
+.table-config-chip--blind { color: var(--orange); }
+.table-config-chip--stack { color: var(--blue); }
 
 .room-topbar-actions {
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
   pointer-events: auto;
 }
@@ -120,6 +130,51 @@
 }
 .admin-shield.large { width: 30px; height: 34px; font-size: 13px; }
 
+/* Overflow (hamburger) menu: hidden on desktop where the individual buttons
+   fit; the 600px media block swaps the buttons out for this menu. */
+.room-menu {
+  position: relative;
+  display: none;
+  pointer-events: auto;
+}
+.room-menu-btn {
+  font-size: 16px;
+  line-height: 1;
+  padding: 7px 11px 9px;
+}
+.room-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  padding: 6px;
+}
+.room-menu-item {
+  appearance: none;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  padding: 8px 10px 9px;
+  cursor: pointer;
+}
+.room-menu-item:hover:not(:disabled),
+.room-menu-item:focus-visible {
+  background: rgba(242, 193, 78, 0.15);
+}
+.room-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.room-menu-item.danger { color: var(--red); }
+
 .room-splash {
   position: absolute;
   inset: 0;
@@ -127,6 +182,85 @@
   align-items: center;
   justify-content: center;
   z-index: 10;
+}
+
+/* ============ first-join auto seat ============ */
+
+.auto-seat-backdrop {
+  background:
+    radial-gradient(circle at 50% 46%, rgba(46, 157, 250, 0.16), transparent 34%),
+    rgba(8, 13, 22, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.auto-seat-modal {
+  width: min(390px, calc(100vw - 28px));
+  align-items: center;
+  gap: 10px;
+  padding: 24px 30px 28px;
+  overflow: hidden;
+  border-color: var(--gold);
+  text-align: center;
+  box-shadow:
+    inset 0 -7px 0 rgba(0, 0, 0, 0.3),
+    0 0 0 4px rgba(242, 193, 78, 0.12),
+    0 18px 60px rgba(0, 0, 0, 0.68);
+}
+
+.auto-seat-kicker {
+  color: var(--blue);
+  font-size: 11px;
+  letter-spacing: 2.5px;
+}
+
+.auto-seat-modal h3 {
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.auto-seat-count {
+  min-height: 92px;
+  color: var(--orange);
+  font-size: 92px;
+  font-weight: 700;
+  line-height: 0.95;
+  text-shadow:
+    4px 4px 0 var(--orange-deep),
+    0 0 28px rgba(255, 157, 46, 0.45);
+}
+
+.auto-seat-modal p {
+  max-width: 310px;
+  min-height: 45px;
+  font-size: 14px;
+}
+
+.auto-seat-pips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  width: min(250px, 78%);
+  margin: 3px 0 7px;
+}
+
+.auto-seat-pips span {
+  height: 7px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  background: var(--panel-dark);
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.28);
+}
+
+.auto-seat-pips span.lit {
+  border-color: var(--orange);
+  background: var(--orange);
+  box-shadow: 0 0 10px rgba(255, 157, 46, 0.5);
+}
+
+.auto-seat-spectate {
+  width: 100%;
+  margin-top: 3px;
+  font-size: 17px;
 }
 
 /* ============ table ============ */
@@ -761,6 +895,20 @@
 
 /* ============ responsive ============ */
 
+/* Mid-size screens (tablets, split windows): the full topbar — name, code,
+   config chips, hand counter, plus up to five admin/seat buttons — needs
+   ~950px, so trim the label and the second chip before things collide. */
+@media (max-width: 1024px) {
+  .room-tag > b:first-child {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .table-config-chip + .table-config-chip { display: none; }
+  .table-settings-button-label { display: none; }
+}
+
 @media (max-width: 900px) {
   .table-wrap { width: 94vw; }
   .card { width: 46px; height: 66px; }
@@ -783,20 +931,17 @@
     font-size: 13px;
   }
   .room-tag > b:first-child {
-    max-width: 78px;
+    /* Room for a longer name now that the buttons collapse into the menu. */
+    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .room-tag .label { display: none; }
   .table-config-chip + .table-config-chip { display: none; }
-  .room-topbar-actions .btn-dev { display: none; }
-  .room-topbar-actions .btn-table-settings {
-    display: inline-flex;
-    padding: 5px 8px 7px;
-  }
-  .table-settings-button-label { display: none; }
-  .btn-leave { padding-inline: 10px; }
+  /* All topbar action buttons collapse into the hamburger menu. */
+  .room-topbar-actions > .btn { display: none; }
+  .room-menu { display: block; }
 
   /* Keep a fixed layout width so the felt bleeds past the screen edges while
      the fixed-width pods stay dominant; useTableFit scales the composition so
@@ -837,6 +982,10 @@
     padding: 14px 18px 17px;
   }
   .showdown .sd-who { font-size: 25px; }
+
+  .auto-seat-modal {
+    padding: 20px 22px 24px;
+  }
 }
 
 @media (max-width: 460px) {
@@ -893,19 +1042,45 @@
 /* Short viewports (landscape phones, squat windows): the bottom action bar
    would eat most of the height, so dock it to the right instead and hand the
    full height to the table. Placed last so it wins over the width blocks. */
+/* Narrow landscape (small phones rotated): drop the info chips and hand
+   counter so the room name and the action buttons both stay on screen. */
+@media (max-height: 520px) and (max-width: 640px) {
+  .table-config-chip { display: none !important; }
+  .room-tag > b.num { display: none; }
+}
+
 @media (max-height: 520px) {
   .room-stage {
     --chrome-top: 46px;
     --chrome-bottom: 12px;
     --chrome-right: 316px;
   }
-  .room-topbar { top: 6px; }
+  .room-topbar {
+    top: 6px;
+    gap: 8px;
+  }
   .room-tag {
+    min-width: 0;
+    overflow: hidden;
     font-size: 13px;
     gap: 8px;
     padding: 4px 10px 6px;
   }
+  .room-tag > b:first-child {
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .room-tag .label { display: none; }
+  .table-config-chip + .table-config-chip { display: none; }
+  /* Buttons must never get pushed off-screen; the tag shrinks instead. */
+  .room-topbar-actions {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+  .room-topbar-actions .settings-btn { padding: 6px 9px; font-size: 15px; }
+  .table-settings-button-label { display: none; }
   .btn-leave { font-size: 12px; padding: 5px 10px 7px; }
   .actionbar,
   .waitbar {
@@ -943,12 +1118,56 @@
     justify-content: center;
   }
   .raise-amt { font-size: 15px; min-width: 52px; }
-  .showdown { padding: 10px 16px 12px; }
+  .showdown {
+    /* undo the portrait 100vw width: the banner is centered over the table
+       area, which only spans the space left of the docked action bar */
+    width: max-content;
+    max-width: calc(100% - var(--chrome-right, 0px) - 12px);
+    padding: 10px 16px 12px;
+  }
   .showdown .sd-who { font-size: 20px; }
   .showdown .sd-amt { font-size: 16px; }
   .idle-warning {
     top: 42px;
     font-size: 13px;
     width: min(60vw, 430px);
+  }
+  .modal.auto-seat-modal {
+    width: min(560px, calc(100vw - 24px));
+    display: grid;
+    grid-template-columns: 1fr 118px;
+    gap: 6px 18px;
+    padding: 14px 20px 17px;
+    text-align: left;
+  }
+  .auto-seat-kicker,
+  .auto-seat-modal h3,
+  .auto-seat-modal p,
+  .auto-seat-pips,
+  .auto-seat-spectate {
+    grid-column: 1;
+  }
+  .auto-seat-count {
+    grid-column: 2;
+    grid-row: 1 / 5;
+    min-height: 0;
+    align-self: center;
+    text-align: center;
+    font-size: 78px;
+  }
+  .auto-seat-modal h3 { font-size: 21px; }
+  .auto-seat-modal p {
+    min-height: 0;
+    max-width: none;
+    font-size: 12px;
+  }
+  .auto-seat-pips {
+    width: 100%;
+    margin: 1px 0 5px;
+  }
+  .auto-seat-spectate {
+    margin-top: 0;
+    padding-block: 8px 11px;
+    font-size: 15px;
   }
 }

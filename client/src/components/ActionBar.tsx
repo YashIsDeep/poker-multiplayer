@@ -75,6 +75,20 @@ export default function ActionBar() {
   const gameSeat =
     game && yourSeat !== null ? (game.seats.find((s) => s.seat === yourSeat) ?? null) : null
 
+  if (!viewerSeated && room.viewer.busted) {
+    return (
+      <BustedBar
+        amount={room.viewer.rebuyAmount}
+        enabled={room.config.rebuysEnabled}
+        handsRemaining={room.viewer.rebuyHandsRemaining ?? 0}
+        offerDeadline={room.viewer.rebuyOfferDeadline}
+        disabled={pendingAction !== null}
+        offTable
+        onRebuy={rebuy}
+      />
+    )
+  }
+
   if (!game || !viewerSeated) {
     return (
       <div className="actionbar panel wait" data-testid="actionbar-idle">
@@ -94,10 +108,11 @@ export default function ActionBar() {
       <BustedBar
         amount={game.viewer.rebuyAmount}
         enabled={room.config.rebuysEnabled ?? true}
-        roundsRemaining={game.viewer.rebuyRoundsRemaining ?? gameSeat.rebuyRoundsRemaining}
+        handsRemaining={game.viewer.rebuyHandsRemaining ?? gameSeat.rebuyHandsRemaining}
+        offerDeadline={null}
         disabled={pendingAction !== null}
+        offTable={false}
         onRebuy={rebuy}
-        onStand={() => void stand()}
       />
     )
   }
@@ -233,12 +248,16 @@ export default function ActionBar() {
 function BustedBar(props: {
   amount: number | null
   enabled: boolean
-  roundsRemaining: number
+  handsRemaining: number
+  offerDeadline: number | null
   disabled: boolean
+  offTable: boolean
   onRebuy: (amount: number) => void
-  onStand: () => void
 }) {
-  const locked = !props.enabled || props.roundsRemaining > 0 || props.amount === null
+  const offer = useServerCountdown(props.offerDeadline, 5_000)
+  const emergencyOffer = props.offerDeadline !== null && offer.secondsRemaining > 0
+  const locked = !props.enabled || (!emergencyOffer && props.handsRemaining > 0)
+    || props.amount === null || !props.offTable
   return (
     <div className="actionbar panel" data-testid="actionbar-busted">
       <h3 className="ab-head">You busted out</h3>
@@ -248,14 +267,18 @@ function BustedBar(props: {
             {Array.from({ length: 5 }, (_, index) => (
               <span
                 key={index}
-                className={index < props.roundsRemaining ? 'round-chip remaining' : 'round-chip cleared'}
+                className={index < Math.min(5, props.handsRemaining) ? 'round-chip remaining' : 'round-chip cleared'}
               />
             ))}
           </div>
           <p className="waiting">
-            {props.roundsRemaining > 0
-              ? `Rebuy unlocks after ${props.roundsRemaining} more completed ${props.roundsRemaining === 1 ? 'round' : 'rounds'}.`
-              : 'Cooldown complete — rebuy is unlocked.'}
+            {!props.offTable
+              ? 'You will move off the table after this hand.'
+              : emergencyOffer
+                ? `Priority rebuy window: ${offer.secondsRemaining}s`
+                : props.handsRemaining > 0
+                  ? `Rebuy unlocks after ${props.handsRemaining} more completed ${props.handsRemaining === 1 ? 'hand' : 'hands'}.`
+                  : 'Cooldown complete — rebuy is unlocked.'}
           </p>
         </div>
       ) : (
@@ -277,13 +300,12 @@ function BustedBar(props: {
             disabled={props.disabled || locked}
             onClick={() => props.amount !== null && props.onRebuy(props.amount)}
           >
-            {props.roundsRemaining > 0 ? `Rebuy locked · ${props.roundsRemaining}R` : 'Rebuy'}{' '}
+            {emergencyOffer
+              ? 'Priority rebuy'
+              : props.handsRemaining > 0 ? `Rebuy locked · ${props.handsRemaining}H` : 'Rebuy'}{' '}
             {props.amount !== null && <span className="num">{formatChips(props.amount)}</span>}
           </button>
         )}
-        <button className="btn btn-red" data-sound="exit" onClick={props.onStand}>
-          Stand up
-        </button>
       </div>
     </div>
   )

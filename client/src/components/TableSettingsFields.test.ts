@@ -20,11 +20,13 @@ describe('power-of-ten table controls', () => {
       startingStack: 8_000_000,
       rebuysEnabled: true,
       rebuyStack: 900_000,
+      rebuyDelayHands: 7,
     })).toEqual({
       bigBlind: 100_000,
       startingStack: 10_000_000,
       rebuysEnabled: true,
       rebuyStack: 5_000_000,
+      rebuyDelayHands: 5,
     })
   })
 
@@ -35,11 +37,13 @@ describe('power-of-ten table controls', () => {
       startingStack: 1_000_000_000,
       rebuysEnabled: true,
       rebuyStack: 1_000_000_000,
+      rebuyDelayHands: 5,
     })).toEqual({
       bigBlind: 1_000_000,
       startingStack: 500_000_000,
       rebuysEnabled: true,
       rebuyStack: 500_000_000,
+      rebuyDelayHands: 5,
     })
   })
 })

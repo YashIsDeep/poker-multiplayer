@@ -8,8 +8,12 @@ import CrtOverlay from '../components/CrtOverlay'
 import Table from '../components/Table'
 import ActionBar from '../components/ActionBar'
 import ShowdownBanner from '../components/ShowdownBanner'
-import SettingsButton from '../components/SettingsButton'
+import SettingsModal from '../components/SettingsModal'
+import RoomMenu from '../components/RoomMenu'
+import type { RoomMenuItem } from '../components/RoomMenu'
+import AutoSeatPrompt from '../components/AutoSeatPrompt'
 import TableSettingsModal from '../components/TableSettingsModal'
+import HandHistoryDrawer from '../components/HandHistoryDrawer'
 import { formatChips } from '../lib/chips'
 import { serverNow, useGameStore } from '../store/gameStore'
 import { useReducedMotion } from '../hooks/useReducedMotion'
@@ -17,6 +21,38 @@ import { useAnimationQueue } from '../hooks/useAnimationQueue'
 import { useGameSounds } from '../hooks/useGameSounds'
 import { startMockDriver } from '../dev/mockGame'
 import '../styles/table.css'
+
+async function writeToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    let timeoutId: number | undefined
+    try {
+      await Promise.race([
+        navigator.clipboard.writeText(text),
+        new Promise<never>((_, reject) => {
+          timeoutId = window.setTimeout(() => reject(new Error('clipboard write timed out')), 750)
+        }),
+      ])
+      return
+    } catch {
+      // Restricted browsers can reject or leave the Clipboard API pending.
+    } finally {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+    }
+  }
+
+  const previousFocus = document.activeElement as HTMLElement | null
+  const input = document.createElement('textarea')
+  input.value = text
+  input.setAttribute('readonly', '')
+  input.style.position = 'fixed'
+  input.style.opacity = '0'
+  document.body.appendChild(input)
+  input.select()
+  const copied = document.execCommand('copy')
+  input.remove()
+  previousFocus?.focus()
+  if (!copied) throw new Error('clipboard write failed')
+}
 
 export default function Room() {
   const { roomId } = useParams()
@@ -47,6 +83,8 @@ export default function Room() {
   const [sittingOut, setSittingOut] = useState(false)
   const [keepingAlive, setKeepingAlive] = useState(false)
   const [tableSettingsOpen, setTableSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [handHistoryOpen, setHandHistoryOpen] = useState(false)
   const [clock, setClock] = useState(() => serverNow())
 
   const viewerSeatStatus =
@@ -112,6 +150,80 @@ export default function Room() {
   const showIdleWarning = idleRemaining > 0 && idleRemaining <= 5 * 60_000
   const idleMinutes = Math.max(0, Math.ceil(idleRemaining / 60_000))
 
+  const copyRoomCode = async () => {
+    try {
+      await writeToClipboard(room.joinCode)
+      pushToast('ok', 'Copied!')
+    } catch {
+      pushToast('warn', 'Copy failed', 'select the room code and copy it manually')
+    }
+  }
+
+  const handleSitOut = async () => {
+    if (sittingOut) return
+    setSittingOut(true)
+    try {
+      const ack = await sitOut()
+      if (!ack?.ok) setSittingOut(false)
+    } catch {
+      setSittingOut(false)
+      pushToast('warn', 'Sit out failed', 'could not reach the server')
+    }
+  }
+
+  const handleLeave = async () => {
+    if (leaving) return
+    setLeaving(true)
+    try {
+      const ack = await leaveRoom()
+      if (ack?.ok) navigate('/lobby')
+    } catch {
+      pushToast('warn', 'Leave failed', 'could not reach the server')
+    } finally {
+      setLeaving(false)
+    }
+  }
+
+  const canSitOut = room.viewer.canStand && viewerSeatStatus !== 'SITTING_OUT'
+
+  // Same actions as the individual topbar buttons; CSS swaps in this menu on
+  // small screens where the buttons don't fit.
+  const menuItems: RoomMenuItem[] = [
+    ...(room.canEditSettings
+      ? [
+          {
+            key: 'table-settings',
+            label: 'Table settings',
+            sound: 'open',
+            onClick: () => setTableSettingsOpen(true),
+          },
+        ]
+      : []),
+    { key: 'settings', label: 'Settings', sound: 'open', onClick: () => setSettingsOpen(true) },
+    ...(canSitOut
+      ? [
+          {
+            key: 'sit-out',
+            label: sittingOut ? 'Sitting out…' : 'Sit out',
+            sound: 'fold',
+            disabled: sittingOut,
+            onClick: () => void handleSitOut(),
+          },
+        ]
+      : []),
+    ...(room.viewer.canStand
+      ? [{ key: 'stand', label: 'Stand', sound: 'exit', onClick: () => void stand() }]
+      : []),
+    {
+      key: 'leave',
+      label: leaving ? 'Leaving…' : 'Leave table',
+      sound: 'exit',
+      danger: true,
+      disabled: leaving,
+      onClick: () => void handleLeave(),
+    },
+  ]
+
   return (
     <div className="stage room-stage" data-testid="room">
       <SwirlBackground />
@@ -120,12 +232,21 @@ export default function Room() {
         <div className="room-tag panel">
           <b>{room.name}</b>
           <span className="label">code</span>
-          <b className="num">{room.joinCode}</b>
-          <span className="table-config-chip num" title="Current big blind">
+          <button
+            type="button"
+            className="room-code num"
+            aria-label={`Copy room code ${room.joinCode}`}
+            title="Copy room code"
+            data-sound="confirm"
+            onClick={() => void copyRoomCode()}
+          >
+            {room.joinCode}
+          </button>
+          <span className="table-config-chip table-config-chip--blind num" title="Current big blind">
             BB {formatChips(room.config.bigBlind)}
           </span>
           <span
-            className="table-config-chip num"
+            className="table-config-chip table-config-chip--stack num"
             title={`${formatChips(room.config.startingStack ?? room.config.minBuyIn)} chips for future seats`}
           >
             STACK {formatChips(
@@ -152,23 +273,24 @@ export default function Room() {
               <span className="table-settings-button-label">Table settings</span>
             </button>
           )}
-          <SettingsButton />
-          {room.viewer.canStand && viewerSeatStatus !== 'SITTING_OUT' && (
+          <button
+            type="button"
+            className="btn btn-dev settings-btn"
+            data-sound="open"
+            aria-haspopup="dialog"
+            aria-expanded={settingsOpen}
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <span aria-hidden="true">⚙️</span>
+          </button>
+          {canSitOut && (
             <button
               className="btn btn-dev btn-leave"
               data-sound="fold"
               disabled={sittingOut}
-              onClick={async () => {
-                if (sittingOut) return
-                setSittingOut(true)
-                try {
-                  const ack = await sitOut()
-                  if (!ack?.ok) setSittingOut(false)
-                } catch {
-                  setSittingOut(false)
-                  pushToast('warn', 'Sit out failed', 'could not reach the server')
-                }
-              }}
+              onClick={() => void handleSitOut()}
             >
               {sittingOut ? 'Sitting out…' : 'Sit out'}
             </button>
@@ -182,21 +304,11 @@ export default function Room() {
             className="btn btn-red btn-leave"
             data-sound="exit"
             disabled={leaving}
-            onClick={async () => {
-              if (leaving) return
-              setLeaving(true)
-              try {
-                const ack = await leaveRoom()
-                if (ack?.ok) navigate('/lobby')
-              } catch {
-                pushToast('warn', 'Leave failed', 'could not reach the server')
-              } finally {
-                setLeaving(false)
-              }
-            }}
+            onClick={() => void handleLeave()}
           >
             {leaving ? 'Leaving…' : 'Leave table'}
           </button>
+          <RoomMenu items={menuItems} />
         </div>
       </div>
 
@@ -229,7 +341,21 @@ export default function Room() {
       <ShowdownBanner />
       <ActionBar />
 
+      <AutoSeatPrompt room={room} />
+
       {tableSettingsOpen && <TableSettingsModal onClose={() => setTableSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsModal
+          onClose={() => setSettingsOpen(false)}
+          onHandHistory={() => {
+            setSettingsOpen(false)
+            setHandHistoryOpen(true)
+          }}
+        />
+      )}
+      {handHistoryOpen && (
+        <HandHistoryDrawer roomId={room.roomId} onClose={() => setHandHistoryOpen(false)} />
+      )}
 
       <CrtOverlay />
     </div>

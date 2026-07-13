@@ -7,9 +7,11 @@ export const PUBLIC_TABLE_SETTINGS: TableSettings = {
   startingStack: 10_000_000,
   rebuysEnabled: false,
   rebuyStack: 10_000_000,
+  rebuyDelayHands: 5,
 }
 
 export const STACK_BB_OPTIONS = [50, 100, 200, 500] as const
+const REBUY_DELAY_OPTIONS = [0, 1, 3, 5, 10, 20] as const
 
 export function valueAtPower(power: number): number {
   return 10 ** Math.round(power)
@@ -43,6 +45,9 @@ export function normalizeTableSettings(settings: TableSettings): TableSettings {
     startingStack: bigBlind * stackBigBlinds(settings.startingStack, bigBlind),
     rebuysEnabled: settings.rebuysEnabled,
     rebuyStack: bigBlind * stackBigBlinds(settings.rebuyStack, bigBlind),
+    rebuyDelayHands: REBUY_DELAY_OPTIONS[
+      closestOptionIndex(settings.rebuyDelayHands, REBUY_DELAY_OPTIONS)
+    ],
   }
 }
 
@@ -55,6 +60,10 @@ export function tableSettingsError(settings: TableSettings): string | null {
   }
   if (!Number.isSafeInteger(settings.rebuyStack) || settings.rebuyStack < 1) {
     return 'Choose a valid rebuy stack.'
+  }
+  if (!Number.isSafeInteger(settings.rebuyDelayHands)
+      || settings.rebuyDelayHands < 0 || settings.rebuyDelayHands > 20) {
+    return 'Choose a rebuy delay between 0 and 20 hands.'
   }
   return null
 }
@@ -116,6 +125,10 @@ function OptionChipSlider({
 }
 
 const BIG_BLIND_OPTIONS = [1, 2, 3, 4, 5, 6].map(valueAtPower)
+function formatHands(value: number): string {
+  if (value === 0) return 'No delay'
+  return `${value} ${value === 1 ? 'hand' : 'hands'}`
+}
 
 export default function TableSettingsFields({
   value,
@@ -190,6 +203,17 @@ export default function TableSettingsFields({
             scaleLabel="50 · 100 · 200 · 500"
             formatValue={formatBigBlinds}
             onChange={(multiple) => onChange({ ...value, rebuyStack: value.bigBlind * multiple })}
+          />
+          <OptionChipSlider
+            label="Rebuy delay"
+            hint="Hands to wait after busting"
+            value={value.rebuyDelayHands}
+            options={REBUY_DELAY_OPTIONS}
+            tone="green"
+            disabled={disabled}
+            scaleLabel="cooldown"
+            formatValue={formatHands}
+            onChange={(rebuyDelayHands) => onChange({ ...value, rebuyDelayHands })}
           />
         </div>
       )}

@@ -102,9 +102,10 @@
 }
 .room-name {
   font-size: 20px;
-  display: flex;
-  gap: 10px;
-  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .room-stat { text-align: right; }
 .room-stat .label { display: block; margin-bottom: 1px; }
@@ -273,6 +274,10 @@
 }
 
 @media (max-width: 560px) {
+  /* keep one clean line per table: name + seats + join button */
+  .room-row { gap: 10px; padding: 12px; }
+  .room-stat:nth-of-type(4),
+  .room-stat:nth-of-type(5) { display: none; }
   .lobby-head {
     flex-wrap: wrap;
     justify-content: center;

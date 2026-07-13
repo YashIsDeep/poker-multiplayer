@@ -7,7 +7,13 @@ import type { CSSProperties } from 'react'
 import { playSound } from '../lib/sound'
 import { useSoundSettings } from '../hooks/useSoundSettings'
 
-export default function SettingsModal({ onClose }: { onClose: () => void }) {
+export default function SettingsModal({
+  onClose,
+  onHandHistory,
+}: {
+  onClose: () => void
+  onHandHistory?: () => void
+}) {
   const { muted, volume, setMuted, setVolume } = useSoundSettings()
 
   // Throttle the audible preview so dragging the slider doesn't machine-gun it.
@@ -87,6 +93,24 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             <b className="num settings-vol">{muted ? '—' : `${pct}%`}</b>
           </div>
         </section>
+
+        {onHandHistory && (
+          <section className="settings-section">
+            <div className="settings-section-head label">Table</div>
+            <button
+              type="button"
+              className="btn btn-dev settings-history-button"
+              data-sound="open"
+              onClick={onHandHistory}
+            >
+              <span aria-hidden="true">↺</span>
+              <span>
+                <b>Hand histories</b>
+                <small>Actions, boards, stacks and results</small>
+              </span>
+            </button>
+          </section>
+        )}
 
         <div className="row">
           <button className="btn btn-orange" data-sound="close" onClick={onClose}>

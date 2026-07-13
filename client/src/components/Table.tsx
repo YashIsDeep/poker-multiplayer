@@ -135,7 +135,9 @@ export default function Table({ room, game, animations }: TableProps) {
 
   const membersBySeat = useMemo(() => {
     const map = new Map<number, string>()
-    for (const seatView of room.seats) map.set(seatView.seat, seatView.userId)
+    for (const seatView of room.seats) {
+      if (seatView.userId) map.set(seatView.seat, seatView.userId)
+    }
     return map
   }, [room.seats])
 
