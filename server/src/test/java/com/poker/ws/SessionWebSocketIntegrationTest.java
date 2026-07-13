@@ -38,6 +38,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.messaging.simp.broker.SimpleBrokerMessageHandler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("dev")
@@ -58,10 +59,12 @@ class SessionWebSocketIntegrationTest {
 
     private WebSocketStompClient client;
     private StompSession session;
+    private ThreadPoolTaskScheduler heartbeatScheduler;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", () -> "jdbc:h2:mem:" + DATABASE + ";DB_CLOSE_DELAY=-1");
+        registry.add("poker.websocket.heartbeat-interval", () -> "1s");
     }
 
     @AfterEach
@@ -72,11 +75,14 @@ class SessionWebSocketIntegrationTest {
         if (client != null) {
             client.stop();
         }
+        if (heartbeatScheduler != null) {
+            heartbeatScheduler.destroy();
+        }
     }
 
     @Test
     void authenticatedSessionConnectsWithCsrfAndRecoversState() throws Exception {
-        assertArrayEquals(new long[] {5_000, 5_000}, broker.getHeartbeatValue());
+        assertArrayEquals(new long[] {1_000, 1_000}, broker.getHeartbeatValue());
         HttpClient http = HttpClient.newHttpClient();
         HttpResponse<Void> login = http.send(
                 HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/auth/dev?u=ws-user"))
@@ -102,6 +108,11 @@ class SessionWebSocketIntegrationTest {
 
         client = new WebSocketStompClient(new StandardWebSocketClient());
         client.setMessageConverter(new MappingJackson2MessageConverter(objectMapper));
+        heartbeatScheduler = new ThreadPoolTaskScheduler();
+        heartbeatScheduler.setThreadNamePrefix("stomp-test-heartbeat-");
+        heartbeatScheduler.initialize();
+        client.setTaskScheduler(heartbeatScheduler);
+        client.setDefaultHeartbeat(new long[] {100, 100});
         WebSocketHttpHeaders httpHeaders = new WebSocketHttpHeaders();
         httpHeaders.add("Cookie", sessionCookie);
         StompHeaders connectHeaders = new StompHeaders();
@@ -114,6 +125,9 @@ class SessionWebSocketIntegrationTest {
                         sessionHandler)
                 .get(10, TimeUnit.SECONDS);
         assertTrue(session.isConnected());
+
+        Thread.sleep(1_500);
+        assertTrue(session.isConnected(), "authenticated heartbeat must keep the STOMP session open");
 
         LinkedBlockingQueue<JsonNode> acks = new LinkedBlockingQueue<>();
         LinkedBlockingQueue<JsonNode> roomSnapshots = new LinkedBlockingQueue<>();

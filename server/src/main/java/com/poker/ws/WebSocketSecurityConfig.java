@@ -17,7 +17,10 @@ public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBro
     protected void configureInbound(MessageSecurityMetadataSourceRegistry messages) {
         messages
                 .simpTypeMatchers(SimpMessageType.CONNECT).authenticated()
-                .simpTypeMatchers(SimpMessageType.DISCONNECT, SimpMessageType.UNSUBSCRIBE).authenticated()
+                .simpTypeMatchers(
+                        SimpMessageType.DISCONNECT,
+                        SimpMessageType.UNSUBSCRIBE,
+                        SimpMessageType.HEARTBEAT).authenticated()
                 .simpMessageDestMatchers(
                         "/app/state.sync",
                         "/app/room.create",
