@@ -8,9 +8,17 @@
   height: 100vh;
   height: 100dvh; /* dvh tracks the visible viewport so the bottom action bar
                      never hides behind mobile browser chrome; vh is the fallback */
-  min-height: 600px;
   overflow: hidden;
   background: radial-gradient(120% 90% at 50% 40%, var(--swirl-1) 0%, var(--swirl-2) 70%, #0e1826 100%);
+}
+
+/* Bands the room chrome occupies; useTableFit keeps every seat pod out of
+   them. --chrome-bottom reserves the tallest action-bar state so the table
+   does not rescale as the bar cycles turn/wait/showdown. */
+.room-stage {
+  --chrome-top: 64px;
+  --chrome-bottom: 196px;
+  --chrome-right: 0px;
 }
 
 #swirl {
@@ -94,11 +102,14 @@
 
 /* ============ table ============ */
 
+/* Width breakpoints set the layout size of the composition; useTableFit owns
+   left/top/transform at runtime and scales it into the chrome-free box (the
+   values here are the pre-JS fallback). */
 .table-wrap {
   position: absolute;
   left: 50%;
   top: 46%;
-  width: min(78vw, 1020px, 150vh);
+  width: min(78vw, 1020px);
   aspect-ratio: 2 / 1;
   transform: translate(-50%, -50%);
   z-index: 10;
@@ -356,10 +367,16 @@
     0 0 30px rgba(242, 193, 78, 0.55);
 }
 
-.badge {
+.badge-row {
   position: absolute;
   top: -10px;
   right: -8px;
+  z-index: 3;
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 4px;
+}
+.badge {
   z-index: 3;
   font-size: 10px;
   letter-spacing: 1px;
@@ -367,10 +384,12 @@
   border-radius: 8px;
   text-shadow: var(--outline-text);
   border: 2px solid rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
 }
 .badge.allin { background: var(--red); }
 .badge.sitout-b { background: #46525f; }
 .badge.dealer {
+  position: absolute;
   top: auto;
   bottom: -10px;
   left: -10px;
@@ -550,12 +569,18 @@
   content: '...';
   animation: dots 1.4s steps(4) infinite;
 }
+.dots {
+  display: inline-block;
+  width: 3ch;
+  text-align: left;
+}
 
 /* ============ showdown banner ============ */
 
 .showdown {
   position: absolute;
-  left: 50%;
+  /* center over the table area, not the stage, when the action bar docks right */
+  left: calc((100% - var(--chrome-right, 0px)) / 2);
   top: 40%;
   transform: translate(-50%, -50%) rotate(-1.5deg);
   z-index: 32;
@@ -587,7 +612,7 @@
 /* ============ responsive ============ */
 
 @media (max-width: 900px) {
-  .table-wrap { width: 94vw; top: 42%; }
+  .table-wrap { width: 94vw; }
   .card { width: 46px; height: 66px; }
   .card .c-rank { font-size: 17px; }
   .card .c-suit { font-size: 24px; }
@@ -595,6 +620,7 @@
 }
 
 @media (max-width: 600px) {
+  .room-stage { --chrome-bottom: 208px; } /* wrapped raise-row makes the bar taller */
   .room-topbar {
     left: 8px;
     right: 8px;
@@ -616,13 +642,10 @@
   .room-topbar-actions .btn-dev { display: none; }
   .btn-leave { padding-inline: 10px; }
 
-  /* Keep the desktop seat geometry and scale it as one composition. Scaling
-     a viewport-sized table left fixed-width pods overlapping at 7–9 seats. */
-  .table-wrap {
-    width: 760px;
-    top: 42%;
-    transform: translate(-50%, -50%) scale(0.62);
-  }
+  /* Keep a fixed layout width so the felt bleeds past the screen edges while
+     the fixed-width pods stay dominant; useTableFit scales the composition so
+     the pods themselves always fit. */
+  .table-wrap { width: 760px; }
 
   .actionbar {
     bottom: 10px;
@@ -661,25 +684,15 @@
 }
 
 @media (max-width: 460px) {
-  .table-wrap {
-    width: 620px;
-    transform: translate(-50%, -50%) scale(0.6);
-  }
+  .table-wrap { width: 620px; }
   .table-wrap[data-seat-count='7'],
   .table-wrap[data-seat-count='8'],
   .table-wrap[data-seat-count='9'] {
     width: 760px;
-    transform: translate(-50%, -50%) scale(0.48);
   }
 }
 
 @media (max-width: 360px) {
-  .table-wrap { transform: translate(-50%, -50%) scale(0.5); }
-  .table-wrap[data-seat-count='7'],
-  .table-wrap[data-seat-count='8'],
-  .table-wrap[data-seat-count='9'] {
-    transform: translate(-50%, -50%) scale(0.41);
-  }
   .ab-buttons .btn { font-size: 13px; }
 }
 .idle-warning {
@@ -718,5 +731,68 @@
     top: 104px;
     width: min(92vw, 430px);
     justify-content: space-between;
+  }
+}
+
+/* Short viewports (landscape phones, squat windows): the bottom action bar
+   would eat most of the height, so dock it to the right instead and hand the
+   full height to the table. Placed last so it wins over the width blocks. */
+@media (max-height: 520px) {
+  .room-stage {
+    --chrome-top: 46px;
+    --chrome-bottom: 12px;
+    --chrome-right: 316px;
+  }
+  .room-topbar { top: 6px; }
+  .room-tag {
+    font-size: 13px;
+    gap: 8px;
+    padding: 4px 10px 6px;
+  }
+  .room-tag .label { display: none; }
+  .btn-leave { font-size: 12px; padding: 5px 10px 7px; }
+  .actionbar,
+  .waitbar {
+    left: auto;
+    right: 8px;
+    bottom: 8px;
+    transform: none;
+  }
+  .actionbar {
+    width: 300px;
+    gap: 8px;
+    padding: 10px 12px 12px;
+  }
+  .actionbar.wait { padding: 10px 14px 12px; }
+  .waitbar {
+    max-width: 300px;
+    font-size: 13px;
+    padding: 8px 14px 10px;
+  }
+  .ab-head { font-size: 13px; }
+  .ab-buttons { gap: 6px; }
+  .ab-buttons .btn {
+    min-width: 0;
+    font-size: 14px;
+    padding: 8px 8px 11px;
+    white-space: normal;
+  }
+  .waiting { font-size: 13px; }
+  .raise-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .raise-pills {
+    width: 100%;
+    justify-content: center;
+  }
+  .raise-amt { font-size: 15px; min-width: 52px; }
+  .showdown { padding: 10px 16px 12px; }
+  .showdown .sd-who { font-size: 20px; }
+  .showdown .sd-amt { font-size: 16px; }
+  .idle-warning {
+    top: 42px;
+    font-size: 13px;
+    width: min(60vw, 430px);
   }
 }

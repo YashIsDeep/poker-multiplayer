@@ -80,7 +80,9 @@ export default function ActionBar() {
       <div className="actionbar panel wait" data-testid="actionbar-idle">
         <p className="waiting">
           {viewerSeated
-            ? 'Waiting for the next hand to start…'
+            ? room.seats.length === 1
+              ? 'Waiting for players to join'
+              : 'Waiting for the next hand to start…'
             : 'You are spectating — take a seat to play.'}
         </p>
       </div>
@@ -135,13 +137,9 @@ export default function ActionBar() {
   }
 
   if (!isYourTurn) {
-    const actorSeatView = room.seats.find((s) => s.seat === game.actingSeat)
-    const actorName = actorSeatView
-      ? (room.members.find((m) => m.userId === actorSeatView.userId)?.displayName ?? 'player')
-      : 'player'
     return (
       <div className="waitbar panel" data-testid="actionbar-waiting">
-        waiting for <b>{actorName.toUpperCase()}</b>
+        Waiting for other players
         <span className="dots" />
       </div>
     )

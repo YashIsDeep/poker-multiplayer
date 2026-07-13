@@ -93,10 +93,12 @@ export default function SeatPod(props: SeatPodProps) {
         </div>
       )}
       <div className="pod">
-        {allin && <span className="badge allin">All-in</span>}
-        {sitout && <span className="badge sitout-b">Sitting out</span>}
-        {busted && <span className="badge sitout-b">Busted</span>}
-        {offline && <span className="badge offline-b">Offline</span>}
+        <div className="badge-row">
+          {allin && <span className="badge allin">All-in</span>}
+          {sitout && <span className="badge sitout-b">Sitting out</span>}
+          {busted && <span className="badge sitout-b">Busted</span>}
+          {offline && <span className="badge offline-b">Offline</span>}
+        </div>
         {isDealer && <span className="badge dealer">D</span>}
         {isActor && props.deadline !== null && (
           <TimerRing deadline={props.deadline} budgetMs={props.budgetMs} />

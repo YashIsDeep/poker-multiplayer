@@ -2,7 +2,8 @@
 // Superellipse projection pushes seats onto the stadium rim; your seat is rotated
 // to bottom-center. Board, pot, committed bet chips render at center/inner curve.
 
-import { useMemo } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
+import type { RefObject } from 'react'
 import PixelCard from './PixelCard'
 import SeatPod from './SeatPod'
 import { useGameStore } from '../store/gameStore'
@@ -32,6 +33,85 @@ export function seatPosition(viewIndex: number, totalSeats: number) {
   }
 }
 
+// Clearance for bits that stick out past a seat's layout box (dealer badge
+// below, all-in badge to the right) plus breathing room against hard edges.
+const FIT_PAD = { top: 8, bottom: 14, side: 14 }
+
+// T11 fit-to-viewport: the composition (felt + overhanging pods) has a fixed
+// layout size from the CSS width breakpoints; this hook scales and positions
+// .table-wrap so every pod stays inside the box the room chrome leaves free
+// (--chrome-top/--chrome-bottom/--chrome-right on .room-stage). The felt may
+// still bleed past the side edges on phones — that is the T8 look — but pods,
+// board, and pot must never hide under the topbar or action bar.
+function useTableFit(wrapRef: RefObject<HTMLDivElement | null>, totalSeats: number) {
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current
+    const stage = wrap?.parentElement
+    if (!wrap || !stage) return
+
+    const fit = () => {
+      const wrapW = wrap.offsetWidth
+      const wrapH = wrap.offsetHeight
+      if (!wrapW || !wrapH) return
+      let podW = 0
+      let podH = 0
+      for (const el of wrap.querySelectorAll<HTMLElement>('.seat')) {
+        podW = Math.max(podW, el.offsetWidth)
+        podH = Math.max(podH, el.offsetHeight)
+      }
+      let minX = 50
+      let maxX = 50
+      let minY = 50
+      let maxY = 50
+      for (let i = 0; i < totalSeats; i++) {
+        const p = seatPosition(i, totalSeats)
+        minX = Math.min(minX, p.x)
+        maxX = Math.max(maxX, p.x)
+        minY = Math.min(minY, p.y)
+        maxY = Math.max(maxY, p.y)
+      }
+      // Pod bounding box in unscaled wrap coordinates.
+      const box = {
+        left: (minX / 100) * wrapW - podW / 2 - FIT_PAD.side,
+        right: (maxX / 100) * wrapW + podW / 2 + FIT_PAD.side,
+        top: (minY / 100) * wrapH - podH / 2 - FIT_PAD.top,
+        bottom: (maxY / 100) * wrapH + podH / 2 + FIT_PAD.bottom,
+      }
+      const styles = getComputedStyle(stage)
+      const chrome = (name: string, fallback: number) => {
+        const v = parseFloat(styles.getPropertyValue(name))
+        return Number.isFinite(v) ? v : fallback
+      }
+      const chromeTop = chrome('--chrome-top', 64)
+      const chromeBottom = chrome('--chrome-bottom', 196)
+      const chromeRight = chrome('--chrome-right', 0)
+      const availW = stage.clientWidth - chromeRight - 20
+      const availH = stage.clientHeight - chromeTop - chromeBottom
+      const scale = Math.min(1, availW / (box.right - box.left), availH / (box.bottom - box.top))
+      // Wrap center such that the pod box lands centered in the free area
+      // (scale() is about the wrap center thanks to translate(-50%, -50%)).
+      const boxMidX = (box.left + box.right) / 2
+      const boxMidY = (box.top + box.bottom) / 2
+      const centerX = 10 + availW / 2 + (wrapW / 2 - boxMidX) * scale
+      const centerY = chromeTop + availH / 2 + (wrapH / 2 - boxMidY) * scale
+      wrap.style.left = `${Math.round(centerX)}px`
+      wrap.style.top = `${Math.round(centerY)}px`
+      wrap.style.transform = `translate(-50%, -50%) scale(${scale.toFixed(4)})`
+    }
+
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(stage) // window resizes + chrome-var media flips
+    observer.observe(wrap) // width breakpoint changes
+    for (const el of wrap.querySelectorAll<HTMLElement>('.seat')) observer.observe(el) // pod content growth
+    window.addEventListener('resize', fit) // belt & braces where RO delivery is throttled
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', fit)
+    }
+  }, [wrapRef, totalSeats])
+}
+
 type TableProps = {
   room: RoomSnapshot
   game: Game | null
@@ -50,6 +130,8 @@ export default function Table({ room, game, animations }: TableProps) {
   const takeSeat = useGameStore((s) => s.takeSeat)
   const pushToast = useGameStore((s) => s.pushToast)
   const yourSeat = room.viewer.seat
+  const wrapRef = useRef<HTMLDivElement>(null)
+  useTableFit(wrapRef, room.maxSeats)
 
   const membersBySeat = useMemo(() => {
     const map = new Map<number, string>()
@@ -101,7 +183,7 @@ export default function Table({ room, game, animations }: TableProps) {
   }
 
   return (
-    <div className="table-wrap" data-testid="table" data-seat-count={totalSeats}>
+    <div className="table-wrap" ref={wrapRef} data-testid="table" data-seat-count={totalSeats}>
       <div className="felt" />
       <div className="table-logo">
         H<span className="lt-o">O</span>LD&#39;EM
