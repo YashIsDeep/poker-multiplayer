@@ -157,7 +157,7 @@ export default function ActionBar() {
         </span>
       </h3>
       <div className="ab-buttons">
-        {legal.canFold && (
+        {legal.canFold && !legal.canCheck && (
           <button
             className="btn btn-red"
             data-sound="fold"
