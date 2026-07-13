@@ -2,9 +2,13 @@
   "name": "poker-multiplayer",
   "private": true,
   "scripts": {
-    "dev": "concurrently -k -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "cd server && .\\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev",
+    "dev": "node --env-file=.env node_modules/concurrently/dist/bin/index.js -k -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && .\\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev,oauth",
     "dev:client": "cd client && npm run dev",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "npm --prefix client run build",
+    "build:server": "cd server && .\\mvnw.cmd -B -ntp clean package -DskipTests",
+    "start": "node --env-file=.env scripts/start.mjs",
     "test": "cd server && .\\mvnw.cmd -B -ntp test"
   },
   "devDependencies": {
