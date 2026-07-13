@@ -6,6 +6,7 @@ import java.util.UUID;
 public record RoomExitNotice(UUID roomId, ExitReason reason, long membershipEpoch, Instant serverNow) {
     public enum ExitReason {
         LEFT,
-        IDLE_TIMEOUT
+        IDLE_TIMEOUT,
+        DISCONNECTED_TIMEOUT
     }
 }

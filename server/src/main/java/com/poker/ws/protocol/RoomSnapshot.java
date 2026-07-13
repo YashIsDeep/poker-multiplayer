@@ -12,6 +12,7 @@ public record RoomSnapshot(
         long membershipEpoch,
         long revision,
         Instant serverNow,
+        Instant idleExpiresAt,
         List<RoomMemberView> members,
         List<SeatView> seats,
         RoomConfigView config,

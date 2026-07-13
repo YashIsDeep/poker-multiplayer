@@ -10,5 +10,6 @@ public record LobbyRoomView(
         int maxSeats,
         int memberCount,
         int seatedCount,
+        int connectedMemberCount,
         Instant createdAt) {
 }

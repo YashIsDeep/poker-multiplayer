@@ -8,5 +8,7 @@ public record RoomMemberView(
         String displayName,
         String avatarUrl,
         Instant joinedAt,
-        Integer seat) {
+        Integer seat,
+        boolean connected,
+        Instant disconnectedSince) {
 }

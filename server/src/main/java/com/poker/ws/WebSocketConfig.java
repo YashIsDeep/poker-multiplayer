@@ -51,8 +51,9 @@ public class WebSocketConfig extends AbstractSessionWebSocketMessageBrokerConfig
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
+        long heartbeatMillis = properties.getHeartbeatInterval().toMillis();
         registry.enableSimpleBroker("/topic", "/queue")
-                .setHeartbeatValue(new long[] {10_000, 10_000})
+                .setHeartbeatValue(new long[] {heartbeatMillis, heartbeatMillis})
                 .setTaskScheduler(brokerTaskScheduler);
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");

@@ -6,6 +6,7 @@ public enum CommandType {
     ROOM_JOIN,
     ROOM_LEAVE,
     ROOM_SYNC,
+    ROOM_KEEP_ALIVE,
     ROOM_TAKE_SEAT,
     ROOM_STAND,
     GAME_ACT,

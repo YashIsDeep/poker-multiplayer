@@ -26,6 +26,9 @@ public record RoomChange(
         SEAT_TAKEN,
         STOOD,
         GAME_CHANGED,
+        PRESENCE_CHANGED,
+        KEEP_ALIVE,
+        DISCONNECTED_MEMBER_EVICTED,
         IDLE_CLOSED,
         STATE_SYNC
     }

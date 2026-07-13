@@ -24,6 +24,7 @@ public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBro
                         "/app/room.join",
                         "/app/room.leave",
                         "/app/room.sync",
+                        "/app/room.keep-alive",
                         "/app/room.take-seat",
                         "/app/room.stand",
                         "/app/game.act",

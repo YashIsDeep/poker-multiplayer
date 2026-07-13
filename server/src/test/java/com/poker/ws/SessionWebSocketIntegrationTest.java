@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +37,7 @@ import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.messaging.simp.broker.SimpleBrokerMessageHandler;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("dev")
@@ -50,6 +52,9 @@ class SessionWebSocketIntegrationTest {
 
     @Autowired
     private RoomManager roomManager;
+
+    @Autowired
+    private SimpleBrokerMessageHandler broker;
 
     private WebSocketStompClient client;
     private StompSession session;
@@ -71,6 +76,7 @@ class SessionWebSocketIntegrationTest {
 
     @Test
     void authenticatedSessionConnectsWithCsrfAndRecoversState() throws Exception {
+        assertArrayEquals(new long[] {5_000, 5_000}, broker.getHeartbeatValue());
         HttpClient http = HttpClient.newHttpClient();
         HttpResponse<Void> login = http.send(
                 HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/auth/dev?u=ws-user"))
@@ -165,6 +171,9 @@ class SessionWebSocketIntegrationTest {
         awaitDisconnected(session, Duration.ofSeconds(10));
         assertFalse(session.isConnected());
         assertEquals(1, roomManager.roomCount());
+        assertFalse(roomManager.room(UUID.fromString(createAck.path("roomId").asText()))
+                .orElseThrow().members().getFirst().connected());
+        assertTrue(roomManager.lobby().rooms().isEmpty());
     }
 
     private static void awaitDisconnected(StompSession session, Duration timeout) throws InterruptedException {

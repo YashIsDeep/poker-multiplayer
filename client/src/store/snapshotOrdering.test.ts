@@ -29,6 +29,7 @@ function snapshot(overrides: Partial<RoomSnapshot> & { membershipEpoch: number; 
     name: 'Test Table',
     maxSeats: 6,
     serverNow: new Date().toISOString(),
+    idleExpiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
     members: [
       {
         userId: 'u-1',
@@ -36,6 +37,8 @@ function snapshot(overrides: Partial<RoomSnapshot> & { membershipEpoch: number; 
         avatarUrl: null,
         joinedAt: new Date().toISOString(),
         seat: 0,
+        connected: true,
+        disconnectedSince: null,
       },
     ],
     seats: [{ seat: 0, userId: 'u-1' }],
@@ -191,7 +194,7 @@ describe('gameStore snapshot acceptance', () => {
     expect(useGameStore.getState().roomClosed).toBe(false)
   })
 
-  it('only turns ROOM_NOT_FOUND into table-loss recovery for room-scoped commands', () => {
+  it('turns both terminal recovery errors into table-loss for room-scoped commands', () => {
     const store = useGameStore.getState()
     useGameStore.setState({ roomGone: false, toasts: [] })
     const failure = {
@@ -210,6 +213,29 @@ describe('gameStore snapshot acceptance', () => {
     expect(useGameStore.getState().roomGone).toBe(false)
 
     store.__handleAck({ ...failure, command: 'ROOM_SYNC' })
+    expect(useGameStore.getState().roomGone).toBe(true)
+
+    useGameStore.setState({ roomGone: false })
+    store.__handleAck({
+      ...failure,
+      requestId: 'not-member',
+      command: 'ROOM_SYNC',
+      error: 'NOT_A_ROOM_MEMBER',
+    })
+    expect(useGameStore.getState().roomGone).toBe(true)
+  })
+
+  it('treats disconnected-member eviction as terminal room recovery', () => {
+    const store = useGameStore.getState()
+    store.__applyRoomSnapshot(snapshot({ membershipEpoch: 85, revision: 1 }))
+    useGameStore.setState({ roomGone: false })
+    store.__handleRoomEvent({
+      roomId: 'room-1',
+      reason: 'DISCONNECTED_TIMEOUT',
+      membershipEpoch: 86,
+      serverNow: new Date().toISOString(),
+    })
+    expect(useGameStore.getState().room).toBeNull()
     expect(useGameStore.getState().roomGone).toBe(true)
   })
 

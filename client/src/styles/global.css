@@ -143,6 +143,17 @@ main {
   color: var(--text);
 }
 
+/* Icon-only mute / unmute toggle (lobby header + room topbar). */
+.sound-toggle {
+  padding: 10px 12px;
+  line-height: 1;
+  font-size: 18px;
+}
+
+.sound-toggle.muted {
+  opacity: 0.72;
+}
+
 .server-status {
   position: fixed;
   bottom: 12px;

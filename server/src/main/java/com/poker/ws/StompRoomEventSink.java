@@ -52,8 +52,11 @@ public final class StompRoomEventSink implements RoomEventSink {
         if (change.exitedUserId() != null && change.roomId() != null) {
             attempted++;
             try {
-                RoomExitNotice notice = mapper.exit(
-                        change.roomId(), change.exitedMembershipEpoch(), clock.instant());
+                RoomExitNotice notice = change.kind() == RoomChange.Kind.DISCONNECTED_MEMBER_EVICTED
+                        ? mapper.disconnectedExit(
+                                change.roomId(), change.exitedMembershipEpoch(), clock.instant())
+                        : mapper.exit(
+                                change.roomId(), change.exitedMembershipEpoch(), clock.instant());
                 messaging.convertAndSendToUser(
                         change.exitedUserId().toString(), "/queue/room-events", notice);
             } catch (RuntimeException ex) {
@@ -72,7 +75,9 @@ public final class StompRoomEventSink implements RoomEventSink {
                 }
             }
         }
-        if (change.kind() != RoomChange.Kind.ROOM_SYNC && change.kind() != RoomChange.Kind.GAME_CHANGED
+        if (change.kind() != RoomChange.Kind.ROOM_SYNC
+                && change.kind() != RoomChange.Kind.GAME_CHANGED
+                && change.kind() != RoomChange.Kind.KEEP_ALIVE
                 && change.roomRevision() > 0) {
             attempted++;
             try {

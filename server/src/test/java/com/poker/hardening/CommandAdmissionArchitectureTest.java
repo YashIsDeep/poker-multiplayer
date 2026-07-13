@@ -18,6 +18,7 @@ class CommandAdmissionArchitectureTest {
             Map.entry("/room.join", CommandType.ROOM_JOIN),
             Map.entry("/room.leave", CommandType.ROOM_LEAVE),
             Map.entry("/room.sync", CommandType.ROOM_SYNC),
+            Map.entry("/room.keep-alive", CommandType.ROOM_KEEP_ALIVE),
             Map.entry("/room.take-seat", CommandType.ROOM_TAKE_SEAT),
             Map.entry("/room.stand", CommandType.ROOM_STAND),
             Map.entry("/game.act", CommandType.GAME_ACT),

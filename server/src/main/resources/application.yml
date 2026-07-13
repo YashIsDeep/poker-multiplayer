@@ -27,6 +27,7 @@ server:
 
 poker:
   websocket:
+    heartbeat-interval: 5s
     allowed-origins:
       - http://127.0.0.1:5173
       - http://localhost:5173
@@ -47,6 +48,12 @@ poker:
     registry-cap: 100000
     registry-ttl: 10m
   rooms:
-    disconnected-grace: 30m
+    disconnected-grace: 10m
+    member-disconnected-grace: 10m
+    inactivity-timeout: 60m
+    inactivity-warning: 5m
+    cleanup-sweep-ms: 60000
+  presence:
+    reconnect-grace: 10s
   gameplay:
     recovery-sweep-ms: 5000

@@ -6,7 +6,9 @@ import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SwirlBackground from '../components/SwirlBackground'
 import CrtOverlay from '../components/CrtOverlay'
+import SoundToggle from '../components/SoundToggle'
 import { useGameStore } from '../store/gameStore'
+import { playSound } from '../lib/sound'
 import '../styles/lobby.css'
 
 type Me = {
@@ -63,6 +65,7 @@ export default function Lobby() {
 
   const join = (code: string) => {
     if (busy) return
+    playSound('click')
     setBusy(true)
     joinRoom(code)
       .then((ack) => {
@@ -96,6 +99,7 @@ export default function Lobby() {
               <span className="avatar" aria-hidden="true" />
             )}
             <b>{me?.displayName ?? '…'}</b>
+            <SoundToggle />
             <a className="btn btn-dev logout" href="/logout">
               Log out
             </a>
@@ -127,6 +131,10 @@ export default function Lobby() {
                   </b>
                 </span>
                 <span className="room-stat">
+                  <span className="label">online</span>
+                  <b className="num">{r.connectedMemberCount}</b>
+                </span>
+                <span className="room-stat">
                   <span className="label">watching</span>
                   <b className="num">{Math.max(0, r.memberCount - r.seatedCount)}</b>
                 </span>
@@ -146,7 +154,10 @@ export default function Lobby() {
           <button
             className="btn btn-orange btn-create"
             disabled={connection !== 'connected'}
-            onClick={() => setCreating(true)}
+            onClick={() => {
+              playSound('click')
+              setCreating(true)
+            }}
           >
             + Create table
           </button>

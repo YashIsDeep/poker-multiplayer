@@ -3,7 +3,7 @@
 Build phases for the multiplayer Texas Hold'em app. Labels: `backlog` → `in-progress` → `done`.
 IDs match the session task list (T1 = task #1), so "pick T4" is unambiguous.
 
-- [x] `T1` `done` **P0 — Scaffold monorepo**: Spring Boot 3.5 server + Vite/React client + proxy, health/meta endpoints, dev scripts, Balatro base tokens.
+- [x] `T1` `CODE_REVIEWED` **P0 — Scaffold monorepo**: Spring Boot 3.5 server + Vite/React client + proxy, health/meta endpoints, dev scripts, Balatro base tokens.
 - [x] `T2` `CODE_REVIEWED` **P1 — Deck + hand evaluator (pure Java)**: card encoding, injected-RNG Fisher-Yates shuffle, rank5/evaluate7 best-of-21-combos evaluator, describe(), exhaustive JUnit vector suite (wheel, kickers, board-plays).
 - [x] `T3` `CODE_REVIEWED` **P2 — Game engine**: betting rounds (raiseTo totals, min-raise, no-reopen on short all-in, BB option, heads-up order), layered side pots + uncalled-bet refund + odd-chip rule, state machine with fold-win and all-in runout paths, 10 scenario tests + 10k-hand chip-conservation sim.
 - [x] `T4` `CODE_REVIEWED` **P3 — Auth + users**: Google + Discord OAuth (Spring Security oauth2-client, custom Discord provider), user upsert into H2 via JPA, Spring Session JDBC, dev-only login (`/auth/dev?u=name`), `/api/me`.
@@ -13,3 +13,5 @@ IDs match the session task list (T1 = task #1), so "pick T4" is unambiguous.
 - [x] `T8` `CODE_REVIEWED` **P6 — Balatro UI (client-only)**: WebGL swirl background, CRT scanlines + grain overlay, elliptical table with 2-9 seats, pixel cards, action bar + raise slider, juice animations (number pop, chip fly, card bob), reconnect UX. Pure client work — all server support (per-viewer snapshots, rejoin-as-resync) lands in T5/T6.
 - [x] `T9` `CODE_REVIEWED` **P7·backend — Hardening (server)**: action rate limiting (~10/s), abuse monitoring and limit tuning, idle-room product policy, kill-server recovery semantics (`ROOM_NOT_FOUND` ack), double-join/multi-tab server behavior verified. Structural payload validation, bounded STOMP frames, and deterministic last-member room GC land in T5.
 - [x] `T10` `CODE_REVIEWED` **P7·UI — Client resilience + E2E**: `RoomExitNotice(IDLE_TIMEOUT)`/`ROOM_NOT_FOUND` → toast → lobby, multi-tab UX, mid-hand refresh/reconnect flows, full two-browser E2E script from the plan.
+- [ ] `T11` `in-progress` **P8·UI — Adaptive layout**: make table, lobby, and action bar genuinely responsive (phones portrait/landscape, tablets, small windows) instead of scale-down breakpoints; verify across viewport matrix.
+- [ ] `T12` `backlog` **P8·UI — Snappiness pass**: reduce input-to-feedback lag — instant/optimistic visual feedback on actions, animation timing tune, render-performance audit.

@@ -682,3 +682,41 @@
   }
   .ab-buttons .btn { font-size: 13px; }
 }
+.idle-warning {
+  position: fixed;
+  z-index: 45;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 12px;
+  color: #fff;
+  background: color-mix(in srgb, var(--amber-warn) 88%, transparent);
+  text-shadow: var(--outline-text);
+}
+
+.idle-warning .btn {
+  white-space: nowrap;
+  font-size: 14px;
+  padding: 5px 10px;
+}
+
+.seat.offline .pod {
+  filter: grayscale(0.7);
+  opacity: 0.72;
+}
+
+.badge.offline-b {
+  background: #4b5563;
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .idle-warning {
+    top: 104px;
+    width: min(92vw, 430px);
+    justify-content: space-between;
+  }
+}

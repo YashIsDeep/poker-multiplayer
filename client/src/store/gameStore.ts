@@ -64,6 +64,7 @@ export type GameStore = {
   createRoom: (name: string, maxSeats: number) => Promise<CommandAck>
   joinRoom: (joinCode: string) => Promise<CommandAck>
   syncRoom: (roomId: string) => Promise<CommandAck>
+  keepRoomAlive: () => Promise<CommandAck>
   leaveRoom: () => Promise<CommandAck | null>
   takeSeat: (seat: number) => Promise<CommandAck>
   stand: () => Promise<CommandAck>
@@ -245,7 +246,8 @@ export const useGameStore = create<GameStore>()((set, get) => {
 
     switch (error) {
       case 'ROOM_NOT_FOUND':
-        pushToast('warn', 'ROOM_NOT_FOUND', 'that table no longer exists')
+      case 'NOT_A_ROOM_MEMBER':
+        pushToast('warn', error, 'that table is no longer available to this player')
         if (!['STATE_SYNC', 'ROOM_CREATE', 'ROOM_JOIN'].includes(ack.command)) {
           set({ roomGone: true })
         }
@@ -280,6 +282,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
       myHoleCards: null,
       pendingAction: null,
       roomClosed: !wasVoluntary && notice.reason === 'IDLE_TIMEOUT',
+      roomGone: !wasVoluntary && notice.reason === 'DISCONNECTED_TIMEOUT',
     })
     leavingRoomId = null
   }
@@ -336,7 +339,11 @@ export const useGameStore = create<GameStore>()((set, get) => {
       } else if (cachedRoomId) {
         const roomAck = await get().syncRoom(cachedRoomId)
         recoveryRoomId = null
-        if (!roomAck.ok && roomAck.error !== 'ROOM_NOT_FOUND') {
+        if (
+          !roomAck.ok &&
+          roomAck.error !== 'ROOM_NOT_FOUND' &&
+          roomAck.error !== 'NOT_A_ROOM_MEMBER'
+        ) {
           throw new Error(`room recovery failed: ${roomAck.error ?? 'unknown error'}`)
         }
       }
@@ -450,6 +457,11 @@ export const useGameStore = create<GameStore>()((set, get) => {
     },
     syncRoom(roomId: string) {
       return sendCommand('/app/room.sync', { roomId })
+    },
+    keepRoomAlive() {
+      const roomId = requireRoomId()
+      if (!roomId) return Promise.reject(new Error('not in a room'))
+      return sendCommand('/app/room.keep-alive', { roomId })
     },
     async leaveRoom() {
       const roomId = requireRoomId()

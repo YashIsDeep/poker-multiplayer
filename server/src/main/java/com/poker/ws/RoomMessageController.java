@@ -10,6 +10,7 @@ import com.poker.ws.protocol.CommandType;
 import com.poker.ws.protocol.CreateRoomRequest;
 import com.poker.ws.protocol.ErrorCode;
 import com.poker.ws.protocol.JoinRoomRequest;
+import com.poker.ws.protocol.KeepRoomAliveRequest;
 import com.poker.ws.protocol.LeaveRoomRequest;
 import com.poker.ws.protocol.StandRequest;
 import com.poker.ws.protocol.StateSyncView;
@@ -108,6 +109,19 @@ public class RoomMessageController {
         return execute(envelope.requestId(), CommandType.ROOM_SYNC, principal, user -> {
             RoomCommandResult result = service.roomSync(user.userId(), envelope.payload().roomId());
             return ack(envelope.requestId(), CommandType.ROOM_SYNC, result);
+        });
+    }
+
+    @MessageMapping("/room.keep-alive")
+    @AdmittedCommand(value = CommandType.ROOM_KEEP_ALIVE, control = true)
+    @SendToUser(destinations = "/queue/acks", broadcast = false)
+    public CommandAck keepAlive(
+            @Valid @Payload CommandEnvelope<KeepRoomAliveRequest> envelope,
+            Principal principal) {
+        return execute(envelope.requestId(), CommandType.ROOM_KEEP_ALIVE, principal, user -> {
+            RoomCommandResult result = service.keepAlive(
+                    user.userId(), envelope.payload().roomId());
+            return ack(envelope.requestId(), CommandType.ROOM_KEEP_ALIVE, result);
         });
     }
 

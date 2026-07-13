@@ -8,9 +8,11 @@ import CrtOverlay from '../components/CrtOverlay'
 import Table from '../components/Table'
 import ActionBar from '../components/ActionBar'
 import ShowdownBanner from '../components/ShowdownBanner'
-import { useGameStore } from '../store/gameStore'
+import SoundToggle from '../components/SoundToggle'
+import { serverNow, useGameStore } from '../store/gameStore'
 import { useReducedMotion } from '../hooks/useReducedMotion'
 import { useAnimationQueue } from '../hooks/useAnimationQueue'
+import { useGameSounds } from '../hooks/useGameSounds'
 import { startMockDriver } from '../dev/mockGame'
 import '../styles/table.css'
 
@@ -23,19 +25,29 @@ export default function Room() {
   const connection = useGameStore((s) => s.connection)
   const room = useGameStore((s) => s.room)
   const game = useGameStore((s) => s.game)
+  const yourSeat = useGameStore((s) => s.yourSeat)
   const leaveRoom = useGameStore((s) => s.leaveRoom)
   const pushToast = useGameStore((s) => s.pushToast)
   const stand = useGameStore((s) => s.stand)
   const roomClosed = useGameStore((s) => s.roomClosed)
   const roomGone = useGameStore((s) => s.roomGone)
   const takenOver = useGameStore((s) => s.takenOver)
+  const keepRoomAlive = useGameStore((s) => s.keepRoomAlive)
 
   const reducedMotion = useReducedMotion()
   const animations = useAnimationQueue(game, reducedMotion)
+  useGameSounds(game, yourSeat)
 
   const mockState = import.meta.env.DEV ? search.get('mock') : null
   const mockStarted = useRef(false)
   const [leaving, setLeaving] = useState(false)
+  const [keepingAlive, setKeepingAlive] = useState(false)
+  const [clock, setClock] = useState(() => serverNow())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(serverNow()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (mockState) {
@@ -81,6 +93,11 @@ export default function Room() {
     )
   }
 
+  const idleDeadline = Date.parse(room.idleExpiresAt)
+  const idleRemaining = Number.isNaN(idleDeadline) ? Number.POSITIVE_INFINITY : idleDeadline - clock
+  const showIdleWarning = idleRemaining > 0 && idleRemaining <= 5 * 60_000
+  const idleMinutes = Math.max(0, Math.ceil(idleRemaining / 60_000))
+
   return (
     <div className="stage room-stage" data-testid="room">
       <SwirlBackground />
@@ -98,6 +115,7 @@ export default function Room() {
           )}
         </div>
         <div className="room-topbar-actions">
+          <SoundToggle />
           {room.viewer.canStand && (
             <button className="btn btn-dev btn-leave" onClick={() => void stand()}>
               Stand
@@ -123,6 +141,30 @@ export default function Room() {
           </button>
         </div>
       </div>
+
+      {showIdleWarning && (
+        <div className="idle-warning panel" role="status">
+          <span>This table closes for inactivity in about {idleMinutes} min.</span>
+          <button
+            className="btn btn-orange"
+            disabled={keepingAlive || connection !== 'connected'}
+            onClick={async () => {
+              if (keepingAlive) return
+              setKeepingAlive(true)
+              try {
+                const ack = await keepRoomAlive()
+                if (!ack.ok) pushToast('warn', 'Keep-alive rejected')
+              } catch {
+                pushToast('warn', 'Keep-alive failed', 'could not reach the server')
+              } finally {
+                setKeepingAlive(false)
+              }
+            }}
+          >
+            {keepingAlive ? 'Keeping open…' : 'Keep table open'}
+          </button>
+        </div>
+      )}
 
       <Table room={room} game={game} animations={animations} />
       <ShowdownBanner />

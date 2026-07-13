@@ -2,7 +2,7 @@
 // owned by the store's resilience machine (T10), so automatic reconnect is
 // disabled here. Every CONNECT refetches the CSRF token per the T5 flow.
 
-import { Client } from '@stomp/stompjs'
+import { Client, TickerStrategy } from '@stomp/stompjs'
 import type { IMessage } from '@stomp/stompjs'
 
 export type StompHandlers = {
@@ -21,6 +21,16 @@ const SUBSCRIPTIONS: Array<{ destination: string; handler: keyof StompHandlers }
   { destination: '/user/queue/room', handler: 'onRoom' },
   { destination: '/user/queue/room-events', handler: 'onRoomEvent' },
 ]
+
+export const HEARTBEAT_INTERVAL_MS = 5_000
+export const HEARTBEAT_TOLERANCE_MULTIPLIER = 3
+export const HEARTBEAT_CONFIG = Object.freeze({
+  heartbeatIncoming: HEARTBEAT_INTERVAL_MS,
+  heartbeatOutgoing: HEARTBEAT_INTERVAL_MS,
+  heartbeatToleranceMultiplier: HEARTBEAT_TOLERANCE_MULTIPLIER,
+  heartbeatStrategy: TickerStrategy.Worker,
+  discardWebsocketOnCommFailure: true,
+})
 
 async function fetchCsrf(): Promise<{ headerName: string; token: string }> {
   const response = await fetch('/api/csrf', { credentials: 'same-origin' })
@@ -66,8 +76,7 @@ export class PokerStompClient {
       brokerURL: wsUrl(),
       connectHeaders: { [csrf.headerName]: csrf.token },
       reconnectDelay: 0, // resilience machine owns retry scheduling
-      heartbeatIncoming: 10_000,
-      heartbeatOutgoing: 10_000,
+      ...HEARTBEAT_CONFIG,
       onConnect: () => {
         SUBSCRIPTIONS.forEach(({ destination, handler }) =>
           client.subscribe(destination, (message: IMessage) => {

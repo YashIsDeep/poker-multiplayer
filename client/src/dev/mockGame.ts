@@ -20,6 +20,8 @@ function baseRoom(seatCount: number): Omit<RoomSnapshot, 'game'> {
     avatarUrl: null,
     joinedAt: new Date().toISOString(),
     seat: i,
+    connected: true,
+    disconnectedSince: null,
   }))
   const seats: SeatView[] = members.map((m, i) => ({ seat: i, userId: m.userId }))
   return {
@@ -30,6 +32,7 @@ function baseRoom(seatCount: number): Omit<RoomSnapshot, 'game'> {
     membershipEpoch: 1,
     revision: revision++,
     serverNow: new Date().toISOString(),
+    idleExpiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
     members,
     seats,
     config: {

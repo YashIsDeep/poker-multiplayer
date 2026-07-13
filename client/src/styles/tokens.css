@@ -19,7 +19,9 @@
   --text-dim: #9aa7b4;
 
   --card-face: #f8f5f0;
-  --suit-red: #ff4c40;
+  /* deep card red: the bright --red (#ff4c40) only hits 3:1 on the cream face,
+     leaving pixel-font ranks like a red "2" mushy. This clears WCAG AA (~5.7:1). */
+  --suit-red: #c01818;
   --suit-dark: #2e3444;
 
   /* Drop m6x11.ttf (managore.itch.io/m6x11, Balatro's font) into src/assets

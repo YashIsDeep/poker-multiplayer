@@ -78,6 +78,7 @@ final class TableGame {
         scheduleStartIfReady();
     }
     boolean handIncludes(int seat) { return hand != null && playerInHand(seat); }
+    boolean standAfterHand(int seat) { return required(seat).standAfterHand(); }
 
     void sitOut(int seat) {
         TableSeatState state = required(seat);
@@ -86,6 +87,39 @@ final class TableGame {
         else seats.put(seat, copy(state, TableSeatStatus.SITTING_OUT, false, state.standAfterHand(), state.pendingRebuy()));
         lifecycle();
         if (hand == null) scheduleStartIfReady();
+    }
+
+    /** Presence-driven sit-out. Repeated reconciliation is intentionally a no-op. */
+    boolean autoSitOut(int seat) {
+        TableSeatState state = required(seat);
+        if (state.status() == TableSeatStatus.SITTING_OUT || state.sitOutAfterHand()) return false;
+        if (hand != null && playerInHand(seat)) {
+            seats.put(seat, copy(
+                    state, state.status(), true, state.standAfterHand(), state.pendingRebuy()));
+        } else {
+            seats.put(seat, copy(
+                    state, TableSeatStatus.SITTING_OUT, false,
+                    state.standAfterHand(), state.pendingRebuy()));
+        }
+        lifecycle();
+        if (hand == null) scheduleStartIfReady();
+        return true;
+    }
+
+    /** Cleanup-driven stand. Returns true only when the seat was removed immediately. */
+    boolean autoStand(int seat) {
+        TableSeatState state = required(seat);
+        if (hand != null && playerInHand(seat)) {
+            if (state.standAfterHand()) return false;
+            seats.put(seat, copy(
+                    state, state.status(), state.sitOutAfterHand(), true, state.pendingRebuy()));
+            lifecycle();
+            return false;
+        }
+        seats.remove(seat);
+        lifecycle();
+        scheduleStartIfReady();
+        return true;
     }
 
     void sitIn(int seat) {

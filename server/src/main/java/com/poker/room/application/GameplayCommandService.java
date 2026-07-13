@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import com.poker.presence.RoomPresenceReconciler;
 
 @Service
 public final class GameplayCommandService {
@@ -13,9 +14,12 @@ public final class GameplayCommandService {
     private final RoomManager rooms;
     private final RoomEventSink events;
     private final ScheduledGameplayCoordinator coordinator;
+    private final RoomPresenceReconciler presence;
 
-    public GameplayCommandService(RoomManager rooms, RoomEventSink events, ScheduledGameplayCoordinator coordinator) {
-        this.rooms = Objects.requireNonNull(rooms); this.events = Objects.requireNonNull(events); this.coordinator = Objects.requireNonNull(coordinator);
+    public GameplayCommandService(RoomManager rooms, RoomEventSink events,
+            ScheduledGameplayCoordinator coordinator, RoomPresenceReconciler presence) {
+        this.rooms = Objects.requireNonNull(rooms); this.events = Objects.requireNonNull(events);
+        this.coordinator = Objects.requireNonNull(coordinator); this.presence = Objects.requireNonNull(presence);
     }
     public RoomCommandResult act(UUID user, UUID room, long seq, GameAction action, Long amount) { return commit(rooms.act(user, room, seq, action, amount)); }
     public RoomCommandResult sitOut(UUID user, UUID room) { return commit(rooms.sitOut(user, room)); }
@@ -35,6 +39,12 @@ public final class GameplayCommandService {
             coordinator.reconcile(change);
         } catch (RuntimeException ex) {
             log.error("Gameplay scheduling failed roomId={} revision={}",
+                    change.roomId(), change.roomRevision(), ex);
+        }
+        try {
+            presence.reconcile(change);
+        } catch (RuntimeException ex) {
+            log.error("Room cleanup scheduling failed roomId={} revision={}",
                     change.roomId(), change.roomRevision(), ex);
         }
         return new RoomCommandResult(change, report == null ? PublicationReport.none() : report);

@@ -9,6 +9,9 @@ export default defineConfig({
     // Bind IPv4 loopback explicitly: on Windows, binding the default
     // 'localhost' can pick ::1 only, leaving 127.0.0.1 unreachable.
     host: '127.0.0.1',
+    // PORT override lets tooling run a second instance; OAuth flows still
+    // need the default 5173 origin registered with the providers.
+    port: Number(process.env.PORT) || 5173,
     strictPort: true,
     proxy: {
       '/api': 'http://127.0.0.1:8080',

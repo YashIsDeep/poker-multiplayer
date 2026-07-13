@@ -1,6 +1,7 @@
 package com.poker.room;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -117,12 +118,14 @@ public final class RoomManager {
                             0,
                             Map.of(profile.userId(), epoch(profile.userId())));
                 }
-                if (room.members.size() >= room.maxSeats) {
+                if (room.members.size() >= room.memberCapacity()) {
                     throw new RoomException(RoomError.ROOM_FULL);
                 }
                 Instant now = clock.instant();
                 incrementEpoch(profile.userId());
                 room.members.put(profile.userId(), new PokerRoom.Member(profile, now, epoch(profile.userId())));
+                room.allDisconnectedSince = null;
+                touch(room, now);
                 roomsByUser.put(profile.userId(), roomId);
                 incrementRoomRevision(room);
                 incrementLobbyRevision();
@@ -195,6 +198,8 @@ public final class RoomManager {
                     roomsByCode.remove(room.joinCode);
                     lobbyRooms.remove(room.id);
                 } else {
+                    touch(room, clock.instant());
+                    recomputeAllDisconnected(room, clock.instant());
                     room.assertInvariant();
                     updateLobbyEntry(room);
                     state = room.snapshot();
@@ -266,6 +271,7 @@ public final class RoomManager {
                 }
                 incrementRoomRevision(room);
                 incrementLobbyRevision();
+                touch(room, clock.instant());
                 room.assertInvariant();
                 updateLobbyEntry(room);
                 return change(
@@ -303,6 +309,31 @@ public final class RoomManager {
                         null,
                         0,
                         Map.of(userId, epoch(userId)));
+            } finally {
+                room.lock.unlock();
+            }
+        } finally {
+            registryLock.unlock();
+        }
+    }
+
+    public RoomChange keepAlive(UUID userId, UUID roomId) {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(roomId, "roomId");
+        registryLock.lock();
+        try {
+            PokerRoom room = requiredMemberRoom(userId, roomId);
+            room.lock.lock();
+            try {
+                touch(room, clock.instant());
+                incrementRoomRevision(room);
+                return change(
+                        RoomChange.Kind.KEEP_ALIVE,
+                        room,
+                        memberIds(room),
+                        null,
+                        0,
+                        epochsFor(room));
             } finally {
                 room.lock.unlock();
             }
@@ -398,6 +429,7 @@ public final class RoomManager {
             if (room.closed) throw new RoomException(RoomError.ROOM_NOT_FOUND);
             if (room.member(userId) == null) throw new RoomException(RoomError.NOT_A_ROOM_MEMBER);
             mutation.accept(room);
+            touch(room, clock.instant());
             incrementRoomRevision(room);
             room.assertInvariant();
             return gameplayChange(room, lease.lobby());
@@ -554,53 +586,30 @@ public final class RoomManager {
         } finally { registryLock.unlock(); }
     }
 
-    public IdleGuard markRoomDisconnected(UUID roomId, Instant now) {
+    /** Marks a confirmed disconnect after the transport reconnect grace has elapsed. */
+    public Optional<RoomChange> memberDisconnected(UUID userId, Instant now) {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(now, "now");
         registryLock.lock();
         try {
-            PokerRoom room = rooms.get(new RoomId(roomId));
-            if (room == null) return new IdleGuard(0, now);
+            RoomId roomId = roomsByUser.get(userId);
+            PokerRoom room = roomId == null ? null : rooms.get(roomId);
+            if (room == null) return Optional.empty();
             room.lock.lock();
             try {
-                if (room.allDisconnectedSince == null) {
-                    room.allDisconnectedSince = now;
-                    room.presenceGeneration = incrementExact(room.presenceGeneration, "presence generation");
-                }
-                return new IdleGuard(room.presenceGeneration, room.allDisconnectedSince);
-            } finally { room.lock.unlock(); }
-        } finally { registryLock.unlock(); }
-    }
-
-    public void markRoomConnected(UUID roomId) {
-        registryLock.lock();
-        try {
-            PokerRoom room = rooms.get(new RoomId(roomId));
-            if (room == null) return;
-            room.lock.lock();
-            try {
-                if (room.allDisconnectedSince != null) {
-                    room.allDisconnectedSince = null;
-                    room.idleExpiryPending = false;
-                    room.presenceGeneration = incrementExact(room.presenceGeneration, "presence generation");
-                }
-            } finally { room.lock.unlock(); }
-        } finally { registryLock.unlock(); }
-    }
-
-    public boolean idleGuardCurrent(
-            UUID rawRoomId,
-            long generation,
-            Instant due,
-            java.time.Duration grace) {
-        RoomId roomId = new RoomId(rawRoomId);
-        registryLock.lock();
-        try {
-            PokerRoom room = rooms.get(roomId);
-            if (room == null) return false;
-            room.lock.lock();
-            try {
-                return room.presenceGeneration == generation
-                        && room.allDisconnectedSince != null
-                        && room.allDisconnectedSince.plus(grace).equals(due);
+                PokerRoom.Member member = room.member(userId);
+                if (member == null || member.disconnectedSince != null) return Optional.empty();
+                member.disconnectedSince = now;
+                if (member.seat != null) room.game.autoSitOut(member.seat);
+                recomputeAllDisconnected(room, now);
+                bumpCleanupGeneration(room);
+                incrementRoomRevision(room);
+                incrementLobbyRevision();
+                updateLobbyEntry(room);
+                room.assertInvariant();
+                return Optional.of(change(
+                        RoomChange.Kind.PRESENCE_CHANGED, room, memberIds(room),
+                        null, 0, epochsFor(room)));
             } finally {
                 room.lock.unlock();
             }
@@ -609,45 +618,137 @@ public final class RoomManager {
         }
     }
 
-    public Optional<RoomChange> expireIdleRoom(UUID rawRoomId, long generation, Instant due,
-                                                Instant now, java.time.Duration grace) {
+    /** Clears confirmed-offline state. Reconnecting does not automatically sit the player in. */
+    public Optional<RoomChange> memberConnected(UUID userId, Instant now) {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(now, "now");
+        registryLock.lock();
+        try {
+            RoomId roomId = roomsByUser.get(userId);
+            PokerRoom room = roomId == null ? null : rooms.get(roomId);
+            if (room == null) return Optional.empty();
+            room.lock.lock();
+            try {
+                PokerRoom.Member member = room.member(userId);
+                if (member == null || member.disconnectedSince == null) return Optional.empty();
+                member.disconnectedSince = null;
+                room.allDisconnectedSince = null;
+                bumpCleanupGeneration(room);
+                incrementRoomRevision(room);
+                incrementLobbyRevision();
+                updateLobbyEntry(room);
+                room.assertInvariant();
+                return Optional.of(change(
+                        RoomChange.Kind.PRESENCE_CHANGED, room, memberIds(room),
+                        null, 0, epochsFor(room)));
+            } finally {
+                room.lock.unlock();
+            }
+        } finally {
+            registryLock.unlock();
+        }
+    }
+
+    public Set<UUID> roomIds() {
+        registryLock.lock();
+        try {
+            return rooms.keySet().stream().map(RoomId::value).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        } finally {
+            registryLock.unlock();
+        }
+    }
+
+    public Optional<CleanupIntent> cleanupIntent(
+            UUID rawRoomId,
+            Duration disconnectedGrace,
+            Duration memberDisconnectedGrace,
+            Duration inactivityTimeout) {
+        Objects.requireNonNull(rawRoomId, "roomId");
+        registryLock.lock();
+        try {
+            PokerRoom room = rooms.get(new RoomId(rawRoomId));
+            if (room == null) return Optional.empty();
+            room.lock.lock();
+            try {
+                return Optional.of(cleanupIntentLocked(
+                        room, disconnectedGrace, memberDisconnectedGrace, inactivityTimeout));
+            } finally {
+                room.lock.unlock();
+            }
+        } finally {
+            registryLock.unlock();
+        }
+    }
+
+    /** Applies exactly the currently due cleanup action under the registry/room lock order. */
+    public CleanupOutcome cleanupDue(
+            UUID rawRoomId,
+            long generation,
+            Instant due,
+            Instant now,
+            Duration disconnectedGrace,
+            Duration memberDisconnectedGrace,
+            Duration inactivityTimeout) {
+        Objects.requireNonNull(rawRoomId, "roomId");
         RoomId roomId = new RoomId(rawRoomId);
         registryLock.lock();
         try {
             PokerRoom room = rooms.get(roomId);
-            if (room == null) return Optional.empty();
+            if (room == null) return CleanupOutcome.none();
             room.lock.lock();
             try {
-                if (room.presenceGeneration != generation || room.allDisconnectedSince == null
-                        || !room.allDisconnectedSince.plus(grace).equals(due)
-                        || now.isBefore(due) || now.isBefore(room.allDisconnectedSince.plus(grace))) {
-                    return Optional.empty();
+                CleanupIntent current = cleanupIntentLocked(
+                        room, disconnectedGrace, memberDisconnectedGrace, inactivityTimeout);
+                if (generation != current.generation() || !due.equals(current.due()) || now.isBefore(due)) {
+                    return CleanupOutcome.none();
                 }
-                GameState game = room.game.snapshot();
-                if (game.tableStatus() == TableStatus.PAUSED
-                        && (game.pausedSince() == null
-                                || now.isBefore(game.pausedSince().plusSeconds(300)))) {
-                    room.idleExpiryPending = true;
-                    return Optional.empty();
+
+                if (room.allDisconnectedSince != null) {
+                    if (!mayCloseAtBoundary(room, now)) {
+                        return CleanupOutcome.retry(now.plusSeconds(5));
+                    }
+                    return CleanupOutcome.changed(closeRoomLocked(room, rawRoomId));
                 }
-                if (!game.safeBoundary() && game.tableStatus() != TableStatus.FAILED
-                        && game.tableStatus() != TableStatus.PAUSED) {
-                    room.idleExpiryPending = true;
-                    return Optional.empty();
+
+                PokerRoom.Member expired = room.members.values().stream()
+                        .filter(member -> member.disconnectedSince != null)
+                        .filter(member -> !now.isBefore(member.disconnectedSince.plus(memberDisconnectedGrace)))
+                        .sorted(Comparator.comparing(member -> member.disconnectedSince))
+                        .findFirst().orElse(null);
+                if (expired != null) {
+                    if (expired.seat != null && room.game.handIncludes(expired.seat)) {
+                        boolean alreadyQueued = room.game.standAfterHand(expired.seat);
+                        room.game.autoStand(expired.seat);
+                        RoomChange queued = null;
+                        if (!alreadyQueued) {
+                            incrementRoomRevision(room);
+                            queued = change(RoomChange.Kind.PRESENCE_CHANGED, room, memberIds(room),
+                                    null, 0, epochsFor(room));
+                        }
+                        return new CleanupOutcome(queued, now.plusSeconds(5));
+                    }
+                    return CleanupOutcome.changed(evictDisconnectedMemberLocked(room, expired));
                 }
-                Set<UUID> removed = Set.copyOf(room.members.keySet());
-                Map<UUID, Long> epochs = new HashMap<>();
-                for (UUID user : removed) { roomsByUser.remove(user); incrementEpoch(user); epochs.put(user, epoch(user)); }
-                room.closed = true;
-                rooms.remove(roomId); roomsByCode.remove(room.joinCode); lobbyRooms.remove(roomId);
-                incrementLobbyRevision();
-                return Optional.of(new RoomChange(RoomChange.Kind.IDLE_CLOSED, rawRoomId, null,
-                        lobbyStateLocked(), removed, epochs, null, 0, room.revision, lobbyRevision));
-            } finally { room.lock.unlock(); }
-        } finally { registryLock.unlock(); }
+
+                if (!mayCloseAtBoundary(room, now)) {
+                    return CleanupOutcome.retry(now.plusSeconds(5));
+                }
+                return CleanupOutcome.changed(closeRoomLocked(room, rawRoomId));
+            } finally {
+                room.lock.unlock();
+            }
+        } finally {
+            registryLock.unlock();
+        }
     }
 
-    public record IdleGuard(long generation, Instant since) {}
+    public record CleanupIntent(long generation, Instant due) {}
+
+    public record CleanupOutcome(RoomChange change, Instant retryAt) {
+        static CleanupOutcome none() { return new CleanupOutcome(null, null); }
+        static CleanupOutcome retry(Instant retryAt) { return new CleanupOutcome(null, retryAt); }
+        static CleanupOutcome changed(RoomChange change) { return new CleanupOutcome(change, null); }
+    }
 
     private RoomChange seatMutation(UUID userId, UUID roomId, int seat, long requestedBuyIn) {
         Objects.requireNonNull(userId, "userId");
@@ -685,6 +786,7 @@ public final class RoomManager {
                 room.game.seat(seat, userId, buyIn);
                 room.seats[seat] = userId;
                 member.seat = seat;
+                touch(room, clock.instant());
                 incrementRoomRevision(room);
                 incrementLobbyRevision();
                 room.assertInvariant();
@@ -714,6 +816,109 @@ public final class RoomManager {
             throw new RoomException(RoomError.NOT_A_ROOM_MEMBER);
         }
         return room;
+    }
+
+    private CleanupIntent cleanupIntentLocked(
+            PokerRoom room,
+            Duration disconnectedGrace,
+            Duration memberDisconnectedGrace,
+            Duration inactivityTimeout) {
+        Instant due;
+        if (room.allDisconnectedSince != null) {
+            // A table-wide abandoned-room deadline always wins over per-member eviction.
+            due = room.allDisconnectedSince.plus(disconnectedGrace);
+        } else {
+            due = room.lastActivityAt.plus(inactivityTimeout);
+            for (PokerRoom.Member member : room.members.values()) {
+                if (member.disconnectedSince != null) {
+                    Instant memberDue = member.disconnectedSince.plus(memberDisconnectedGrace);
+                    if (memberDue.isBefore(due)) due = memberDue;
+                }
+            }
+        }
+        return new CleanupIntent(room.cleanupGeneration, due);
+    }
+
+    private RoomChange evictDisconnectedMemberLocked(PokerRoom room, PokerRoom.Member member) {
+        Integer seat = member.seat;
+        if (seat != null) {
+            if (room.game.hasSeat(seat, member.userId)) room.game.removeAtBoundary(seat);
+            room.seats[seat] = null;
+            member.seat = null;
+        }
+        room.members.remove(member.userId);
+        roomsByUser.remove(member.userId);
+        incrementEpoch(member.userId);
+        incrementRoomRevision(room);
+        incrementLobbyRevision();
+        bumpCleanupGeneration(room);
+        recomputeAllDisconnected(room, clock.instant());
+        updateLobbyEntry(room);
+        room.assertInvariant();
+        return new RoomChange(
+                RoomChange.Kind.DISCONNECTED_MEMBER_EVICTED,
+                room.id.value(),
+                room.snapshot(),
+                lobbyStateLocked(),
+                memberIds(room),
+                epochsFor(room),
+                member.userId,
+                epoch(member.userId),
+                room.revision,
+                lobbyRevision);
+    }
+
+    private RoomChange closeRoomLocked(PokerRoom room, UUID rawRoomId) {
+        Set<UUID> removed = Set.copyOf(room.members.keySet());
+        Map<UUID, Long> epochs = new HashMap<>();
+        for (UUID user : removed) {
+            roomsByUser.remove(user);
+            incrementEpoch(user);
+            epochs.put(user, epoch(user));
+        }
+        room.closed = true;
+        rooms.remove(room.id);
+        roomsByCode.remove(room.joinCode);
+        lobbyRooms.remove(room.id);
+        incrementLobbyRevision();
+        return new RoomChange(
+                RoomChange.Kind.IDLE_CLOSED,
+                rawRoomId,
+                null,
+                lobbyStateLocked(),
+                removed,
+                epochs,
+                null,
+                0,
+                room.revision,
+                lobbyRevision);
+    }
+
+    private static boolean mayCloseAtBoundary(PokerRoom room, Instant now) {
+        GameState game = room.game.snapshot();
+        if (game.tableStatus() == TableStatus.PAUSED) {
+            return game.pausedSince() != null && !now.isBefore(game.pausedSince().plusSeconds(300));
+        }
+        return game.safeBoundary() || game.tableStatus() == TableStatus.FAILED;
+    }
+
+    private void touch(PokerRoom room, Instant now) {
+        room.lastActivityAt = now;
+        bumpCleanupGeneration(room);
+    }
+
+    private void recomputeAllDisconnected(PokerRoom room, Instant now) {
+        boolean allDisconnected = room.members.values().stream()
+                .allMatch(member -> member.disconnectedSince != null);
+        if (allDisconnected) {
+            if (room.allDisconnectedSince == null) room.allDisconnectedSince = now;
+        } else {
+            room.allDisconnectedSince = null;
+        }
+    }
+
+    private void bumpCleanupGeneration(PokerRoom room) {
+        room.cleanupGeneration = incrementExact(room.cleanupGeneration, "cleanup generation");
     }
 
     private RoomChange change(
@@ -770,7 +975,9 @@ public final class RoomManager {
     }
 
     private void updateLobbyEntry(PokerRoom room) {
-        lobbyRooms.put(room.id, room.lobbyState());
+        LobbyRoomState state = room.lobbyState();
+        if (state.connectedMemberCount() == 0) lobbyRooms.remove(room.id);
+        else lobbyRooms.put(room.id, state);
     }
 
     private JoinCode allocateCode() {

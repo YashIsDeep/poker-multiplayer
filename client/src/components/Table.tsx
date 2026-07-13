@@ -6,6 +6,7 @@ import { useMemo } from 'react'
 import PixelCard from './PixelCard'
 import SeatPod from './SeatPod'
 import { useGameStore } from '../store/gameStore'
+import { playSound } from '../lib/sound'
 import type { AnimationEvents } from '../hooks/useAnimationQueue'
 import type { Game, RoomSnapshot } from '../store/types'
 
@@ -90,6 +91,7 @@ export default function Table({ room, game, animations }: TableProps) {
   const potTotal = potMain + (potSide ?? 0)
 
   const handleTakeSeat = (seat: number) => {
+    playSound('click')
     takeSeat(seat).then(
       (ack) => {
         if (ack.ok) pushToast('ok', `Took seat ${seat + 1}`)

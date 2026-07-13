@@ -10,6 +10,7 @@ export type CommandType =
   | 'ROOM_JOIN'
   | 'ROOM_LEAVE'
   | 'ROOM_SYNC'
+  | 'ROOM_KEEP_ALIVE'
   | 'ROOM_TAKE_SEAT'
   | 'ROOM_STAND'
   // T6 gameplay command types
@@ -51,6 +52,8 @@ export type RoomMemberView = {
   avatarUrl: string | null
   joinedAt: string
   seat: number | null
+  connected: boolean
+  disconnectedSince: string | null
 }
 
 export type SeatView = { seat: number; userId: string }
@@ -80,6 +83,7 @@ export type RoomSnapshot = {
   membershipEpoch: number
   revision: number
   serverNow: string
+  idleExpiresAt: string
   members: RoomMemberView[]
   seats: SeatView[]
   config: RoomConfig
@@ -94,6 +98,7 @@ export type LobbyRoomView = {
   maxSeats: number
   memberCount: number
   seatedCount: number
+  connectedMemberCount: number
   createdAt: string
 }
 
@@ -124,7 +129,7 @@ export type CommandAck = {
 
 export type RoomExitNotice = {
   roomId: string
-  reason: 'LEFT' | 'IDLE_TIMEOUT'
+  reason: 'LEFT' | 'IDLE_TIMEOUT' | 'DISCONNECTED_TIMEOUT'
   membershipEpoch: number
   serverNow: string
 }

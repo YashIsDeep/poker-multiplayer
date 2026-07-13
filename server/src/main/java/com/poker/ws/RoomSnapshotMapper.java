@@ -4,6 +4,7 @@ import com.poker.room.LobbyRoomState;
 import com.poker.room.LobbyState;
 import com.poker.room.MemberState;
 import com.poker.room.RoomState;
+import com.poker.presence.RoomIdleProperties;
 import com.poker.ws.protocol.LobbyRoomView;
 import com.poker.ws.protocol.LobbySnapshot;
 import com.poker.ws.protocol.RoomExitNotice;
@@ -19,17 +20,21 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /** Allow-list mapper from immutable room projections to wire DTOs. */
 @Component
 public final class RoomSnapshotMapper {
     private final GameSnapshotRedactor gameRedactor;
+    private final java.time.Duration inactivityTimeout;
 
-    public RoomSnapshotMapper(GameSnapshotRedactor gameRedactor) {
+    @Autowired
+    public RoomSnapshotMapper(GameSnapshotRedactor gameRedactor, RoomIdleProperties properties) {
         this.gameRedactor = Objects.requireNonNull(gameRedactor, "gameRedactor");
+        this.inactivityTimeout = Objects.requireNonNull(properties, "properties").getInactivityTimeout();
     }
 
-    public RoomSnapshotMapper() { this(new GameSnapshotRedactor()); }
+    public RoomSnapshotMapper() { this(new GameSnapshotRedactor(), new RoomIdleProperties()); }
     public LobbySnapshot lobby(LobbyState state) {
         Objects.requireNonNull(state, "state");
         List<LobbyRoomView> rooms = state.rooms().stream().map(this::lobbyRoom).toList();
@@ -65,6 +70,7 @@ public final class RoomSnapshotMapper {
                 membershipEpoch,
                 state.revision(),
                 now,
+                state.lastActivityAt().plus(inactivityTimeout),
                 members,
                 seats,
                 new RoomConfigView(
@@ -100,6 +106,7 @@ public final class RoomSnapshotMapper {
                 room.maxSeats(),
                 room.memberCount(),
                 room.seatedCount(),
+                room.connectedMemberCount(),
                 room.createdAt());
     }
 
@@ -109,6 +116,13 @@ public final class RoomSnapshotMapper {
                 member.displayName(),
                 member.avatarUrl(),
                 member.joinedAt(),
-                member.seat());
+                member.seat(),
+                member.connected(),
+                member.disconnectedSince());
+    }
+
+    public RoomExitNotice disconnectedExit(UUID roomId, long membershipEpoch, Instant now) {
+        return new RoomExitNotice(
+                roomId, RoomExitNotice.ExitReason.DISCONNECTED_TIMEOUT, membershipEpoch, now);
     }
 }

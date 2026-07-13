@@ -19,12 +19,13 @@ public record RoomState(
         List<MemberState> members,
         List<UUID> seats,
         RoomConfig config,
-        GameState game) {
+        GameState game,
+        Instant lastActivityAt) {
     public RoomState(RoomId id, JoinCode joinCode, String name, int maxSeats, Instant createdAt,
                      long revision, List<MemberState> members, List<UUID> seats) {
         this(id, joinCode, name, maxSeats, createdAt, revision, members, seats, RoomConfig.DEFAULT,
                 new GameState(TableStatus.WAITING, 0, 0, null, null, null,
-                        List.of(), java.util.Map.of(), 1, 1, null, null, true));
+                        List.of(), java.util.Map.of(), 1, 1, null, null, true), createdAt);
     }
     public RoomState {
         Objects.requireNonNull(id, "id");
@@ -35,8 +36,9 @@ public record RoomState(
         Objects.requireNonNull(seats, "seats");
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(game, "game");
+        Objects.requireNonNull(lastActivityAt, "lastActivityAt");
         if (maxSeats < 2 || maxSeats > 9 || revision <= 0 || members.isEmpty()
-                || members.size() > maxSeats || seats.size() != maxSeats) {
+                || members.size() > maxSeats + PokerRoom.MAX_SPECTATORS || seats.size() != maxSeats) {
             throw new IllegalArgumentException("invalid room projection");
         }
         if (members.stream().anyMatch(Objects::isNull)) {
@@ -88,6 +90,10 @@ public record RoomState(
 
     public int seatedCount() {
         return (int) members.stream().filter(MemberState::seated).count();
+    }
+
+    public int connectedMemberCount() {
+        return (int) members.stream().filter(MemberState::connected).count();
     }
 
     public MemberState member(UUID userId) {

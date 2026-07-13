@@ -90,6 +90,43 @@ class RoomManagerTest {
     }
 
     @Test
+    void spectatorCanJoinWhenAllSeatsAreTaken() {
+        RoomManager manager = new RoomManager(CLOCK, codes("ABC234"));
+        MemberProfile alice = profile("Alice");
+        MemberProfile bob = profile("Bob");
+        RoomChange created = manager.create(alice, "Room", 2);
+        UUID roomId = created.roomId();
+        String code = created.room().joinCodeValue();
+        manager.join(bob, code);
+        manager.takeSeat(alice.userId(), roomId, 0);
+        manager.takeSeat(bob.userId(), roomId, 1);
+
+        RoomChange spectating = manager.join(profile("Carol"), code);
+
+        assertEquals(3, spectating.room().memberCount());
+        assertNull(spectating.room().member(profile("Carol").userId()).seat());
+        assertThrows(RoomException.class,
+                () -> manager.takeSeat(profile("Carol").userId(), roomId, 0));
+    }
+
+    @Test
+    void joinRejectedOnceMemberCapacityIsExhausted() {
+        RoomManager manager = new RoomManager(CLOCK, codes("ABC234"));
+        RoomChange created = manager.create(profile("Owner"), "Room", 2);
+        String code = created.room().joinCodeValue();
+        int capacity = 2 + PokerRoom.MAX_SPECTATORS;
+        for (int i = 1; i < capacity; i++) {
+            manager.join(profile("Member" + i), code);
+        }
+
+        RoomException full = assertThrows(RoomException.class,
+                () -> manager.join(profile("Overflow"), code));
+
+        assertEquals(RoomError.ROOM_FULL, full.error());
+        assertEquals(capacity, manager.room(created.roomId()).orElseThrow().memberCount());
+    }
+
+    @Test
     void codeExhaustionLeavesStateUnchanged() {
         AtomicInteger calls = new AtomicInteger();
         JoinCodeGenerator generator = new JoinCodeGenerator(() -> {

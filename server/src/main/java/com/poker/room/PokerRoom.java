@@ -13,6 +13,9 @@ import com.poker.room.application.DeckFactory;
 
 /** Mutable aggregate. Package-private so only RoomManager can mutate authoritative state. */
 final class PokerRoom {
+    /** Unseated members beyond the seat count; keeps spectate open on full tables while bounding fan-out. */
+    static final int MAX_SPECTATORS = 10;
+
     final RoomId id;
     final JoinCode joinCode;
     final String name;
@@ -26,9 +29,9 @@ final class PokerRoom {
     long revision = 1;
 
     boolean closed;
-    long presenceGeneration;
+    long cleanupGeneration = 1;
     Instant allDisconnectedSince;
-    boolean idleExpiryPending;
+    Instant lastActivityAt;
 
     PokerRoom(RoomId id, JoinCode joinCode, String name, int maxSeats, Instant createdAt,
               RoomConfig config, Clock clock, DeckFactory decks) {
@@ -40,10 +43,15 @@ final class PokerRoom {
         this.config = Objects.requireNonNull(config, "config");
         this.game = new TableGame(config, maxSeats, clock, decks);
         this.seats = new UUID[maxSeats];
+        this.lastActivityAt = createdAt;
     }
 
     Member member(UUID userId) {
         return members.get(userId);
+    }
+
+    int memberCapacity() {
+        return maxSeats + MAX_SPECTATORS;
     }
 
     RoomState snapshot() {
@@ -61,21 +69,24 @@ final class PokerRoom {
                 memberStates,
                 java.util.Arrays.asList(seats.clone()),
                 config,
-                game.snapshot());
+                game.snapshot(),
+                lastActivityAt);
     }
 
     LobbyRoomState lobbyState() {
         int seated = 0;
+        int connected = 0;
         for (Member member : members.values()) {
             if (member.seat != null) {
                 seated++;
             }
+            if (member.disconnectedSince == null) connected++;
         }
-        return new LobbyRoomState(id, joinCode, name, maxSeats, members.size(), seated, createdAt);
+        return new LobbyRoomState(id, joinCode, name, maxSeats, members.size(), seated, connected, createdAt);
     }
 
     void assertInvariant() {
-        if ((!closed && members.isEmpty()) || members.size() > maxSeats || revision <= 0) {
+        if ((!closed && members.isEmpty()) || members.size() > memberCapacity() || revision <= 0) {
             throw new IllegalStateException("room invariant violated");
         }
         for (int seat = 0; seat < seats.length; seat++) {
@@ -103,6 +114,7 @@ final class PokerRoom {
         final Instant joinedAt;
         final long membershipEpoch;
         Integer seat;
+        Instant disconnectedSince;
 
         Member(MemberProfile profile, Instant joinedAt, long membershipEpoch) {
             this.userId = profile.userId();
@@ -113,7 +125,9 @@ final class PokerRoom {
         }
 
         MemberState snapshot() {
-            return new MemberState(userId, displayName, avatarUrl, joinedAt, seat);
+            return new MemberState(
+                    userId, displayName, avatarUrl, joinedAt, seat,
+                    disconnectedSince == null, disconnectedSince);
         }
     }
 }

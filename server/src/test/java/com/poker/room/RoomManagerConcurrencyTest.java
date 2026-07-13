@@ -22,6 +22,10 @@ class RoomManagerConcurrencyTest {
                 new JoinCodeGenerator(() -> new JoinCode("ABC234")));
         MemberProfile owner = profile("owner");
         RoomChange created = manager.create(owner, "room", 2);
+        int capacity = 2 + PokerRoom.MAX_SPECTATORS;
+        for (int i = 2; i < capacity; i++) {
+            manager.join(profile("filler" + i), created.room().joinCodeValue());
+        }
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
@@ -29,7 +33,7 @@ class RoomManagerConcurrencyTest {
             Future<Boolean> second = executor.submit(() -> join(start, manager, "two", created.room().joinCodeValue()));
             start.countDown();
             assertEquals(1, (first.get() ? 1 : 0) + (second.get() ? 1 : 0));
-            assertEquals(2, manager.room(created.roomId()).orElseThrow().memberCount());
+            assertEquals(capacity, manager.room(created.roomId()).orElseThrow().memberCount());
         } finally {
             executor.shutdownNow();
         }

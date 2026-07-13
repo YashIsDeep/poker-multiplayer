@@ -55,6 +55,7 @@ export default function SeatPod(props: SeatPodProps) {
   const sitout = status === 'SITTING_OUT'
   const busted = status === 'BUSTED'
   const allin = status === 'ALL_IN'
+  const offline = member.connected === false
 
   const seatClasses = [
     'seat',
@@ -63,6 +64,7 @@ export default function SeatPod(props: SeatPodProps) {
     sitout || busted ? 'sitout' : '',
     isActor ? 'actor' : '',
     isWinner ? 'winner' : '',
+    offline ? 'offline' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -94,6 +96,7 @@ export default function SeatPod(props: SeatPodProps) {
         {allin && <span className="badge allin">All-in</span>}
         {sitout && <span className="badge sitout-b">Sitting out</span>}
         {busted && <span className="badge sitout-b">Busted</span>}
+        {offline && <span className="badge offline-b">Offline</span>}
         {isDealer && <span className="badge dealer">D</span>}
         {isActor && props.deadline !== null && (
           <TimerRing deadline={props.deadline} budgetMs={props.budgetMs} />

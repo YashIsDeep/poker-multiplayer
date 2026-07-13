@@ -3,6 +3,7 @@ package com.poker.ws;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.ArrayList;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -30,6 +31,8 @@ public class PokerWebSocketProperties {
     @Min(1000)
     @Max(120_000)
     private int timeToFirstMessage = 10_000;
+
+    private Duration heartbeatInterval = Duration.ofSeconds(5);
 
     public List<String> getAllowedOrigins() {
         return List.copyOf(allowedOrigins);
@@ -74,5 +77,18 @@ public class PokerWebSocketProperties {
 
     public void setTimeToFirstMessage(int timeToFirstMessage) {
         this.timeToFirstMessage = timeToFirstMessage;
+    }
+
+    public Duration getHeartbeatInterval() {
+        return heartbeatInterval;
+    }
+
+    public void setHeartbeatInterval(Duration heartbeatInterval) {
+        if (heartbeatInterval == null
+                || heartbeatInterval.compareTo(Duration.ofSeconds(1)) < 0
+                || heartbeatInterval.compareTo(Duration.ofSeconds(60)) > 0) {
+            throw new IllegalArgumentException("heartbeat interval must be 1s-60s");
+        }
+        this.heartbeatInterval = heartbeatInterval;
     }
 }
