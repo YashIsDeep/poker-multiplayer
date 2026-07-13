@@ -540,7 +540,7 @@
 }
 .turn-timer.low .turn-timer__seconds {
   color: var(--red);
-  animation: blink 1s steps(2) infinite;
+  animation: blink 0.5s steps(2) infinite;
 }
 
 /* committed bet chips on the inner curve */
