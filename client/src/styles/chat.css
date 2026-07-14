@@ -1,0 +1,460 @@
+.chat-widget {
+  position: absolute;
+  left: auto;
+  right: calc(var(--chrome-right, 0px) + 16px);
+  bottom: calc(var(--chrome-bottom, 196px) + 12px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  width: min(340px, calc(100vw - var(--chrome-right, 0px) - 32px));
+  pointer-events: none;
+}
+
+.chat-widget > * {
+  pointer-events: auto;
+}
+
+.chat-toggle {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  font-size: 0;
+  line-height: 1;
+  box-shadow: 0 4px 0 var(--blue-deep), 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.chat-toggle__icon {
+  width: 25px;
+  height: 25px;
+  fill: none;
+  stroke: var(--text);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.trophy-toggle {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  padding: 8px;
+  place-items: center;
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 58%, var(--panel-edge));
+  background: color-mix(in srgb, var(--panel) 88%, var(--gold));
+  box-shadow: 0 4px 0 #202a35, 0 7px 16px rgba(0, 0, 0, 0.28);
+}
+
+.trophy-toggle:hover,
+.trophy-toggle:focus-visible,
+.trophy-toggle--ready {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 18%, var(--panel));
+  box-shadow: 0 4px 0 #202a35, 0 0 18px rgba(242, 193, 78, 0.4);
+}
+
+.trophy-toggle:active {
+  box-shadow: 0 1px 0 #202a35;
+}
+
+.trophy-toggle__icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  transform-origin: 50% 78%;
+}
+
+.trophy-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.trophy-icon path:last-child {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.trophy-toggle--ready .trophy-toggle__icon {
+  animation: trophyshake 0.72s ease-in-out 3;
+}
+
+.trophy-flight {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: var(--gold);
+  filter: drop-shadow(0 0 7px rgba(242, 193, 78, 0.9));
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: trophyfly 1.25s cubic-bezier(0.2, 0.8, 0.32, 1) both;
+}
+
+.trophy-flight .trophy-icon {
+  width: 34px;
+  height: 34px;
+}
+
+@keyframes trophyshake {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  18% { transform: rotate(-13deg) translateY(-1px); }
+  36% { transform: rotate(10deg) translateY(-2px); }
+  54% { transform: rotate(-8deg) translateY(0); }
+  72% { transform: rotate(6deg) translateY(-1px); }
+}
+
+@keyframes trophyfly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.65) rotate(-16deg);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15) rotate(-8deg);
+  }
+  45% {
+    opacity: 1;
+    transform:
+      translate(calc(-50% + var(--trophy-dx) * 0.45), calc(-50% + var(--trophy-dy) * 0.45))
+      scale(1.04) rotate(8deg);
+  }
+  78% {
+    opacity: 1;
+    transform:
+      translate(calc(-50% + var(--trophy-dx) * 0.8), calc(-50% + var(--trophy-dy) * 0.8))
+      scale(0.88) rotate(-4deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--trophy-dx)), calc(-50% + var(--trophy-dy)))
+      scale(0.7) rotate(0deg);
+  }
+}
+
+/* A live message is anchored to the sender's seat and fades away on its own.
+   The store removes it after the same six-second window, so reopening chat
+   never turns these bubbles into a persistent transcript. */
+.seat {
+  position: relative;
+}
+
+.chat-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 11px);
+  z-index: 8;
+  width: max-content;
+  max-width: min(230px, calc(100vw - 24px));
+  padding: 7px 10px 8px;
+  border: 2px solid var(--blue);
+  border-radius: 11px;
+  background: var(--text);
+  color: var(--blue-deep);
+  box-shadow: 0 5px 0 var(--blue-deep), 0 9px 18px rgba(0, 0, 0, 0.32);
+  transform: translateX(-50%);
+  pointer-events: none;
+  text-align: left;
+  animation: chatbubble 6s ease-out both;
+}
+
+.chat-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  width: 0;
+  height: 0;
+  border-top: 10px solid var(--blue);
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  transform: translateX(-50%);
+}
+
+.chat-bubble--emoji {
+  bottom: calc(100% + 32px);
+  max-width: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: chatemoji 3s ease-out both;
+}
+
+.chat-bubble--emoji::after {
+  display: none;
+}
+
+.chat-bubble.chat-bubble--emoji p {
+  margin: 0;
+  color: var(--text);
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+  font-size: 22px;
+  line-height: 1;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.42), 0 0 9px rgba(242, 193, 78, 0.5);
+  white-space: nowrap;
+}
+
+.chat-bubble.chat-bubble--emoji.chat-bubble--bottom-row p {
+  font-size: 38px;
+}
+
+.chat-bubble p {
+  color: var(--blue-deep);
+  font-family: var(--font-pixel), "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-shadow: none;
+  white-space: pre-wrap;
+}
+
+@keyframes chatbubble {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 7px) scale(0.86);
+  }
+  7% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  83% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -5px) scale(0.96);
+  }
+}
+
+@keyframes chatemoji {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 7px) scale(0.7);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.08);
+  }
+  82% {
+    opacity: 1;
+    transform: translate(-50%, -2px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(1.12);
+  }
+}
+
+.chat-panel {
+  display: grid;
+  gap: 9px;
+  width: 100%;
+  padding: 12px;
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--panel-dark) 94%, transparent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+}
+
+.chat-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-panel__header > div {
+  display: grid;
+  gap: 1px;
+}
+
+.chat-panel__header strong {
+  color: var(--gold);
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+.chat-panel__header small,
+.chat-panel__note {
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+
+.chat-panel__close {
+  border: 0;
+  color: var(--text-dim);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 22px;
+  line-height: 0.8;
+}
+
+.chat-panel__close:hover {
+  color: var(--text);
+}
+
+.chat-log {
+  display: grid;
+  gap: 7px;
+  min-height: 72px;
+  max-height: 230px;
+  padding: 2px 3px 2px 1px;
+  overflow-y: auto;
+  scrollbar-color: var(--panel-edge) transparent;
+}
+
+.chat-empty {
+  align-self: center;
+  padding: 16px 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+}
+
+.chat-message {
+  padding: 6px 8px 7px;
+  border-left: 3px solid var(--panel-edge);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.chat-message--you {
+  border-left-color: var(--gold);
+  background: rgba(242, 193, 78, 0.1);
+}
+
+.chat-message__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--gold);
+  font-size: 12px;
+}
+
+.chat-message__meta time {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: 10px;
+  text-shadow: none;
+}
+
+.chat-message p {
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-shadow: var(--outline-text);
+}
+
+.chat-compose {
+  display: flex;
+  gap: 7px;
+}
+
+.chat-compose input {
+  min-width: 0;
+  flex: 1;
+  padding: 8px 9px 9px;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 2px solid var(--input-edge);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.chat-compose input:focus {
+  border-color: var(--gold);
+}
+
+.chat-compose input::placeholder {
+  color: var(--text-dim);
+}
+
+.chat-emoji-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chat-emoji {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+  font-size: 17px;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.chat-emoji:hover {
+  border-color: var(--gold);
+  background: rgba(242, 193, 78, 0.15);
+}
+
+.chat-emoji:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.chat-compose .btn {
+  flex-shrink: 0;
+  padding: 8px 11px 10px;
+  font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble {
+    animation: none;
+  }
+
+  .trophy-toggle--ready .trophy-toggle__icon,
+  .trophy-flight {
+    animation: none;
+  }
+}
+
+@media (max-height: 520px) {
+  .chat-widget {
+    right: calc(var(--chrome-right, 316px) + 8px);
+    bottom: 12px;
+    width: min(320px, calc(100vw - var(--chrome-right, 316px) - 16px));
+  }
+
+  .chat-log {
+    max-height: 145px;
+  }
+}
+
+@media (max-width: 600px) and (min-height: 521px) {
+  .chat-widget {
+    left: auto;
+    right: 8px;
+    bottom: calc(var(--chrome-bottom, 208px) + 8px);
+    width: min(330px, calc(100vw - 16px));
+  }
+}

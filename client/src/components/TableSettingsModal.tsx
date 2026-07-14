@@ -13,6 +13,7 @@ export default function TableSettingsModal({ onClose }: { onClose: () => void })
   const [busy, setBusy] = useState(false)
   const [settings, setSettings] = useState<TableSettings>(() => normalizeTableSettings({
     bigBlind: room?.config.bigBlind ?? 100_000,
+    actionTimeoutSeconds: room?.config.actionTimeoutSeconds ?? 30,
     startingStack: room?.config.startingStack ?? room?.config.minBuyIn ?? 10_000_000,
     rebuysEnabled: room?.config.rebuysEnabled ?? true,
     rebuyStack: room?.config.rebuyStack ?? room?.config.minBuyIn ?? 10_000_000,
@@ -54,7 +55,7 @@ export default function TableSettingsModal({ onClose }: { onClose: () => void })
         </div>
         <p className="settings-note">
           Blind changes start next hand. Stack changes apply to future seats and rebuys;
-          delay changes apply to future busts.
+          time-per-turn changes apply to the next decision; delay changes apply to future busts.
         </p>
         <TableSettingsFields value={settings} onChange={setSettings} disabled={busy} />
         {error && <p className="settings-error" role="alert">{error}</p>}

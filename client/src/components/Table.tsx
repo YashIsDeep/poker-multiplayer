@@ -8,7 +8,7 @@ import PixelCard from './PixelCard'
 import SeatPod from './SeatPod'
 import { useGameStore } from '../store/gameStore'
 import type { AnimationEvents } from '../hooks/useAnimationQueue'
-import type { Game, RoomSnapshot } from '../store/types'
+import type { ChatMessage, Game, RoomSnapshot } from '../store/types'
 import { formatChips, formatChipsFull } from '../lib/chips'
 
 const K = 0.72 // superellipse power
@@ -29,7 +29,9 @@ export function seatPosition(viewIndex: number, totalSeats: number) {
     x: 50 + superellipse(cos, rimX),
     y: 50 + superellipse(sin, rimY),
     betX: 50 + superellipse(cos, 30),
-    betY: 50 + superellipse(sin, 36),
+    // Keep committed chips on the inner curve. The tighter vertical inset
+    // leaves clearance below the hole cards after the mobile fit scale.
+    betY: 50 + superellipse(sin, 30),
   }
 }
 
@@ -129,6 +131,7 @@ const PHASE_LABEL: Record<string, string> = {
 export default function Table({ room, game, animations }: TableProps) {
   const takeSeat = useGameStore((s) => s.takeSeat)
   const pushToast = useGameStore((s) => s.pushToast)
+  const chatMessages = useGameStore((s) => s.chatMessages)
   const yourSeat = room.viewer.seat
   const wrapRef = useRef<HTMLDivElement>(null)
   useTableFit(wrapRef, room.maxSeats)
@@ -145,6 +148,12 @@ export default function Table({ room, game, animations }: TableProps) {
     const map = new Map(room.members.map((m) => [m.userId, m]))
     return map
   }, [room.members])
+
+  const latestChatBySender = useMemo(() => {
+    const map = new Map<string, ChatMessage>()
+    for (const message of chatMessages) map.set(message.senderId, message)
+    return map
+  }, [chatMessages])
 
   const gameSeatBySeat = useMemo(() => {
     const map = new Map<number, Game['seats'][number]>()
@@ -167,7 +176,7 @@ export default function Table({ room, game, animations }: TableProps) {
   const winningCards = new Set(
     game?.seats
       .filter((seat) => winnerSeats.has(seat.seat))
-      .flatMap((seat) => seat.holeCards ?? []) ?? [],
+      .flatMap((seat) => seat.bestHandCards ?? []) ?? [],
   )
   const isShowdown = game?.phase === 'COMPLETE' && game.completionReason === 'SHOWDOWN'
   const potMain = game?.pots[0]?.amount ?? 0
@@ -181,6 +190,10 @@ export default function Table({ room, game, animations }: TableProps) {
       },
       () => {},
     )
+  }
+
+  const handleStatusChipClick = (message: string) => {
+    pushToast('info', message)
   }
 
   return (
@@ -224,8 +237,10 @@ export default function Table({ room, game, animations }: TableProps) {
         {Array.from({ length: totalSeats }, (_, seat) => {
           const viewIndex = (seat - anchor + totalSeats) % totalSeats
           const pos = seatPosition(viewIndex, totalSeats)
+          const isBottomRow = pos.y >= 72
           const userId = membersBySeat.get(seat)
           const member = userId ? (memberById.get(userId) ?? null) : null
+          const chatMessage = member ? (latestChatBySender.get(member.userId) ?? null) : null
           const gameSeat = gameSeatBySeat.get(seat) ?? null
           const isActor = game !== null && game.actingSeat === seat && !isShowdown
           return (
@@ -249,6 +264,9 @@ export default function Table({ room, game, animations }: TableProps) {
                 budgetMs={room.config.actionTimeoutSeconds * 1000}
                 canTakeSeat={room.viewer.canTakeSeat && !member}
                 onTakeSeat={handleTakeSeat}
+                onStatusChipClick={handleStatusChipClick}
+                chatMessage={chatMessage}
+                chatBubbleBottomRow={isBottomRow}
                 dealDelayMs={animations.holeDeal ? viewIndex * 90 : undefined}
               />
             </div>

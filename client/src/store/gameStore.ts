@@ -11,6 +11,7 @@ import { createBackoff, MAX_ATTEMPTS } from '../lib/backoff'
 import { createEMA, getServerNow, updateEMA } from '../lib/clockOffsetEMA'
 import type {
   CommandAck,
+  ChatMessage,
   ConnectionState,
   ErrorCode,
   Game,
@@ -46,6 +47,7 @@ export type GameStore = {
   myHoleCards: string[] | null
   /** Set only by a fresh create/join/rebuy ack; reconnect and refresh never reopen the prompt. */
   autoSeatRoomId: string | null
+  chatMessages: ChatMessage[]
 
   /** Monotonic tick bumped on every EMA update so hooks depending on serverNow re-derive. */
   clockTick: number
@@ -77,6 +79,7 @@ export type GameStore = {
   leaveRoom: () => Promise<CommandAck | null>
   takeSeat: (seat: number) => Promise<CommandAck>
   stand: () => Promise<CommandAck>
+  sendChatMessage: (message: string) => Promise<CommandAck | null>
 
   // game commands (T6 destinations)
   act: (action: PlayerActionType, amount?: number) => void
@@ -96,6 +99,7 @@ export type GameStore = {
   __applyStateSync: (state: StateSyncView) => void
   __handleAck: (ack: CommandAck) => void
   __handleRoomEvent: (notice: RoomExitNotice) => void
+  __handleChat: (message: ChatMessage) => void
   __setMockMode: (on: boolean) => void
 }
 
@@ -127,6 +131,13 @@ let mockMode = false
 let toastSeq = 0
 
 const ACK_TIMEOUT_MS = 10_000
+const CHAT_MESSAGE_TTL_MS = 6_000
+const chatExpiryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function clearChatExpiryTimers() {
+  for (const timer of chatExpiryTimers.values()) clearTimeout(timer)
+  chatExpiryTimers.clear()
+}
 
 function rejectPendingRequests(message: string) {
   for (const pending of pendingRequests.values()) {
@@ -152,6 +163,101 @@ function tickClock(serverNowIso: string | undefined, set: (partial: Partial<Game
   if (!Number.isNaN(parsed)) {
     updateEMA(ema, parsed, clockNow())
     set({ clockTick: tick + 1 })
+  }
+}
+
+type AckErrorCopy = { message: string; detail?: string }
+
+function ackErrorCopy(ack: Pick<CommandAck, 'command' | 'error'>): AckErrorCopy {
+  const error = ack.error as ErrorCode
+
+  // A join-code lookup uses ROOM_NOT_FOUND for a well-formed code that does
+  // not match a live table, while malformed codes arrive as INVALID_REQUEST.
+  // Both are join-form errors, not evidence that the current player lost a
+  // table membership.
+  if (ack.command === 'ROOM_JOIN') {
+    switch (error) {
+      case 'INVALID_REQUEST':
+      case 'ROOM_NOT_FOUND':
+        return {
+          message: 'Invalid table code',
+          detail: 'check the 6-character code and try again',
+        }
+      case 'ROOM_FULL':
+        return { message: 'Table is full', detail: 'try another table or wait for a seat' }
+      case 'ALREADY_IN_ANOTHER_ROOM':
+        return {
+          message: 'Already at another table',
+          detail: 'leave your current table before joining this one',
+        }
+      default:
+        break
+    }
+  }
+
+  switch (error) {
+    case 'ROOM_NOT_FOUND':
+      return {
+        message: 'Table no longer available',
+        detail: 'it may have been closed or the server restarted',
+      }
+    case 'NOT_A_ROOM_MEMBER':
+      return {
+        message: 'You are no longer in this table',
+        detail: 'return to the lobby and join another table',
+      }
+    case 'ROOM_FULL':
+      return { message: 'Table is full', detail: 'try another table or wait for a seat' }
+    case 'ALREADY_IN_ANOTHER_ROOM':
+      return {
+        message: 'Already at another table',
+        detail: 'leave your current table before joining another one',
+      }
+    case 'INVALID_REQUEST':
+      return { message: 'Request rejected', detail: 'check the details and try again' }
+    case 'UNAUTHENTICATED':
+      return { message: 'Signed out', detail: 'please sign in again' }
+    case 'NOT_YOUR_TURN':
+    case 'STALE_ACTION':
+      return { message: 'Not your turn', detail: 'controls re-synced to current hand' }
+    case 'SEAT_OUT_OF_RANGE':
+      return { message: 'Invalid seat', detail: 'choose a seat at the table' }
+    case 'SEAT_OCCUPIED':
+      return { message: 'Seat already taken', detail: 'choose another open seat' }
+    case 'ALREADY_SEATED':
+      return { message: 'Already seated', detail: 'stand up before choosing another seat' }
+    case 'NOT_SEATED':
+      return { message: 'You are not seated', detail: 'take a seat before doing that' }
+    case 'INVALID_BUY_IN':
+      return { message: 'Invalid buy-in', detail: 'choose an amount within the table limits' }
+    case 'INVALID_AMOUNT':
+      return { message: 'Invalid amount', detail: 'enter a valid amount and try again' }
+    case 'INVALID_RAISE_TO':
+      return { message: 'Invalid raise', detail: 'choose an amount within the allowed range' }
+    case 'HAND_NOT_ACTIVE':
+      return { message: 'Hand is not active', detail: 'wait for the next hand' }
+    case 'HAND_IN_PROGRESS':
+      return { message: 'Hand in progress', detail: 'try again when the hand is complete' }
+    case 'ACTION_NOT_LEGAL':
+      return { message: 'Action not available', detail: 'controls were re-synced to the current hand' }
+    case 'NOT_ROOM_ADMIN':
+      return { message: 'Admin access required', detail: 'only the table admin can do that' }
+    case 'SETTINGS_NOT_EDITABLE':
+      return { message: 'Settings locked', detail: 'table settings cannot change during a hand' }
+    case 'REBUY_NOT_AVAILABLE':
+      return { message: 'Rebuy unavailable', detail: 'there is no rebuy offer right now' }
+    case 'ALREADY_SITTING_IN':
+      return { message: 'Already sitting in', detail: 'you are already playing' }
+    case 'ALREADY_SITTING_OUT':
+      return { message: 'Already sitting out', detail: 'you are already sitting out' }
+    case 'RATE_LIMITED':
+      return { message: 'Too many requests', detail: 'slow down and try again shortly' }
+    case 'JOIN_CODE_EXHAUSTED':
+      return { message: 'Could not create a table', detail: 'please try again shortly' }
+    case 'INTERNAL_ERROR':
+      return { message: 'Something went wrong', detail: 'please try again' }
+    default:
+      return { message: `Action rejected — ${String(error).replaceAll('_', ' ').toLowerCase()}` }
   }
 }
 
@@ -201,6 +307,11 @@ export const useGameStore = create<GameStore>()((set, get) => {
       ...extractView(snapshot),
     }
 
+    if (!current || current.roomId !== snapshot.roomId || snapshot.membershipEpoch !== currentEpoch) {
+      clearChatExpiryTimers()
+      next.chatMessages = []
+    }
+
     if (
       state.autoSeatRoomId === snapshot.roomId &&
       (snapshot.viewer.seated || !snapshot.viewer.canTakeSeat)
@@ -236,6 +347,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
       set({ membershipEpoch: epoch })
       applyRoomSnapshot(view.room)
     } else {
+      clearChatExpiryTimers()
       set({
         membershipEpoch: epoch,
         room: null,
@@ -243,6 +355,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
         yourSeat: null,
         myHoleCards: null,
         autoSeatRoomId: null,
+        chatMessages: [],
       })
     }
   }
@@ -268,23 +381,13 @@ export const useGameStore = create<GameStore>()((set, get) => {
     // Any in-flight game action is dead on a rejection; reconcile to the snapshot.
     if (state.pendingAction) set({ pendingAction: null })
 
-    switch (error) {
-      case 'ROOM_NOT_FOUND':
-      case 'NOT_A_ROOM_MEMBER':
-        pushToast('warn', error, 'that table is no longer available to this player')
-        if (!['STATE_SYNC', 'ROOM_CREATE', 'ROOM_JOIN'].includes(ack.command)) {
-          set({ roomGone: true })
-        }
-        break
-      case 'NOT_YOUR_TURN':
-      case 'STALE_ACTION':
-        pushToast('warn', 'Not your turn', 'controls re-synced to current hand')
-        break
-      case 'UNAUTHENTICATED':
-        pushToast('error', 'Signed out', 'please sign in again')
-        break
-      default:
-        pushToast('warn', `Action rejected — ${error.replaceAll('_', ' ').toLowerCase()}`)
+    const copy = ackErrorCopy(ack)
+    pushToast(error === 'UNAUTHENTICATED' ? 'error' : 'warn', copy.message, copy.detail)
+
+    if (error === 'ROOM_NOT_FOUND' || error === 'NOT_A_ROOM_MEMBER') {
+      if (!['STATE_SYNC', 'ROOM_CREATE', 'ROOM_JOIN'].includes(ack.command)) {
+        set({ roomGone: true })
+      }
     }
   }
 
@@ -298,6 +401,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
       set({ membershipEpoch: Math.max(state.membershipEpoch, notice.membershipEpoch) })
       return
     }
+    clearChatExpiryTimers()
     set({
       membershipEpoch: Math.max(state.membershipEpoch, notice.membershipEpoch),
       room: null,
@@ -306,10 +410,25 @@ export const useGameStore = create<GameStore>()((set, get) => {
       myHoleCards: null,
       pendingAction: null,
       autoSeatRoomId: null,
+      chatMessages: [],
       roomClosed: !wasVoluntary && notice.reason === 'IDLE_TIMEOUT',
       roomGone: !wasVoluntary && notice.reason === 'DISCONNECTED_TIMEOUT',
     })
     leavingRoomId = null
+  }
+
+  function handleChat(message: ChatMessage) {
+    const state = get()
+    if (!state.room || message.roomId !== state.room.roomId) return
+    if (state.chatMessages.some((current) => current.id === message.id)) return
+    set({ chatMessages: [...state.chatMessages, message].slice(-100) })
+    const timer = setTimeout(() => {
+      chatExpiryTimers.delete(message.id)
+      set((current) => ({
+        chatMessages: current.chatMessages.filter((currentMessage) => currentMessage.id !== message.id),
+      }))
+    }, CHAT_MESSAGE_TTL_MS)
+    chatExpiryTimers.set(message.id, timer)
   }
 
   // ----- connection machine (T10) -----
@@ -330,6 +449,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
       onAck: (body) => handleAck(body as CommandAck),
       onRoom: (body) => applyRoomSnapshot(body as RoomSnapshot),
       onRoomEvent: (body) => handleRoomEvent(body as RoomExitNotice),
+      onChat: (body) => handleChat(body as ChatMessage),
     })
     return client
   }
@@ -427,6 +547,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
     yourSeat: null,
     myHoleCards: null,
     autoSeatRoomId: null,
+    chatMessages: [],
     clockTick: 0,
     pendingAction: null,
     toasts: [],
@@ -524,7 +645,8 @@ export const useGameStore = create<GameStore>()((set, get) => {
         const ack = await sendCommand('/app/room.leave', { roomId })
         if (ack.ok) {
           recoveryRoomId = null
-          set({ ...extractView(null), pendingAction: null, autoSeatRoomId: null })
+          clearChatExpiryTimers()
+          set({ ...extractView(null), pendingAction: null, autoSeatRoomId: null, chatMessages: [] })
         }
         return ack
       } finally {
@@ -548,6 +670,14 @@ export const useGameStore = create<GameStore>()((set, get) => {
       const roomId = requireRoomId()
       if (!roomId) return Promise.reject(new Error('not in a room'))
       return sendCommand('/app/room.stand', { roomId })
+    },
+
+    sendChatMessage(message: string) {
+      const roomId = requireRoomId()
+      const text = message.trim()
+      if (!roomId || !text) return Promise.resolve(null)
+      if (text.length > 50) return Promise.reject(new Error('chat message is too long'))
+      return sendCommand('/app/room.chat', { roomId, message: text })
     },
 
     act(action: PlayerActionType, amount?: number) {
@@ -640,6 +770,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
       set({ roomClosed: false })
     },
     acknowledgeRoomGone() {
+      clearChatExpiryTimers()
       set({
         roomGone: false,
         room: null,
@@ -648,6 +779,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
         myHoleCards: null,
         pendingAction: null,
         autoSeatRoomId: null,
+        chatMessages: [],
       })
       void get().stateSync().catch(() => {})
     },
@@ -656,6 +788,7 @@ export const useGameStore = create<GameStore>()((set, get) => {
     __applyStateSync: applyStateSync,
     __handleAck: handleAck,
     __handleRoomEvent: handleRoomEvent,
+    __handleChat: handleChat,
     __setMockMode(on: boolean) {
       mockMode = on
       if (on) {

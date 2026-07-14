@@ -1,10 +1,15 @@
 // One seat pod on the felt: name / stack / actions, position chips (dealer/SB/BB),
 // status badges, hole cards above, and the timer ring when acting.
 
+import { useEffect, useState } from 'react'
 import PixelCard from './PixelCard'
 import TimerRing from './TimerRing'
-import type { GameSeat, LastAction, RoomMemberView } from '../store/types'
+import type { ChatMessage, GameSeat, LastAction, RoomMemberView } from '../store/types'
 import { formatChips, formatChipsFull } from '../lib/chips'
+
+const CHAT_BUBBLE_TTL_MS = 6_000
+const CHAT_EMOJI_TTL_MS = 3_000
+const EMOJI_ONLY_PATTERN = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji_Modifier}\uFE0F\u200D]+$/u
 
 export type SeatPodProps = {
   seat: number
@@ -21,6 +26,9 @@ export type SeatPodProps = {
   budgetMs: number
   canTakeSeat: boolean
   onTakeSeat: (seat: number) => void
+  onStatusChipClick: (message: string) => void
+  chatMessage?: ChatMessage | null
+  chatBubbleBottomRow?: boolean
   /** T8 deal stagger for freshly dealt hole cards. */
   dealDelayMs?: number
 }
@@ -30,6 +38,31 @@ function actionLabel(action: LastAction): string {
   return action.amount !== null && action.amount > 0
     ? `${verb} ${formatChips(action.amount)}`
     : verb
+}
+
+function ChatBubble({ message, bottomRow }: { message: ChatMessage; bottomRow: boolean }) {
+  const [visible, setVisible] = useState(true)
+  const emojiOnly = EMOJI_ONLY_PATTERN.test(message.message.trim())
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setVisible(false),
+      emojiOnly ? CHAT_EMOJI_TTL_MS : CHAT_BUBBLE_TTL_MS,
+    )
+    return () => window.clearTimeout(timer)
+  }, [message.id])
+
+  if (!visible) return null
+
+  return (
+    <div
+      className={`chat-bubble${emojiOnly ? ' chat-bubble--emoji' : ''}${bottomRow ? ' chat-bubble--bottom-row' : ''}`}
+      role="status"
+      aria-live="polite"
+    >
+      <p>{message.message}</p>
+    </div>
+  )
 }
 
 /** Only players captured in the current hand receive face-down hole cards. */
@@ -47,6 +80,30 @@ export function displayedHoleCards(
   return null
 }
 
+export type ShowdownHandLabel = {
+  category: string
+  detail: string | null
+}
+
+/** Presentation-only split of the authoritative server hand description. */
+export function splitShowdownHand(description: string): ShowdownHandLabel {
+  const highCard = /^(.+)-high (Straight Flush|Straight|Flush)$/.exec(description)
+  if (highCard) return { category: highCard[2], detail: `${highCard[1]}-high` }
+
+  const comma = description.indexOf(', ')
+  if (comma >= 0) {
+    return { category: description.slice(0, comma), detail: description.slice(comma + 2) }
+  }
+
+  const grouped = /^(Pair|Three of a Kind|Four of a Kind) of (.+)$/.exec(description)
+  if (grouped) return { category: grouped[1], detail: grouped[2] }
+
+  const fullHouse = /^(.+) full of (.+)$/.exec(description)
+  if (fullHouse) return { category: 'Full House', detail: `${fullHouse[1]} full of ${fullHouse[2]}` }
+
+  return { category: description, detail: null }
+}
+
 export default function SeatPod(props: SeatPodProps) {
   const {
     seat,
@@ -59,6 +116,8 @@ export default function SeatPod(props: SeatPodProps) {
     isSmallBlind,
     isBigBlind,
     showdown,
+    chatMessage,
+    chatBubbleBottomRow = false,
   } = props
 
   if (!member) {
@@ -105,23 +164,77 @@ export default function SeatPod(props: SeatPodProps) {
   // `position` is assigned only to the immutable participant set captured
   // when the hand starts. A player taking a live table seat mid-hand must wait.
   const cards = displayedHoleCards(gameSeat, showdown)
+  // The boolean fallback keeps older snapshots readable while the server/client
+  // contract rolls out the precise count.
+  const rebuyCount = gameSeat?.rebuyCount ?? (gameSeat?.rebought ? 1 : 0)
+  const livesUsed = rebuyCount + 1
+  const rebuyTimes = rebuyCount === 1 ? 'time' : 'times'
+  const showRoleToast = (role: string) => {
+    props.onStatusChipClick(`${member.displayName} is the ${role} for this round`)
+  }
+  const showdownHand = showdown && gameSeat?.finalHandRank
+    ? splitShowdownHand(gameSeat.finalHandRank)
+    : null
 
   return (
     <div className={seatClasses} data-seat={seat}>
+      {chatMessage && (
+        <ChatBubble key={chatMessage.id} message={chatMessage} bottomRow={chatBubbleBottomRow} />
+      )}
       {cards && (
-        <div className="mini-cards">
+        <div className={`mini-cards${showdownHand ? ' has-rank' : ''}`}>
           {cards.map((c, i) => (
             <PixelCard
               key={`${gameSeat?.holeCards ? 'face' : 'back'}-${i}`}
               code={c}
               size="hole"
-              win={isWinner && showdown}
+              win={Boolean(isWinner && showdown && c !== null && gameSeat?.bestHandCards?.includes(c))}
               dealDelayMs={props.dealDelayMs !== undefined ? props.dealDelayMs + i * 120 : undefined}
             />
           ))}
         </div>
       )}
+      {showdownHand && gameSeat?.finalHandRank && (
+        <div
+          className={`showdown-rank${isWinner ? ' winner' : ''}`}
+          data-testid={`showdown-rank-${seat}`}
+          aria-label={`Showdown hand: ${gameSeat.finalHandRank}`}
+        >
+          <span className="showdown-rank__category">{showdownHand.category}</span>
+          {showdownHand.detail && (
+            <span className="showdown-rank__detail">({showdownHand.detail})</span>
+          )}
+        </div>
+      )}
       <div className="pod">
+        {(member.admin || rebuyCount > 0) && (
+          <div className="corner-chip-stack" aria-label="Player status chips">
+            {member.admin && (
+              <button
+                className="badge position-chip admin-chip"
+                type="button"
+                data-sound="notify"
+                title="Table admin"
+                aria-label="Table admin"
+                onClick={() => props.onStatusChipClick(`${member.displayName} has admin controls`)}
+              >
+                A
+              </button>
+            )}
+            {rebuyCount > 0 && (
+              <button
+                className="badge position-chip rebuy-chip num"
+                type="button"
+                data-sound="notify"
+                title={`Rebought ${rebuyCount} ${rebuyTimes}`}
+                aria-label={`Player has rebought ${rebuyCount} ${rebuyTimes}`}
+                onClick={() => props.onStatusChipClick(`${member.displayName} rebought ${rebuyCount} ${rebuyTimes}`)}
+              >
+                x{livesUsed}
+              </button>
+            )}
+          </div>
+        )}
         <div className="badge-row">
           {allin && <span className="badge allin">All-in</span>}
           {sitout && <span className="badge sitout-b">Sitting out</span>}
@@ -134,29 +247,50 @@ export default function SeatPod(props: SeatPodProps) {
         </div>
         {(isDealer || isSmallBlind || isBigBlind) && (
           <div className="position-chip-row" aria-label="Table positions">
-            {isDealer && <span className="badge position-chip dealer" aria-label="Dealer button">D</span>}
-            {isSmallBlind && <span className="badge position-chip small-blind" aria-label="Small blind">SB</span>}
-            {isBigBlind && <span className="badge position-chip big-blind" aria-label="Big blind">BB</span>}
+            {isDealer && (
+              <button
+                className="badge position-chip dealer"
+                type="button"
+                data-sound="notify"
+                aria-label="Dealer button"
+                onClick={() => showRoleToast('dealer')}
+              >
+                D
+              </button>
+            )}
+            {isSmallBlind && (
+              <button
+                className="badge position-chip small-blind"
+                type="button"
+                data-sound="notify"
+                aria-label="Small blind"
+                onClick={() => showRoleToast('small blind')}
+              >
+                SB
+              </button>
+            )}
+            {isBigBlind && (
+              <button
+                className="badge position-chip big-blind"
+                type="button"
+                data-sound="notify"
+                aria-label="Big blind"
+                onClick={() => showRoleToast('big blind')}
+              >
+                BB
+              </button>
+            )}
           </div>
         )}
         {isActor && props.deadline !== null && (
           <TimerRing deadline={props.deadline} budgetMs={props.budgetMs} />
         )}
         <div className="pidentity">
-          {gameSeat?.position && <span className="position-label">{gameSeat.position}</span>}
           <span className="pname">
             {member.displayName.toUpperCase()}
             {isYou ? ' (YOU)' : ''}
           </span>
-          {member.admin && (
-            <span className="admin-shield" title="Table admin" aria-label="Table admin">A</span>
-          )}
         </div>
-        {gameSeat?.rebought && (
-          <div className="rebought-label" title="This player has rebought" aria-label="Player has rebought">
-            ↻ REBOUGHT
-          </div>
-        )}
         <div
           className="pstack num"
           title={gameSeat ? `${formatChipsFull(gameSeat.stack)} chips` : undefined}
@@ -171,7 +305,6 @@ export default function SeatPod(props: SeatPodProps) {
             </span>
           ))}
         </div>
-        {showdown && gameSeat?.finalHandRank && <div className="prank">{gameSeat.finalHandRank}</div>}
       </div>
     </div>
   )

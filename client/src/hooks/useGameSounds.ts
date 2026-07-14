@@ -76,13 +76,14 @@ export function deriveSoundEvents(
     events.push('yourTurn')
   }
 
-  // Hand just completed with a pot award → win chime (bigger if you won).
+  // Hand just completed with a pot award → only a winning viewer hears the
+  // victory fanfare. Losing viewers and spectators stay quiet.
   const justCompleted = game.phase === 'COMPLETE' && prev.phase !== 'COMPLETE'
   if (justCompleted && game.awards.length > 0) {
     const winnerSeats = new Set(
       game.awards.flatMap((award) => award.winners.map((w) => w.seat)),
     )
-    events.push(yourSeat !== null && winnerSeats.has(yourSeat) ? 'winBig' : 'win')
+    if (yourSeat !== null && winnerSeats.has(yourSeat)) events.push('winBig')
   }
 
   return events

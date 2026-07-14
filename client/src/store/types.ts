@@ -14,6 +14,7 @@ export type CommandType =
   | 'ROOM_UPDATE_SETTINGS'
   | 'ROOM_TAKE_SEAT'
   | 'ROOM_STAND'
+  | 'CHAT_SEND'
   // T6 gameplay command types
   | 'GAME_ACT'
   | 'GAME_REBUY'
@@ -90,7 +91,7 @@ export type RoomConfig = {
 
 export type TableSettings = Pick<
   RoomConfig,
-  'bigBlind' | 'startingStack' | 'rebuysEnabled' | 'rebuyStack' | 'rebuyDelayHands'
+  'bigBlind' | 'actionTimeoutSeconds' | 'startingStack' | 'rebuysEnabled' | 'rebuyStack' | 'rebuyDelayHands'
 >
 
 export type RoomSnapshot = {
@@ -154,6 +155,15 @@ export type RoomExitNotice = {
   serverNow: string
 }
 
+export type ChatMessage = {
+  id: string
+  roomId: string
+  senderId: string
+  senderName: string
+  message: string
+  sentAt: string
+}
+
 // ---------- T6 per-viewer game contract ----------
 
 export type GamePhase = 'PREFLOP' | 'FLOP' | 'TURN' | 'RIVER' | 'COMPLETE'
@@ -180,10 +190,14 @@ export type GameSeat = {
   /** Standard poker position for this hand; null when the seat is not in the hand. */
   position: 'BN/SB' | 'BN' | 'SB' | 'BB' | 'UTG' | 'UTG+1' | 'MP' | 'LJ' | 'HJ' | 'CO' | null
   finalHandRank: string | null
+  /** Authoritative five cards used by this seat's awarded showdown hand. */
+  bestHandCards?: string[]
   /** Completed hands still required before this busted player may rebuy. */
   rebuyHandsRemaining: number
   /** True once at least one accepted rebuy has been applied to this seat. */
   rebought: boolean
+  /** Number of accepted rebuys applied to this seat during the table session. */
+  rebuyCount: number
 }
 
 export type LegalActions = {

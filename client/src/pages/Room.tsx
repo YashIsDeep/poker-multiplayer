@@ -2,6 +2,7 @@
 // approved table-green.html skin. T8 layers swirl/CRT/juice on the same DOM.
 
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SwirlBackground from '../components/SwirlBackground'
 import CrtOverlay from '../components/CrtOverlay'
@@ -14,13 +15,18 @@ import type { RoomMenuItem } from '../components/RoomMenu'
 import AutoSeatPrompt from '../components/AutoSeatPrompt'
 import TableSettingsModal from '../components/TableSettingsModal'
 import HandHistoryDrawer from '../components/HandHistoryDrawer'
+import ChatPanel from '../components/ChatPanel'
+import ShowdownResultsModal from '../components/ShowdownResultsModal'
+import TrophyIcon from '../components/TrophyIcon'
 import { formatChips } from '../lib/chips'
+import { isCompletedHandResult } from '../lib/showdownResults'
 import { serverNow, useGameStore } from '../store/gameStore'
 import { useReducedMotion } from '../hooks/useReducedMotion'
 import { useAnimationQueue } from '../hooks/useAnimationQueue'
 import { useGameSounds } from '../hooks/useGameSounds'
 import { startMockDriver } from '../dev/mockGame'
 import '../styles/table.css'
+import '../styles/chat.css'
 
 async function writeToClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
@@ -54,6 +60,13 @@ async function writeToClipboard(text: string) {
   if (!copied) throw new Error('clipboard write failed')
 }
 
+type TrophyFlight = {
+  left: number
+  top: number
+  dx: number
+  dy: number
+}
+
 export default function Room() {
   const { roomId } = useParams()
   const [search] = useSearchParams()
@@ -85,7 +98,42 @@ export default function Room() {
   const [tableSettingsOpen, setTableSettingsOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [handHistoryOpen, setHandHistoryOpen] = useState(false)
+  const [showdownOpen, setShowdownOpen] = useState(false)
+  const [lastHandResult, setLastHandResult] = useState<typeof game>(null)
+  const [trophyFlight, setTrophyFlight] = useState<TrophyFlight | null>(null)
   const [clock, setClock] = useState(() => serverNow())
+  const trophyOriginRef = useRef<HTMLSpanElement>(null)
+  const trophyButtonRef = useRef<HTMLButtonElement>(null)
+  const trophyFlightHandRef = useRef<number | null>(null)
+
+  const handIsOver = isCompletedHandResult(game)
+  const handId = game?.handId ?? null
+
+  useEffect(() => {
+    if (!handIsOver || !game) return
+    // Keep the newest complete snapshot: the first frame may arrive before
+    // the authoritative best-five projection is available to the client.
+    setLastHandResult(game)
+  }, [game, handIsOver])
+
+  useEffect(() => {
+    if (reducedMotion || !handIsOver || handId === null) return
+    if (trophyFlightHandRef.current === handId) return
+
+    const origin = trophyOriginRef.current?.getBoundingClientRect()
+    const target = trophyButtonRef.current?.getBoundingClientRect()
+    if (!origin || !target || origin.width === 0 || target.width === 0) return
+
+    trophyFlightHandRef.current = handId
+    setTrophyFlight({
+      left: origin.left + origin.width / 2,
+      top: origin.top + origin.height / 2,
+      dx: target.left + target.width / 2 - (origin.left + origin.width / 2),
+      dy: target.top + target.height / 2 - (origin.top + origin.height / 2),
+    })
+    const timer = window.setTimeout(() => setTrophyFlight(null), 1300)
+    return () => window.clearTimeout(timer)
+  }, [handId, handIsOver, reducedMotion])
 
   const viewerSeatStatus =
     game && yourSeat !== null
@@ -338,7 +386,31 @@ export default function Room() {
       )}
 
       <Table room={room} game={game} animations={animations} />
-      <ShowdownBanner />
+      <ChatPanel
+        room={room}
+        game={game}
+        showdownOpen={showdownOpen}
+        trophyButtonRef={trophyButtonRef}
+        onOpenShowdown={() => setShowdownOpen(true)}
+      />
+      <ShowdownBanner trophyRef={trophyOriginRef} />
+      {trophyFlight && (
+        <span
+          className="trophy-flight"
+          data-testid="trophy-flight"
+          aria-hidden="true"
+          style={
+            {
+              left: `${trophyFlight.left}px`,
+              top: `${trophyFlight.top}px`,
+              '--trophy-dx': `${trophyFlight.dx}px`,
+              '--trophy-dy': `${trophyFlight.dy}px`,
+            } as CSSProperties
+          }
+        >
+          <TrophyIcon />
+        </span>
+      )}
       <ActionBar />
 
       <AutoSeatPrompt room={room} />
@@ -355,6 +427,13 @@ export default function Room() {
       )}
       {handHistoryOpen && (
         <HandHistoryDrawer roomId={room.roomId} onClose={() => setHandHistoryOpen(false)} />
+      )}
+      {showdownOpen && (
+        <ShowdownResultsModal
+          room={room}
+          game={lastHandResult}
+          onClose={() => setShowdownOpen(false)}
+        />
       )}
 
       <CrtOverlay />

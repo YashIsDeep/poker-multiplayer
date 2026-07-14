@@ -107,19 +107,31 @@ export default function AutoSeatPrompt({ room }: { room: RoomSnapshot }) {
             <span key={index} className={index < remaining && !picking ? 'lit' : ''} />
           ))}
         </div>
-        <button
-          type="button"
-          className="btn btn-dev auto-seat-spectate"
-          data-sound="close"
-          disabled={picking}
-          onClick={() => {
-            cancelled.current = true
-            dismissAutoSeat()
-            pushToast('info', 'Spectating table', 'click any open seat whenever you want to play')
-          }}
-        >
-          Spectate Instead
-        </button>
+        <div className="auto-seat-actions">
+          <button
+            type="button"
+            className="btn btn-orange auto-seat-join"
+            data-testid="auto-seat-join"
+            data-sound="confirm"
+            disabled={picking}
+            onClick={() => void pickSeat()}
+          >
+            Join now
+          </button>
+          <button
+            type="button"
+            className="btn btn-dev auto-seat-spectate"
+            data-sound="close"
+            disabled={picking}
+            onClick={() => {
+              cancelled.current = true
+              dismissAutoSeat()
+              pushToast('info', 'Spectating table', 'click any open seat whenever you want to play')
+            }}
+          >
+            Spectate Instead
+          </button>
+        </div>
       </section>
     </div>
   )

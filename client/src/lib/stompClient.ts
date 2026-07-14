@@ -13,6 +13,7 @@ export type StompHandlers = {
   onAck: (body: unknown) => void
   onRoom: (body: unknown) => void
   onRoomEvent: (body: unknown) => void
+  onChat: (body: unknown) => void
 }
 
 const SUBSCRIPTIONS: Array<{ destination: string; handler: keyof StompHandlers }> = [
@@ -20,6 +21,7 @@ const SUBSCRIPTIONS: Array<{ destination: string; handler: keyof StompHandlers }
   { destination: '/user/queue/acks', handler: 'onAck' },
   { destination: '/user/queue/room', handler: 'onRoom' },
   { destination: '/user/queue/room-events', handler: 'onRoomEvent' },
+  { destination: '/user/queue/chat', handler: 'onChat' },
 ]
 
 export const HEARTBEAT_INTERVAL_MS = 5_000

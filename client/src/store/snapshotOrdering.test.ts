@@ -106,6 +106,7 @@ function makeGame(actionSeq: number): Game {
       finalHandRank: null,
       rebuyHandsRemaining: 0,
       rebought: false,
+      rebuyCount: 0,
     }],
     viewer: {
       seated: true,
@@ -210,7 +211,7 @@ describe('gameStore snapshot acceptance', () => {
     expect(useGameStore.getState().roomClosed).toBe(false)
   })
 
-  it('turns both terminal recovery errors into table-loss for room-scoped commands', () => {
+  it('separates invalid join codes from terminal room recovery errors', () => {
     const store = useGameStore.getState()
     useGameStore.setState({ roomGone: false, toasts: [] })
     const failure = {
@@ -227,9 +228,17 @@ describe('gameStore snapshot acceptance', () => {
 
     store.__handleAck({ ...failure, command: 'ROOM_JOIN' })
     expect(useGameStore.getState().roomGone).toBe(false)
+    expect(useGameStore.getState().toasts.at(-1)).toMatchObject({
+      message: 'Invalid table code',
+      detail: 'check the 6-character code and try again',
+    })
 
     store.__handleAck({ ...failure, command: 'ROOM_SYNC' })
     expect(useGameStore.getState().roomGone).toBe(true)
+    expect(useGameStore.getState().toasts.at(-1)).toMatchObject({
+      message: 'Table no longer available',
+      detail: 'it may have been closed or the server restarted',
+    })
 
     useGameStore.setState({ roomGone: false })
     store.__handleAck({
@@ -239,6 +248,47 @@ describe('gameStore snapshot acceptance', () => {
       error: 'NOT_A_ROOM_MEMBER',
     })
     expect(useGameStore.getState().roomGone).toBe(true)
+    expect(useGameStore.getState().toasts.at(-1)).toMatchObject({
+      message: 'You are no longer in this table',
+      detail: 'return to the lobby and join another table',
+    })
+  })
+
+  it('gives actionable messages for other join failures', () => {
+    const store = useGameStore.getState()
+    const failure = {
+      requestId: 'join-error',
+      ok: false,
+      error: 'ROOM_FULL' as const,
+      roomId: null,
+      roomRevision: null,
+      lobbyRevision: null,
+      state: null,
+      actionSeq: null,
+      retryAfterMs: null,
+      command: 'ROOM_JOIN' as const,
+    }
+
+    useGameStore.setState({ toasts: [] })
+    store.__handleAck(failure)
+    expect(useGameStore.getState().toasts.at(-1)).toMatchObject({
+      message: 'Table is full',
+      detail: 'try another table or wait for a seat',
+    })
+
+    useGameStore.setState({ toasts: [] })
+    store.__handleAck({ ...failure, error: 'ALREADY_IN_ANOTHER_ROOM' })
+    expect(useGameStore.getState().toasts.at(-1)).toMatchObject({
+      message: 'Already at another table',
+      detail: 'leave your current table before joining this one',
+    })
+
+    useGameStore.setState({ toasts: [] })
+    store.__handleAck({ ...failure, error: 'INVALID_REQUEST' })
+    expect(useGameStore.getState().toasts.at(-1)).toMatchObject({
+      message: 'Invalid table code',
+      detail: 'check the 6-character code and try again',
+    })
   })
 
   it('treats disconnected-member eviction as terminal room recovery', () => {

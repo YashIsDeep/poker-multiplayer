@@ -40,6 +40,18 @@ describe('raisePresets', () => {
     expect(presets.half).toBe(100)
     expect(presets.pot).toBe(100)
   })
+
+  it('rounds pot-based presets to the table increment', () => {
+    const presets = raisePresets({
+      pot: 340,
+      toCall: 120,
+      minRaiseTo: 240,
+      maxRaiseTo: 1_850,
+      increment: 100,
+    })
+    expect(presets.half).toBe(400)
+    expect(presets.pot).toBe(600)
+  })
 })
 
 describe('clampRaise', () => {
@@ -48,5 +60,6 @@ describe('clampRaise', () => {
     expect(clampRaise(950, 100, 900)).toBe(900)
     expect(clampRaise(444.6, 100, 900)).toBe(445)
     expect(clampRaise(Number.NaN, 100, 900)).toBe(100)
+    expect(clampRaise(444.6, 100, 900, 100)).toBe(400)
   })
 })

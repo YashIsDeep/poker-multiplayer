@@ -118,7 +118,6 @@ export default function SwirlBackground() {
       disposed = true
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
-      gl.getExtension('WEBGL_lose_context')?.loseContext()
     }
   }, [])
 

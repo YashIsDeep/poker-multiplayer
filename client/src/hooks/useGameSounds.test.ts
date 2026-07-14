@@ -16,6 +16,7 @@ function seat(overrides: Partial<GameSeat> = {}): GameSeat {
     finalHandRank: null,
     rebuyHandsRemaining: 0,
     rebought: false,
+    rebuyCount: 0,
     ...overrides,
   }
 }
@@ -144,7 +145,8 @@ describe('deriveSoundEvents', () => {
       completionReason: 'SHOWDOWN',
       awards: [{ potIndex: 0, potAmount: 100, winners: [{ seat: 1, amount: 100 }] }],
     })
-    expect(deriveSoundEvents(prev, theyWin, 0)).toContain('win')
+    expect(deriveSoundEvents(prev, theyWin, 0)).toEqual([])
     expect(deriveSoundEvents(prev, theyWin, 0)).not.toContain('winBig')
+    expect(deriveSoundEvents(prev, theyWin, null)).toEqual([])
   })
 })

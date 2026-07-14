@@ -18,6 +18,8 @@ import TableSettingsFields, {
 import type { TableSettings } from '../store/types'
 import '../styles/lobby.css'
 
+const JOIN_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/
+
 type Me = {
   id: string
   displayName: string
@@ -87,7 +89,12 @@ export default function Lobby() {
   const submitCode = (e: FormEvent) => {
     e.preventDefault()
     const code = joinCode.trim().toUpperCase()
-    if (code) join(code)
+    if (!code) return
+    if (!JOIN_CODE_PATTERN.test(code)) {
+      pushToast('warn', 'Invalid table code', 'enter the 6-character code shown by the table owner')
+      return
+    }
+    join(code)
   }
 
   const logout = async () => {
@@ -189,7 +196,7 @@ export default function Lobby() {
             <span className="label">private code</span>
             <input
               type="text"
-              maxLength={12}
+              maxLength={6}
               placeholder="ABC123"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value)}
@@ -320,6 +327,7 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
                 </b>
               </span>
               <span>REBUYS <b>OFF</b></span>
+              <span>TURN <b className="num">{PUBLIC_TABLE_SETTINGS.actionTimeoutSeconds}s</b></span>
             </div>
           </div>
         )}

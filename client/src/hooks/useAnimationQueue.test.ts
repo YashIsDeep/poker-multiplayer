@@ -36,6 +36,7 @@ function game(overrides: Partial<Game> = {}): Game {
         finalHandRank: null,
         rebuyHandsRemaining: 0,
         rebought: false,
+        rebuyCount: 0,
       },
     ],
     viewer: {

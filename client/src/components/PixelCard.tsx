@@ -9,12 +9,20 @@ type PixelCardProps = {
   code: string | null
   size?: 'board' | 'hole'
   win?: boolean
+  frame?: 'gold' | 'silver'
   dead?: boolean
   /** T8 deal-stagger entrance delay in ms; undefined = no entrance animation. */
   dealDelayMs?: number
 }
 
-export default function PixelCard({ code, size = 'board', win, dead, dealDelayMs }: PixelCardProps) {
+export default function PixelCard({
+  code,
+  size = 'board',
+  win,
+  frame,
+  dead,
+  dealDelayMs,
+}: PixelCardProps) {
   // random bob phase per mounted card, stable across re-renders
   const bobDelay = useMemo(() => `${(Math.random() * 2.4).toFixed(2)}s`, [])
   const sizeClass = size === 'hole' ? 'sm' : ''
@@ -26,6 +34,7 @@ export default function PixelCard({ code, size = 'board', win, dead, dealDelayMs
   const classes = ['card', sizeClass]
   const style: CSSProperties & Record<string, string> = {}
   if (win) classes.push('win')
+  if (frame) classes.push(`frame-${frame}`)
   if (dead) classes.push('dead')
   if (dealDelayMs !== undefined) {
     classes.push('deal')

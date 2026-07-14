@@ -28,18 +28,32 @@ export function raisePresets(input: {
   toCall: number
   minRaiseTo: number
   maxRaiseTo: number
+  increment?: number
 }): { min: number; half: number; pot: number; allin: number } {
   const { pot, toCall, minRaiseTo, maxRaiseTo } = input
-  const clamp = (v: number) => Math.min(Math.max(v, minRaiseTo), maxRaiseTo)
+  const increment = Number.isSafeInteger(input.increment) && input.increment! > 0
+    ? input.increment!
+    : 1
+  const clamp = (v: number) => {
+    const stepped = Math.round(v / increment) * increment
+    return Math.min(Math.max(stepped, minRaiseTo), maxRaiseTo)
+  }
   return {
-    min: clamp(minRaiseTo),
+    min: minRaiseTo,
     half: clamp(toCall + Math.round((pot + toCall) / 2)),
     pot: clamp(toCall + pot + toCall),
     allin: maxRaiseTo,
   }
 }
 
-export function clampRaise(value: number, minRaiseTo: number, maxRaiseTo: number): number {
+export function clampRaise(
+  value: number,
+  minRaiseTo: number,
+  maxRaiseTo: number,
+  increment = 1,
+): number {
   if (Number.isNaN(value)) return minRaiseTo
-  return Math.min(Math.max(Math.round(value), minRaiseTo), maxRaiseTo)
+  const step = Number.isSafeInteger(increment) && increment > 0 ? increment : 1
+  const stepped = Math.round(value / step) * step
+  return Math.min(Math.max(stepped, minRaiseTo), maxRaiseTo)
 }

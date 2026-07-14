@@ -92,8 +92,10 @@ function gameSeats(seatCount: number, buttonSeat: number, specs: SeatSpec[]): Ga
       actions: [],
       position: POSITION_LABELS[seatCount][(i - buttonSeat + seatCount) % seatCount],
       finalHandRank: null,
+      bestHandCards: [],
       rebuyHandsRemaining: 0,
       rebought: false,
+      rebuyCount: 0,
       ...spec,
     } as GameSeat
     if (spec?.actions === undefined && spec?.lastAction) seat.actions = [spec.lastAction]
@@ -194,11 +196,18 @@ function staticState(state: string, seatCount: number): Game {
           }],
         },
         [
-          { seat: 0, holeCards: ['As', 'Kd'], lastAction: { action: 'CALL', amount: 120 } },
+          {
+            seat: 0,
+            holeCards: ['As', 'Jd'],
+            finalHandRank: 'Pair of Nines',
+            bestHandCards: ['9c', '9s', 'As', 'Kh', 'Qc'],
+            lastAction: { action: 'CALL', amount: 120 },
+          },
           {
             seat: 1 % seatCount,
             holeCards: ['Kd', '9d'],
-            finalHandRank: 'Two pair, Kings and Nines',
+            finalHandRank: 'Nines full of Kings',
+            bestHandCards: ['Kh', '9c', '9s', 'Kd', '9d'],
           },
           ...COMMON_SPECS.slice(2),
         ],
@@ -218,7 +227,7 @@ function staticState(state: string, seatCount: number): Game {
           },
         },
         [
-          { seat: 0, seatStatus: 'BUSTED', stack: 0, rebuyHandsRemaining: 5 },
+          { seat: 0, seatStatus: 'BUSTED', stack: 0, rebuyHandsRemaining: 5, rebought: true, rebuyCount: 2 },
           ...COMMON_SPECS.slice(1),
         ],
       )
@@ -392,8 +401,15 @@ function runScriptedHand(seatCount: number) {
         awards: [{ potIndex: 0, potAmount: 270, winners: [{ seat: 0, amount: 270 }] }],
       },
       [
-        you({ finalHandRank: 'Two pair, Kings and Nines' }),
-        opp(1, { holeCards: ['Qd', 'Jd'], finalHandRank: 'Pair of Queens' }),
+        you({
+          finalHandRank: 'Two pair, Kings and Nines',
+          bestHandCards: ['As', 'Kd', 'Kh', '9c', '9s'],
+        }),
+        opp(1, {
+          holeCards: ['Jd', 'Td'],
+          finalHandRank: 'Pair of Nines',
+          bestHandCards: ['9c', '9s', 'Kh', 'Qc', 'Jd'],
+        }),
       ],
     )
     setTimeout(() => {

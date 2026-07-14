@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayedHoleCards } from './SeatPod'
+import { displayedHoleCards, splitShowdownHand } from './SeatPod'
 import type { GameSeat } from '../store/types'
 
 function gameSeat(overrides: Partial<GameSeat> = {}): GameSeat {
@@ -16,6 +16,7 @@ function gameSeat(overrides: Partial<GameSeat> = {}): GameSeat {
     finalHandRank: null,
     rebuyHandsRemaining: 0,
     rebought: false,
+    rebuyCount: 0,
     ...overrides,
   }
 }
@@ -27,5 +28,21 @@ describe('displayedHoleCards', () => {
 
   it('shows card backs only for players captured in the current hand', () => {
     expect(displayedHoleCards(gameSeat(), false)).toEqual(['back', 'back'])
+  })
+})
+
+describe('splitShowdownHand', () => {
+  it('puts the category first and keeps the high-card tie-break visible', () => {
+    expect(splitShowdownHand('King-high Flush')).toEqual({
+      category: 'Flush',
+      detail: 'King-high',
+    })
+  })
+
+  it('keeps grouped hand details available for same-category comparisons', () => {
+    expect(splitShowdownHand('Two Pair, Kings and Nines')).toEqual({
+      category: 'Two Pair',
+      detail: 'Kings and Nines',
+    })
   })
 })

@@ -114,6 +114,7 @@ export default function HandHistoryDrawer({
   return (
     <div className="history-backdrop" role="presentation" onClick={onClose}>
       <aside
+        id="table-hand-history"
         className="history-drawer panel"
         role="dialog"
         aria-modal="true"

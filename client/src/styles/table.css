@@ -257,10 +257,20 @@
   box-shadow: 0 0 10px rgba(255, 157, 46, 0.5);
 }
 
-.auto-seat-spectate {
+.auto-seat-actions {
+  display: flex;
+  gap: 12px;
   width: 100%;
   margin-top: 3px;
+}
+
+.auto-seat-actions .btn {
+  flex: 1;
   font-size: 17px;
+}
+
+.auto-seat-spectate {
+  width: 100%;
 }
 
 /* ============ table ============ */
@@ -433,7 +443,11 @@
 .card.win {
   outline: 3px solid var(--gold);
   outline-offset: 1px;
-  animation: winpulse 1s ease-in-out infinite;
+  box-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.35),
+    0 0 0 3px rgba(242, 193, 78, 0.45),
+    0 0 12px rgba(242, 193, 78, 0.58);
+  animation: winshine 0.85s ease-in-out 5;
 }
 .card.dead {
   filter: saturate(0.15) brightness(0.6);
@@ -462,8 +476,10 @@
   justify-content: center;
   margin-bottom: -12px;
   position: relative;
+  top: -4px;
   z-index: 1;
 }
+.seat .mini-cards.has-rank { margin-bottom: 0; }
 .pod {
   position: relative;
   background: var(--panel);
@@ -487,20 +503,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.position-label {
-  flex: 0 0 auto;
-  padding: 1px 4px 2px;
-  border: 1px solid rgba(242, 193, 78, 0.65);
-  border-radius: 4px;
-  background: rgba(242, 193, 78, 0.13);
-  color: var(--gold);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  line-height: 1;
-  text-shadow: none;
-  white-space: nowrap;
-}
 .pod .pstack {
   font-size: 19px;
   color: var(--gold);
@@ -508,37 +510,52 @@
   text-shadow: var(--outline-text);
 }
 .pod .plast,
-.pod .pactions,
-.pod .prank {
+.pod .pactions {
   font-size: 11px;
   letter-spacing: 1.5px;
   color: var(--text-dim);
   text-transform: uppercase;
   min-height: 13px;
 }
-.rebought-label {
-  width: fit-content;
-  margin: 2px auto 1px;
-  border: 1px solid #2d8b59;
-  border-radius: 4px;
-  background: rgba(55, 181, 111, 0.15);
-  color: #77e5a9;
-  padding: 1px 5px 2px;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  line-height: 1;
-  text-shadow: none;
-  white-space: nowrap;
-}
 .pod .pactions {
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
-.pod .prank {
-  margin-top: 2px;
+.showdown-rank {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  width: fit-content;
+  max-width: 150px;
+  margin: 0 auto 5px;
+  padding: 3px 8px 4px;
+  border: 2px solid rgba(242, 193, 78, 0.48);
+  border-radius: 6px;
+  background: rgba(16, 23, 34, 0.94);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.38);
+  line-height: 1.05;
+  text-align: center;
+  text-transform: uppercase;
+}
+.showdown-rank.winner {
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 2px rgba(242, 193, 78, 0.18),
+    0 3px 10px rgba(0, 0, 0, 0.42);
+}
+.showdown-rank__category {
   color: var(--gold);
-  letter-spacing: 0.6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+.showdown-rank__detail {
+  color: var(--text-dim);
+  font-size: 9px;
+  letter-spacing: 0.2px;
+  text-transform: none;
 }
 .action-separator { color: var(--gold); }
 
@@ -610,6 +627,9 @@
 }
 .badge.position-chip {
   position: static;
+  appearance: none;
+  cursor: pointer;
+  font-family: inherit;
   width: 26px;
   height: 26px;
   padding: 0;
@@ -619,6 +639,30 @@
   font-weight: 700;
   line-height: 23px;
   text-align: center;
+}
+.corner-chip-stack {
+  position: absolute;
+  right: -10px;
+  bottom: -10px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.badge.position-chip.admin-chip,
+.badge.position-chip.rebuy-chip {
+  position: static;
+}
+.badge.position-chip.admin-chip {
+  background: var(--gold);
+  color: #1a2332;
+  border-color: #b98d1f;
+}
+.badge.position-chip.rebuy-chip {
+  background: #37b56f;
+  color: #10271b;
+  border-color: #23824b;
+  font-size: 10px;
 }
 .badge.dealer {
   background: var(--gold);
@@ -731,9 +775,18 @@
   justify-content: center;
 }
 .ab-buttons .btn {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   max-width: 220px;
   font-size: 20px;
+  line-height: 1.15;
+  padding-inline: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ab-buttons .btn .num {
+  display: inline-block;
+  margin-inline-start: 0.35em;
   white-space: nowrap;
 }
 .waiting {
@@ -847,6 +900,7 @@
   font-size: 17px;
   color: var(--text-dim);
   letter-spacing: 1px;
+  text-align: center;
 }
 .waitbar b { color: var(--text); }
 .dots::after {
@@ -863,34 +917,82 @@
 
 .showdown {
   position: absolute;
-  /* center over the table area, not the stage, when the action bar docks right */
+  /* Sit in the gap above the showdown action panel so neither the board nor
+     either player's revealed cards are hidden by the result. */
   left: calc((100% - var(--chrome-right, 0px)) / 2);
-  top: 40%;
-  transform: translate(-50%, -50%) rotate(-1.5deg);
+  top: auto;
+  bottom: 110px;
+  transform: translateX(-50%) rotate(-1.5deg);
   z-index: 32;
   text-align: center;
-  padding: 18px 42px 22px;
+  padding: 10px 24px 12px;
   border-color: var(--gold);
+  isolation: isolate;
+  overflow: visible;
   animation: bannerin 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
 }
+.win-confetti {
+  position: absolute;
+  inset: -120px -160px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+.win-confetti-piece {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--confetti-width);
+  height: var(--confetti-height);
+  border-radius: 1px;
+  background: var(--confetti-color);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--confetti-color) 60%, transparent);
+  opacity: 0;
+  animation: confettiburst var(--confetti-duration) cubic-bezier(0.2, 0.7, 0.35, 1)
+    var(--confetti-delay) both;
+}
+.win-confetti-piece:nth-child(3n) { border-radius: 50%; }
+.win-confetti-piece:nth-child(4n) { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.showdown > :not(.win-confetti) {
+  position: relative;
+  z-index: 1;
+}
 .showdown .sd-who {
-  font-size: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--gold);
   text-shadow: var(--outline-text);
 }
+.showdown .sd-trophy {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--gold);
+  filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.72));
+}
+.showdown .sd-trophy .trophy-icon {
+  width: 32px;
+  height: 32px;
+}
 .showdown .sd-amt {
-  font-size: 26px;
+  font-size: 20px;
   color: var(--green);
   font-weight: 700;
   text-shadow: var(--outline-text);
 }
 .showdown .sd-hand {
-  font-size: 16px;
+  font-size: 12px;
   color: var(--text-dim);
   letter-spacing: 2px;
   text-transform: uppercase;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 /* ============ responsive ============ */
@@ -979,9 +1081,11 @@
   }
   .showdown {
     width: calc(100vw - 30px);
-    padding: 14px 18px 17px;
+    padding: 8px 14px 10px;
   }
-  .showdown .sd-who { font-size: 25px; }
+  .showdown .sd-who { font-size: 21px; }
+  .showdown .sd-amt { font-size: 18px; }
+  .showdown .sd-hand { font-size: 11px; }
 
   .auto-seat-modal {
     padding: 20px 22px 24px;
@@ -1119,11 +1223,11 @@
   }
   .raise-amt { font-size: 15px; min-width: 52px; }
   .showdown {
-    /* undo the portrait 100vw width: the banner is centered over the table
-       area, which only spans the space left of the docked action bar */
+    /* Keep the compact result centered above the full-width action panel. */
     width: max-content;
     max-width: calc(100% - var(--chrome-right, 0px) - 12px);
     padding: 10px 16px 12px;
+    bottom: 12px;
   }
   .showdown .sd-who { font-size: 20px; }
   .showdown .sd-amt { font-size: 16px; }
@@ -1144,7 +1248,7 @@
   .auto-seat-modal h3,
   .auto-seat-modal p,
   .auto-seat-pips,
-  .auto-seat-spectate {
+  .auto-seat-actions {
     grid-column: 1;
   }
   .auto-seat-count {
@@ -1165,8 +1269,10 @@
     width: 100%;
     margin: 1px 0 5px;
   }
-  .auto-seat-spectate {
+  .auto-seat-actions {
     margin-top: 0;
+  }
+  .auto-seat-actions .btn {
     padding-block: 8px 11px;
     font-size: 15px;
   }

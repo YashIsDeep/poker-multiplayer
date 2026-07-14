@@ -1,12 +1,13 @@
 // Action-area state machine (T7 §ActionArea, T8 pill/slider skin):
 // reconnecting → turn → waiting → showdown → busted → sitting-out → idle.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useGameStore } from '../store/gameStore'
 import { clampRaise, raisePresets } from '../lib/cards'
 import { formatCountdown, useServerCountdown } from '../hooks/useServerCountdown'
 import type { CSSProperties } from 'react'
 import { formatChips, formatChipsFull } from '../lib/chips'
+import { playSound } from '../lib/sound'
 
 export default function ActionBar() {
   const connection = useGameStore((s) => s.connection)
@@ -35,6 +36,17 @@ export default function ActionBar() {
   const [raiseTo, setRaiseTo] = useState(0)
   const minRaiseTo = legalActions?.minRaiseTo ?? 0
   const maxRaiseTo = legalActions?.maxRaiseTo ?? 0
+  const raiseIncrement = room?.config.smallBlind ?? 1
+
+  // Throttle the slider's tick so dragging doesn't machine-gun it (mirrors the
+  // volume slider in SettingsModal). Preset pills play their own tick on click.
+  const lastTick = useRef(0)
+  const tickThrottled = () => {
+    const now = Date.now()
+    if (now - lastTick.current < 90) return
+    lastTick.current = now
+    playSound('tick')
+  }
 
   // Re-anchor the slider whenever a new decision arrives.
   const actionKey = game ? `${game.handId}:${game.actionSeq}` : 'none'
@@ -51,8 +63,9 @@ export default function ActionBar() {
         toCall: legalActions?.toCall ?? 0,
         minRaiseTo,
         maxRaiseTo,
+        increment: raiseIncrement,
       }),
-    [potTotal, legalActions?.toCall, minRaiseTo, maxRaiseTo],
+    [potTotal, legalActions?.toCall, minRaiseTo, maxRaiseTo, raiseIncrement],
   )
 
   // ----- state selection -----
@@ -158,7 +171,7 @@ export default function ActionBar() {
   const locked = pendingAction !== null
   const callAmount = legal.callAmount
   const canRaise = legal.canRaise && maxRaiseTo >= minRaiseTo && maxRaiseTo > 0
-  const raiseValue = clampRaise(raiseTo, minRaiseTo, maxRaiseTo)
+  const raiseValue = clampRaise(raiseTo, minRaiseTo, maxRaiseTo, raiseIncrement)
   const fillPct =
     maxRaiseTo > minRaiseTo ? ((raiseValue - minRaiseTo) / (maxRaiseTo - minRaiseTo)) * 100 : 100
   const sliderStyle = { '--fill': `${fillPct}%` } as CSSProperties
@@ -231,11 +244,14 @@ export default function ActionBar() {
             type="range"
             min={minRaiseTo}
             max={maxRaiseTo}
-            step={1}
+            step={raiseIncrement}
             value={raiseValue}
             disabled={locked}
             style={sliderStyle}
-            onChange={(e) => setRaiseTo(clampRaise(Number(e.target.value), minRaiseTo, maxRaiseTo))}
+            onChange={(e) => {
+              setRaiseTo(clampRaise(Number(e.target.value), minRaiseTo, maxRaiseTo, raiseIncrement))
+              tickThrottled()
+            }}
             aria-label="Raise amount"
           />
           <span className="raise-amt num" title={formatChipsFull(raiseValue)}>{formatChips(raiseValue)}</span>

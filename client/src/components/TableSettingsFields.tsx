@@ -1,9 +1,12 @@
+import { useRef } from 'react'
 import type { CSSProperties } from 'react'
 import type { TableSettings } from '../store/types'
 import { formatChips } from '../lib/chips'
+import { playSound } from '../lib/sound'
 
 export const PUBLIC_TABLE_SETTINGS: TableSettings = {
   bigBlind: 100_000,
+  actionTimeoutSeconds: 30,
   startingStack: 10_000_000,
   rebuysEnabled: false,
   rebuyStack: 10_000_000,
@@ -11,6 +14,7 @@ export const PUBLIC_TABLE_SETTINGS: TableSettings = {
 }
 
 export const STACK_BB_OPTIONS = [50, 100, 200, 500] as const
+export const ACTION_TIMEOUT_OPTIONS = [10, 20, 30, 45, 60, 90, 120] as const
 const REBUY_DELAY_OPTIONS = [0, 1, 3, 5, 10, 20] as const
 
 export function valueAtPower(power: number): number {
@@ -38,10 +42,20 @@ function formatBigBlinds(value: number): string {
   return `${formatChips(value)} BB`
 }
 
+function formatTurnTime(value: number): string {
+  if (value < 60) return `${value}s`
+  const minutes = Math.floor(value / 60)
+  const seconds = value % 60
+  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`
+}
+
 export function normalizeTableSettings(settings: TableSettings): TableSettings {
   const bigBlind = valueAtPower(closestPower(settings.bigBlind, 1, 6))
   return {
     bigBlind,
+    actionTimeoutSeconds: ACTION_TIMEOUT_OPTIONS[
+      closestOptionIndex(settings.actionTimeoutSeconds, ACTION_TIMEOUT_OPTIONS)
+    ],
     startingStack: bigBlind * stackBigBlinds(settings.startingStack, bigBlind),
     rebuysEnabled: settings.rebuysEnabled,
     rebuyStack: bigBlind * stackBigBlinds(settings.rebuyStack, bigBlind),
@@ -54,6 +68,11 @@ export function normalizeTableSettings(settings: TableSettings): TableSettings {
 export function tableSettingsError(settings: TableSettings): string | null {
   if (!Number.isSafeInteger(settings.bigBlind) || settings.bigBlind < 1) {
     return 'Choose a valid big blind.'
+  }
+  if (!Number.isSafeInteger(settings.actionTimeoutSeconds)
+      || settings.actionTimeoutSeconds < ACTION_TIMEOUT_OPTIONS[0]
+      || settings.actionTimeoutSeconds > ACTION_TIMEOUT_OPTIONS[ACTION_TIMEOUT_OPTIONS.length - 1]) {
+    return 'Choose a turn time between 10 and 120 seconds.'
   }
   if (!Number.isSafeInteger(settings.startingStack) || settings.startingStack < settings.bigBlind * 20) {
     return 'Choose a valid starting stack.'
@@ -93,6 +112,16 @@ function OptionChipSlider({
   const fill = options.length === 1 ? 100 : (index / (options.length - 1)) * 100
   const style = { '--fill': `${fill}%` } as CSSProperties
 
+  // Tick as the slider crosses each notch, throttled so a fast drag doesn't
+  // machine-gun it. Matches the raise slider and volume slider.
+  const lastTick = useRef(0)
+  const tickThrottled = () => {
+    const now = Date.now()
+    if (now - lastTick.current < 90) return
+    lastTick.current = now
+    playSound('tick')
+  }
+
   return (
     <div className="power-setting">
       <div className="power-setting-head">
@@ -113,7 +142,10 @@ function OptionChipSlider({
         style={style}
         aria-label={label}
         aria-valuetext={formatValue(options[index])}
-        onChange={(event) => onChange(options[Number(event.target.value)])}
+        onChange={(event) => {
+          onChange(options[Number(event.target.value)])
+          tickThrottled()
+        }}
       />
       <div className="power-scale num" aria-hidden="true">
         <span>{formatValue(options[0])}</span>
@@ -160,6 +192,18 @@ export default function TableSettingsFields({
         disabled={disabled}
         scaleLabel="×10"
         onChange={setBigBlind}
+      />
+
+      <OptionChipSlider
+        label="Time per turn"
+        hint="Seconds before auto-check or fold"
+        value={value.actionTimeoutSeconds}
+        options={ACTION_TIMEOUT_OPTIONS}
+        tone="green"
+        disabled={disabled}
+        scaleLabel="quick / standard / relaxed"
+        formatValue={formatTurnTime}
+        onChange={(actionTimeoutSeconds) => onChange({ ...value, actionTimeoutSeconds })}
       />
 
       <OptionChipSlider

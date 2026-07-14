@@ -14,9 +14,21 @@
   50% { transform: translateY(-3px); }
 }
 
-@keyframes winpulse {
-  0%, 100% { transform: translateY(-2px); }
-  50% { transform: translateY(-8px); }
+@keyframes winshine {
+  0%, 100% {
+    transform: translateY(-2px);
+    box-shadow:
+      0 3px 0 rgba(0, 0, 0, 0.35),
+      0 0 0 3px rgba(242, 193, 78, 0.45),
+      0 0 12px rgba(242, 193, 78, 0.58);
+  }
+  50% {
+    transform: translateY(-6px);
+    box-shadow:
+      0 3px 0 rgba(0, 0, 0, 0.35),
+      0 0 0 5px rgba(242, 193, 78, 0.72),
+      0 0 34px rgba(242, 193, 78, 0.92);
+  }
 }
 
 @keyframes podpulse {
@@ -58,8 +70,22 @@
 
 @keyframes bannerin {
   from {
-    transform: translate(-50%, -50%) rotate(-1.5deg) scale(0.4);
+    transform: translateX(-50%) rotate(-1.5deg) scale(0.4);
     opacity: 0;
+  }
+}
+
+@keyframes confettiburst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35) rotate(0deg);
+  }
+  12% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform:
+      translate(calc(-50% + var(--confetti-x)), calc(-50% + var(--confetti-y)))
+      rotate(var(--confetti-rotation));
   }
 }
 

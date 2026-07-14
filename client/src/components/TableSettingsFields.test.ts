@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { closestPower, normalizeTableSettings, STACK_BB_OPTIONS, valueAtPower } from './TableSettingsFields'
+import {
+  ACTION_TIMEOUT_OPTIONS,
+  closestPower,
+  normalizeTableSettings,
+  STACK_BB_OPTIONS,
+  valueAtPower,
+} from './TableSettingsFields'
 
 describe('power-of-ten table controls', () => {
   it('maps each slider stop to an exact power of ten', () => {
@@ -17,12 +23,14 @@ describe('power-of-ten table controls', () => {
   it('normalizes stacks to the closest configured big-blind option', () => {
     expect(normalizeTableSettings({
       bigBlind: 100_000,
+      actionTimeoutSeconds: 54,
       startingStack: 8_000_000,
       rebuysEnabled: true,
       rebuyStack: 900_000,
       rebuyDelayHands: 7,
     })).toEqual({
       bigBlind: 100_000,
+      actionTimeoutSeconds: 60,
       startingStack: 10_000_000,
       rebuysEnabled: true,
       rebuyStack: 5_000_000,
@@ -32,14 +40,17 @@ describe('power-of-ten table controls', () => {
 
   it('offers the exact requested BB stack stops without a 100M cap', () => {
     expect(STACK_BB_OPTIONS).toEqual([50, 100, 200, 500])
+    expect(ACTION_TIMEOUT_OPTIONS).toEqual([10, 20, 30, 45, 60, 90, 120])
     expect(normalizeTableSettings({
       bigBlind: 1_000_000,
+      actionTimeoutSeconds: 30,
       startingStack: 1_000_000_000,
       rebuysEnabled: true,
       rebuyStack: 1_000_000_000,
       rebuyDelayHands: 5,
     })).toEqual({
       bigBlind: 1_000_000,
+      actionTimeoutSeconds: 30,
       startingStack: 500_000_000,
       rebuysEnabled: true,
       rebuyStack: 500_000_000,

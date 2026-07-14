@@ -358,19 +358,25 @@ const RECIPES: Record<SoundName, () => void> = {
     tone({ freq: 990, type: 'triangle', dur: 0.16, gain: 0.32, start: 0.12 })
   },
   win() {
-    // three-note rising arpeggio (major)
-    const notes = [523, 659, 784]
+    // Short major-key victory cadence for the rest of the table.
+    tone({ freq: 392, type: 'sine', dur: 0.34, gain: 0.12, release: 0.34 })
+    const notes = [523, 659, 784, 1047]
     notes.forEach((f, i) =>
-      tone({ freq: f, type: 'triangle', dur: 0.16, gain: 0.26, start: i * 0.1, release: 0.18 }),
+      tone({ freq: f, type: 'triangle', dur: 0.16, gain: 0.24, start: i * 0.1, release: 0.18 }),
     )
   },
   winBig() {
-    // fuller fanfare when the viewer wins: arpeggio + octave sparkle
-    const notes = [523, 659, 784, 1047]
+    // Fuller fanfare when the viewer wins: rising arpeggio, warm bass, and a
+    // sustained final chord so the result reads as a proper victory.
+    tone({ freq: 262, type: 'sine', dur: 0.72, gain: 0.14, release: 0.68 })
+    const notes = [523, 659, 784, 1047, 1319]
     notes.forEach((f, i) =>
-      tone({ freq: f, type: 'triangle', dur: 0.2, gain: 0.3, start: i * 0.09, release: 0.22 }),
+      tone({ freq: f, type: 'triangle', dur: 0.2, gain: 0.27, start: i * 0.09, release: 0.22 }),
     )
-    tone({ freq: 1568, type: 'sine', dur: 0.3, gain: 0.18, start: 0.36, release: 0.3 })
+    for (const freq of [523, 659, 784, 1047]) {
+      tone({ freq, type: 'triangle', dur: 0.48, gain: 0.1, start: 0.42, release: 0.5 })
+    }
+    tone({ freq: 1568, type: 'sine', dur: 0.38, gain: 0.16, start: 0.44, release: 0.38 })
   },
   notify() {
     tone({ freq: 587, type: 'triangle', dur: 0.1, gain: 0.24 })
