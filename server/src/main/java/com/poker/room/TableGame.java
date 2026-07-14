@@ -78,7 +78,7 @@ final class TableGame {
                 balance == 0 ? TableSeatStatus.BUSTED : TableSeatStatus.ACTIVE,
                 false, false, null,
                 previousBalance == null ? 0 : previousBalance.rebuyHandsRemaining(),
-                previousBalance != null && previousBalance.rebought()));
+                previousBalance == null ? 0 : previousBalance.rebuyCount()));
         try {
             refreshEmergencyRebuyOffer();
             lifecycle();
@@ -181,7 +181,8 @@ final class TableGame {
             throw new GameException(GameError.REBUY_NOT_AVAILABLE);
         }
         if (amount != config.rebuyStack()) throw new GameException(GameError.INVALID_BUY_IN);
-        players.put(userId, new TablePlayerState(amount, 0, true, 0));
+        players.put(userId, new TablePlayerState(
+                amount, 0, Math.incrementExact(player.rebuyCount()), 0));
         refreshEmergencyRebuyOffer();
         lifecycle();
     }
@@ -273,7 +274,7 @@ final class TableGame {
         archiveCurrentHistory();
         players.replaceAll((userId, player) -> player.stack() == 0 && player.rebuyHandsRemaining() > 0
                 ? new TablePlayerState(0, player.rebuyHandsRemaining() - 1,
-                        player.rebought(), player.bustedOrder())
+                        player.rebuyCount(), player.bustedOrder())
                 : player);
         Map<Integer, TableSeatState> replacement = new HashMap<>(seats);
         for (PlayerSnapshot player : presented.players()) {
@@ -308,11 +309,13 @@ final class TableGame {
             if (old.standAfterHand()) { seats.remove(seat); continue; }
             if (old.stack() == 0) { seats.remove(seat); continue; }
             long stack = old.pendingRebuy() == null ? old.stack() : old.pendingRebuy();
+            int rebuyCount = old.pendingRebuy() == null
+                    ? old.rebuyCount() : Math.incrementExact(old.rebuyCount());
             TableSeatStatus next = old.sitOutAfterHand() ? TableSeatStatus.SITTING_OUT
                     : stack == 0 ? TableSeatStatus.BUSTED : old.status() == TableSeatStatus.SITTING_OUT ? old.status() : TableSeatStatus.ACTIVE;
             seats.put(seat, copy(old, next, false, false, null, stack,
                     stack > 0 ? 0 : old.rebuyHandsRemaining(),
-                    old.rebought() || old.pendingRebuy() != null));
+                    rebuyCount));
         }
         refreshEmergencyRebuyOffer();
         lifecycle();
@@ -495,7 +498,7 @@ final class TableGame {
                 bustOrder = Math.max(bustOrder, order);
             }
             players.put(seat.userId(), new TablePlayerState(
-                    seat.stack(), seat.rebuyHandsRemaining(), seat.rebought(), order));
+                    seat.stack(), seat.rebuyHandsRemaining(), seat.rebuyCount(), order));
         }
     }
 
@@ -595,12 +598,12 @@ final class TableGame {
         return copy(s, status, out, stand, rebuy, stack, s.rebuyHandsRemaining());
     }
     private static TableSeatState copy(TableSeatState s, TableSeatStatus status, boolean out, boolean stand,
-                                       Long rebuy, long stack, int rebuyHandsRemaining) {
-        return copy(s, status, out, stand, rebuy, stack, rebuyHandsRemaining, s.rebought());
+                                        Long rebuy, long stack, int rebuyHandsRemaining) {
+        return copy(s, status, out, stand, rebuy, stack, rebuyHandsRemaining, s.rebuyCount());
     }
     private static TableSeatState copy(TableSeatState s, TableSeatStatus status, boolean out, boolean stand,
-                                       Long rebuy, long stack, int rebuyHandsRemaining, boolean rebought) {
+                                       Long rebuy, long stack, int rebuyHandsRemaining, int rebuyCount) {
         return new TableSeatState(s.seat(), s.userId(), s.initialBuyIn(), stack, status, out, stand,
-                rebuy, rebuyHandsRemaining, rebought);
+                rebuy, rebuyHandsRemaining, rebuyCount);
     }
 }

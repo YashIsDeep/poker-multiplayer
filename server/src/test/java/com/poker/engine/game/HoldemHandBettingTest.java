@@ -82,6 +82,31 @@ class HoldemHandBettingTest {
     }
 
     @Test
+    void aNonSmallBlindMultipleRaiseIsRejectedWithoutMutation() {
+        HoldemHand hand = HoldemHand.start(CONFIG,
+                List.of(EngineTestFixtures.player("button", 0, 100),
+                        EngineTestFixtures.player("big", 1, 100)),
+                0, EngineTestFixtures.orderedDeck());
+        HandSnapshot before = hand.snapshot();
+
+        ActionRejectedException exception = assertThrows(ActionRejectedException.class,
+                () -> hand.act(new PlayerId("button"), new PlayerAction.RaiseTo(45)));
+
+        assertEquals(ActionRejectionReason.INVALID_RAISE_TO, exception.reason());
+        assertEquals(before, hand.snapshot());
+    }
+
+    @Test
+    void minimumRaiseIsRoundedUpToTheSmallBlindIncrement() {
+        HoldemHand hand = HoldemHand.start(new HandConfig(3, 5, 9),
+                List.of(EngineTestFixtures.player("button", 0, 100),
+                        EngineTestFixtures.player("big", 1, 100)),
+                0, EngineTestFixtures.orderedDeck());
+
+        assertEquals(12, hand.legalActions().orElseThrow().minimumRaiseTo());
+    }
+
+    @Test
     void postflopOpeningBetUsesTheNominalBigBlind() {
         HoldemHand hand = HoldemHand.start(CONFIG,
                 List.of(EngineTestFixtures.player("button", 0, 100),

@@ -42,6 +42,7 @@ class RoomSnapshotMapperTest {
         assertEquals(alice.userId(), aliceView.seats().get(0).userId());
         assertEquals(room.config().minBuyIn(), aliceView.config().minBuyIn());
         assertEquals(room.config().maxBuyIn(), aliceView.config().maxBuyIn());
+        assertEquals(room.config().actionTimeoutSeconds(), aliceView.config().actionTimeoutSeconds());
         assertEquals(Instant.EPOCH.plusSeconds(3600), aliceView.idleExpiresAt());
         assertEquals(2, aliceView.members().stream().filter(member -> member.connected()).count());
     }

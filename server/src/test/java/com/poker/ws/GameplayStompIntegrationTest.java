@@ -32,9 +32,9 @@ class GameplayStompIntegrationTest {
 
  @Test void twoClientsPlayWithViewerPrivateCardsAndStaleActionGuard() throws Exception {
    Peer alice=connect("game-alice"),bob=connect("game-bob");
-   send(alice,"/app/room.create",Map.of("name","Heads Up","maxSeats",2,"privateTable",true,"smallBlind",5,"bigBlind",10,"minBuyIn",200,"maxBuyIn",2000,"actionTimeoutSeconds",30));
+   send(alice,"/app/room.create",Map.of("name","Heads Up","maxSeats",2,"privateTable",true,"smallBlind",5,"bigBlind",10,"minBuyIn",200,"maxBuyIn",2000,"actionTimeoutSeconds",45));
    JsonNode create=await(alice.acks,n->n.path("command").asText().equals("ROOM_CREATE"));assertThat(create.path("ok").asBoolean()).isTrue();String roomId=create.path("roomId").asText();
-   JsonNode created=await(alice.rooms,n->n.path("roomId").asText().equals(roomId));String code=created.path("joinCode").asText();
+   JsonNode created=await(alice.rooms,n->n.path("roomId").asText().equals(roomId));assertThat(created.path("config").path("actionTimeoutSeconds").asInt()).isEqualTo(45);String code=created.path("joinCode").asText();
    send(bob,"/app/room.join",Map.of("joinCode",code));assertThat(await(bob.acks,n->n.path("command").asText().equals("ROOM_JOIN")).path("ok").asBoolean()).isTrue();
    send(alice,"/app/room.take-seat",Map.of("roomId",roomId,"seat",0,"buyIn",1000));assertThat(await(alice.acks,n->n.path("command").asText().equals("ROOM_TAKE_SEAT")).path("ok").asBoolean()).isTrue();
    send(bob,"/app/room.take-seat",Map.of("roomId",roomId,"seat",1,"buyIn",1000));assertThat(await(bob.acks,n->n.path("command").asText().equals("ROOM_TAKE_SEAT")).path("ok").asBoolean()).isTrue();

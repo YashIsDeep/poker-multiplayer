@@ -232,12 +232,16 @@ class GameplayWiringTest {
         RoomChange rebought=table.rebuy(bustedUser,roomId,350);
         assertThat(rebought.room().game().players().get(bustedUser))
                 .extracting(TablePlayerState::stack,TablePlayerState::rebuyHandsRemaining,
-                        TablePlayerState::rebought)
-                .containsExactly(350L,0,true);
+                        TablePlayerState::rebuyCount,TablePlayerState::rebought)
+                .containsExactly(350L,0,1,true);
         RoomChange reseated=table.takeSeat(bustedUser,roomId,bustedSeat,200);
         assertThat(reseated.room().game().seats().stream()
                 .filter(seat->seat.userId().equals(bustedUser)).findFirst().orElseThrow().stack())
                 .isEqualTo(350);
+        GameView reseatedView=new GameSnapshotRedactor().redact(reseated.room(),bustedUser);
+        assertThat(reseatedView.seats().stream()
+                .filter(seat->seat.userId().equals(bustedUser)).findFirst().orElseThrow().rebuyCount())
+                .isEqualTo(1);
     }
 
     @Test void loneFundedPlayerStartsFiveSecondOldestBustedRebuyQueue() {
@@ -330,8 +334,17 @@ class GameplayWiringTest {
         assertThat(frame.room().game().presentedHand().players())
                 .extracting(PlayerSnapshot::stack).satisfies(stacks ->
                         assertThat(stacks.stream().mapToLong(Long::longValue).sum()).isEqualTo(400));
-        assertThat(new GameSnapshotRedactor().redact(frame.room(),null).seats())
-                .allMatch(seat->seat.holeCards()!=null&&seat.holeCards().size()==2);
+        GameView showdown = new GameSnapshotRedactor().redact(frame.room(),null);
+        assertThat(showdown.seats()).allMatch(seat->seat.holeCards()!=null&&seat.holeCards().size()==2);
+        assertThat(showdown.seats()).allSatisfy(seat -> {
+            if (seat.seatStatus().equals("FOLDED")) {
+                assertThat(seat.bestHandCards()).isEmpty();
+            } else {
+                assertThat(seat.bestHandCards()).hasSize(5);
+                assertThat(seat.bestHandCards()).allMatch(card ->
+                        seat.holeCards().contains(card) || showdown.board().contains(card));
+            }
+        });
     }
 
     @Test void timeoutIsGuardedAndQueuesTheActorToSitOut() {

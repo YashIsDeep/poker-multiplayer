@@ -312,7 +312,9 @@ public final class HoldemHand {
                 throw new IllegalStateException("pot cap overflow", overflow);
             }
             for (PlayerState player : players) {
-                if (pot.contributors().contains(player.id)) {
+                if (reason == CompletionReason.FOLD_WIN) {
+                    player.handCommitted = 0;
+                } else if (pot.contributors().contains(player.id)) {
                     player.handCommitted = checkedSubtract(player.handCommitted, width);
                 }
             }
@@ -405,6 +407,13 @@ public final class HoldemHand {
             if (raiseTo.amount() < legal.minimumRaiseTo() || raiseTo.amount() > legal.maximumRaiseTo()) {
                 reject(ActionRejectionReason.INVALID_RAISE_TO);
             }
+            // Normal raises use the table's smallest chip unit. A short all-in
+            // may still end at an unaligned stack total because no larger wager
+            // is available from that player.
+            if (raiseTo.amount() % config.smallBlind() != 0
+                    && raiseTo.amount() != legal.maximumRaiseTo()) {
+                reject(ActionRejectionReason.INVALID_RAISE_TO);
+            }
             return;
         }
         throw new IllegalStateException("unknown sealed player action");
@@ -484,9 +493,19 @@ public final class HoldemHand {
     }
 
     private Long fullMinimumRaiseTo() {
-        if (round.currentBet < config.bigBlind()) return config.bigBlind();
+        if (round.currentBet < config.bigBlind()) return roundUpToSmallBlind(config.bigBlind());
         try {
-            return Math.addExact(round.currentBet, round.lastFullRaiseSize);
+            return roundUpToSmallBlind(Math.addExact(round.currentBet, round.lastFullRaiseSize));
+        } catch (ArithmeticException overflow) {
+            return null;
+        }
+    }
+
+    private Long roundUpToSmallBlind(long amount) {
+        long remainder = amount % config.smallBlind();
+        if (remainder == 0) return amount;
+        try {
+            return Math.addExact(amount, config.smallBlind() - remainder);
         } catch (ArithmeticException overflow) {
             return null;
         }
@@ -561,6 +580,10 @@ public final class HoldemHand {
             }
         }
         if (leader == null || leaders != 1 || highest <= second) return Optional.empty();
+        // A forced blind can be the unique largest commitment before its
+        // owner has acted. It is not an uncalled voluntary wager: if the
+        // other player folds immediately, the blind remains in the pot.
+        if (!leader.acted) return Optional.empty();
         long refund = checkedSubtract(highest, second);
         if (refund > leader.streetCommitted) {
             throw new IllegalStateException("uncalled refund exceeds current-street commitment");

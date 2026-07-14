@@ -74,6 +74,8 @@ public class RoomMessageController {
             } else if (p.startingStack() > 0 || p.rebuyStack() > 0) {
                 config = RoomConfig.table(
                         p.bigBlind(), p.startingStack(), p.rebuysEnabled(), p.rebuyStack(),
+                        p.actionTimeoutSeconds() > 0
+                                ? p.actionTimeoutSeconds() : RoomConfig.DEFAULT_ACTION_TIMEOUT_SECONDS,
                         p.rebuyDelayHands());
             } else if (p.smallBlind() > 0 || p.minBuyIn() > 0 || p.maxBuyIn() > 0
                     || p.actionTimeoutSeconds() > 0) {
@@ -148,6 +150,7 @@ public class RoomMessageController {
             RoomCommandResult result = service.updateSettings(
                     user.userId(), p.roomId(), RoomConfig.table(
                             p.bigBlind(), p.startingStack(), p.rebuysEnabled(), p.rebuyStack(),
+                            p.actionTimeoutSeconds(),
                             p.rebuyDelayHands()));
             return ack(envelope.requestId(), CommandType.ROOM_UPDATE_SETTINGS, result);
         });

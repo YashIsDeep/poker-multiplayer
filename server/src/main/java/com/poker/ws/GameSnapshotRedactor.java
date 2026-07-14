@@ -21,7 +21,6 @@ public final class GameSnapshotRedactor {
         Map<Integer, PlayerSnapshot> players = new HashMap<>();
         if (hand != null) for (PlayerSnapshot p : hand.players()) players.put(p.seat(), p);
         Map<Integer, String> positions = pokerPositions(hand);
-
         List<GameView.GameSeatView> seatViews = new ArrayList<>();
         for (TableSeatState tableSeat : game.seats()) {
             PlayerSnapshot p = players.get(tableSeat.seat());
@@ -32,9 +31,13 @@ public final class GameSnapshotRedactor {
             boolean reveal = p != null && (Objects.equals(viewerSeat, p.seat()) || (showdown && !p.folded()));
             List<String> cards = reveal ? p.holeCards().stream().map(Card::toString).toList() : null;
             String rank = null;
+            List<String> bestHandCards = List.of();
             if (showdown && p != null && !p.folded() && hand.board().size() == 5) {
-                ArrayList<Card> seven = new ArrayList<>(p.holeCards()); seven.addAll(hand.board());
+                // Put the shared board first so equal-ranked subsets prefer
+                // showing the common cards that explain both winning hands.
+                ArrayList<Card> seven = new ArrayList<>(hand.board()); seven.addAll(p.holeCards());
                 rank = HandEvaluator.evaluate7(seven).describe();
+                bestHandCards = HandEvaluator.bestFive(seven).stream().map(Card::toString).toList();
             }
             List<GameView.LastActionView> actions = game.roundActions()
                     .getOrDefault(tableSeat.seat(), List.of()).stream()
@@ -42,7 +45,7 @@ public final class GameSnapshotRedactor {
             GameView.LastActionView last = actions.isEmpty() ? null : actions.get(actions.size() - 1);
             seatViews.add(new GameView.GameSeatView(tableSeat.seat(), tableSeat.userId(), stack, status,
                     committed, cards, last, actions, positions.get(tableSeat.seat()), rank,
-                    tableSeat.rebuyHandsRemaining(), tableSeat.rebought()));
+                    bestHandCards, tableSeat.rebuyHandsRemaining(), tableSeat.rebought(), tableSeat.rebuyCount()));
         }
 
         LegalActions legal = game.legalActions();

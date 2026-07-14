@@ -60,6 +60,7 @@ public class StompErrorHandler {
             case "/app/room.update-settings" -> CommandType.ROOM_UPDATE_SETTINGS;
             case "/app/room.take-seat" -> CommandType.ROOM_TAKE_SEAT;
             case "/app/room.stand" -> CommandType.ROOM_STAND;
+            case "/app/room.chat" -> CommandType.CHAT_SEND;
             case "/app/game.act" -> CommandType.GAME_ACT;
             case "/app/game.sit-out" -> CommandType.GAME_SIT_OUT;
             case "/app/game.sit-in" -> CommandType.GAME_SIT_IN;

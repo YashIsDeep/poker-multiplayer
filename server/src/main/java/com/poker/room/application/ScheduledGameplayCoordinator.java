@@ -6,6 +6,7 @@ import com.poker.room.GameState;
 import com.poker.room.RoomChange;
 import com.poker.room.RoomManager;
 import com.poker.room.TableStatus;
+import com.poker.engine.game.CompletionReason;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -21,6 +22,9 @@ import org.springframework.stereotype.Component;
 /** Generation-guarded scheduler; cancellation is only an optimization. */
 @Component
 public final class ScheduledGameplayCoordinator {
+    private static final long NORMAL_COMPLETE_DISPLAY_SECONDS = 3;
+    private static final long SHOWDOWN_DISPLAY_SECONDS = 6;
+
     private final RoomManager rooms;
     private final RoomEventSink events;
     private final TaskScheduler scheduler;
@@ -115,7 +119,11 @@ public final class ScheduledGameplayCoordinator {
         }
         if (game.presentedHand() != null && game.presentedHand().phase() == HandPhase.COMPLETE) {
             long handId = game.handId();
-            return new ScheduleIntent(clock.instant().plusSeconds(3), () -> runCurrent(
+            long displaySeconds = game.presentedHand().completionReason()
+                    .filter(reason -> reason == CompletionReason.SHOWDOWN)
+                    .map(ignored -> SHOWDOWN_DISPLAY_SECONDS)
+                    .orElse(NORMAL_COMPLETE_DISPLAY_SECONDS);
+            return new ScheduleIntent(clock.instant().plusSeconds(displaySeconds), () -> runCurrent(
                     roomId, generation,
                     () -> rooms.nextHand(roomId, handId, generation)));
         }

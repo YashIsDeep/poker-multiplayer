@@ -31,6 +31,7 @@ public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBro
                         "/app/room.update-settings",
                         "/app/room.take-seat",
                         "/app/room.stand",
+                        "/app/room.chat",
                         "/app/game.act",
                         "/app/game.sit-out",
                         "/app/game.sit-in",
@@ -39,7 +40,8 @@ public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBro
                         "/topic/lobby",
                         "/user/queue/acks",
                         "/user/queue/room",
-                        "/user/queue/room-events").authenticated()
+                        "/user/queue/room-events",
+                        "/user/queue/chat").authenticated()
                 .anyMessage().denyAll();
     }
 }

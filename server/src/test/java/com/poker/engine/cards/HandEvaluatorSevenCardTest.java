@@ -15,6 +15,24 @@ class HandEvaluatorSevenCardTest {
     }
 
     @Test
+    void returnsTheCardsUsedByTheBestFiveCardHand() {
+        assertEquals(
+                HandEvaluatorCategoryTest.cards("As Ks Qs Js Ts"),
+                HandEvaluator.bestFive(HandEvaluatorCategoryTest.cards("2c 3d As Ks Qs Js Ts")));
+    }
+
+    @Test
+    void ordersBestComboByGroupsAndHighCards() {
+        assertBestFive("As 5d 2c 5h 5c 3s 5s", "5d 5h 5c 5s As");
+        assertBestFive("Ks Qs Kd 2h Qd Qc 3c", "Qs Qd Qc Ks Kd");
+        assertBestFive("7s 2d 7c Ah 3s 7d 4c", "7s 7c 7d Ah 4c");
+        assertBestFive("Ks 2c 4s Kd Ah 4h 3d", "Ks Kd 4s 4h Ah");
+        assertBestFive("Qs 2c Qd Ah 8d 4s Jc", "Qs Qd Ah Jc 8d");
+        assertBestFive("2c Ah 9d 4s Jc 6h 3d", "Ah Jc 9d 6h 4s");
+        assertBestFive("4h Ah 8h 2h Jh Kc 3d", "Ah Jh 8h 4h 2h");
+    }
+
+    @Test
     void supportsBoardPlayingAndHoleCardImprovement() {
         List<Card> board = HandEvaluatorCategoryTest.cards("9c 8d 7s 6h 5c");
         ArrayList<Card> first = new ArrayList<>(board); first.addAll(HandEvaluatorCategoryTest.cards("As Ad"));
@@ -55,4 +73,10 @@ class HandEvaluatorSevenCardTest {
     }
 
     private static HandRank evaluate(String text) { return HandEvaluator.evaluate7(HandEvaluatorCategoryTest.cards(text)); }
+
+    private static void assertBestFive(String sevenCards, String expectedFiveCards) {
+        assertEquals(
+                HandEvaluatorCategoryTest.cards(expectedFiveCards),
+                HandEvaluator.bestFive(HandEvaluatorCategoryTest.cards(sevenCards)));
+    }
 }

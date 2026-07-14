@@ -54,15 +54,38 @@ final class PotSettlement {
             }
         }
         boolean foldWinView = livePlayers == 1;
-        return new View(build(players, effective, foldWinView, foldWinView ? soleLive : null), Optional.ofNullable(pending));
+        if (foldWinView) {
+            // A fold-win frame represents the whole committed pot. In
+            // particular, a forced big blind must not appear as an uncalled
+            // side amount when the small blind folds before voluntary action.
+            return new View(settlementPots(players, true, soleLive), Optional.empty());
+        }
+        return new View(build(players, effective, false, null), Optional.ofNullable(pending));
     }
 
     static List<Pot> settlementPots(List<HoldemHand.PlayerState> players,
-                                    boolean foldWin,
-                                    HoldemHand.PlayerState foldWinner) {
+                                     boolean foldWin,
+                                     HoldemHand.PlayerState foldWinner) {
+        if (foldWin) return foldWinPot(players, foldWinner);
         ArrayList<Long> effective = new ArrayList<>(players.size());
         for (HoldemHand.PlayerState player : players) effective.add(player.handCommitted);
         return build(players, effective, foldWin, foldWinner);
+    }
+
+    private static List<Pot> foldWinPot(List<HoldemHand.PlayerState> players,
+                                        HoldemHand.PlayerState foldWinner) {
+        Objects.requireNonNull(foldWinner, "foldWinner");
+        ArrayList<PlayerId> contributors = new ArrayList<>();
+        long amount = 0;
+        long cap = 0;
+        for (HoldemHand.PlayerState player : players) {
+            if (player.handCommitted <= 0) continue;
+            amount = Math.addExact(amount, player.handCommitted);
+            cap = Math.max(cap, player.handCommitted);
+            contributors.add(player.id);
+        }
+        if (amount == 0) return List.of();
+        return List.of(new Pot(amount, cap, contributors, List.of(foldWinner.id)));
     }
 
     private static List<Pot> build(List<HoldemHand.PlayerState> players,

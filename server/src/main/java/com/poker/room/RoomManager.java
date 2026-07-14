@@ -636,6 +636,31 @@ public final class RoomManager {
         } finally { registryLock.unlock(); }
     }
 
+    /** Captures the authenticated sender and current room audience under the room lock. */
+    public RoomChatTarget chatTarget(UUID userId, UUID roomId) {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(roomId, "roomId");
+        registryLock.lock();
+        try {
+            PokerRoom room = requiredMemberRoom(userId, roomId);
+            room.lock.lock();
+            try {
+                PokerRoom.Member sender = room.member(userId);
+                if (sender == null) {
+                    throw new RoomException(RoomError.NOT_A_ROOM_MEMBER);
+                }
+                return new RoomChatTarget(
+                        room.id.value(),
+                        sender.snapshot(),
+                        Set.copyOf(room.members.keySet()));
+            } finally {
+                room.lock.unlock();
+            }
+        } finally {
+            registryLock.unlock();
+        }
+    }
+
     /** Marks a confirmed disconnect after the transport reconnect grace has elapsed. */
     public Optional<RoomChange> memberDisconnected(UUID userId, Instant now) {
         Objects.requireNonNull(userId, "userId");

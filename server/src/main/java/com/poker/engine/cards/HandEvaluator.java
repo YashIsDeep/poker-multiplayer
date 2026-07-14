@@ -1,6 +1,7 @@
 package com.poker.engine.cards;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -14,21 +15,47 @@ public final class HandEvaluator {
     }
 
     public static HandRank evaluate7(List<Card> cards) {
+        return rank5(bestFive(cards));
+    }
+
+    /**
+     * Returns the deterministic five-card subset that produces the best
+     * seven-card hand. Equal-ranked subsets keep the input order's first
+     * selection, so callers can choose a presentation preference by ordering
+     * the input cards accordingly.
+     */
+    public static List<Card> bestFive(List<Card> cards) {
         validate(cards, 7);
         HandRank best = null;
+        List<Card> bestCards = null;
         for (int a = 0; a < 3; a++) {
             for (int b = a + 1; b < 4; b++) {
                 for (int c = b + 1; c < 5; c++) {
                     for (int d = c + 1; d < 6; d++) {
                         for (int e = d + 1; e < 7; e++) {
                             HandRank candidate = rankTrusted(cards.get(a), cards.get(b), cards.get(c), cards.get(d), cards.get(e));
-                            if (best == null || candidate.compareTo(best) > 0) best = candidate;
+                            if (best == null || candidate.compareTo(best) > 0) {
+                                best = candidate;
+                                bestCards = List.of(cards.get(a), cards.get(b), cards.get(c), cards.get(d), cards.get(e));
+                            }
                         }
                     }
                 }
             }
         }
-        return best;
+        return orderForPresentation(bestCards);
+    }
+
+    /** Orders the selected combo by poker grouping, then by rank high-to-low. */
+    private static List<Card> orderForPresentation(List<Card> cards) {
+        int[] counts = new int[15];
+        for (Card card : cards) counts[card.rank().value()]++;
+        return cards.stream()
+                .sorted(Comparator
+                        .comparingInt((Card card) -> counts[card.rank().value()])
+                        .reversed()
+                        .thenComparing(Comparator.comparingInt((Card card) -> card.rank().value()).reversed()))
+                .toList();
     }
 
     private static void validate(List<Card> cards, int expectedSize) {

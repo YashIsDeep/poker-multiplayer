@@ -69,6 +69,26 @@ class HoldemHandScenarioTest {
     }
 
     @Test
+    void headsUpSmallBlindFoldAwardsBothForcedBlinds() {
+        HoldemHand hand = HoldemHand.start(CONFIG,
+                List.of(EngineTestFixtures.player("small", 0, 100),
+                        EngineTestFixtures.player("big", 1, 100)),
+                0, EngineTestFixtures.orderedDeck());
+
+        ActionResult result = hand.act(new PlayerId("small"), new PlayerAction.Fold());
+
+        assertEquals(HandPhase.COMPLETE, result.snapshot().phase());
+        assertEquals(CompletionReason.FOLD_WIN, result.snapshot().completionReason().orElseThrow());
+        assertEquals(List.of(30L), result.snapshot().awards().stream()
+                .map(PotAward::potAmount).toList());
+        assertTrue(result.transitions().stream().flatMap(t -> t.events().stream())
+                .noneMatch(HandEvent.UncalledBetRefunded.class::isInstance));
+        assertEquals(90, result.snapshot().players().get(0).stack());
+        assertEquals(110, result.snapshot().players().get(1).stack());
+        EngineTestFixtures.assertConserved(result.snapshot());
+    }
+
+    @Test
     void immediateAllInStartRunsToShowdownWithoutSyntheticAction() {
         HoldemHand hand = HoldemHand.start(CONFIG,
                 List.of(EngineTestFixtures.player("a", 0, 10), EngineTestFixtures.player("b", 1, 10)),

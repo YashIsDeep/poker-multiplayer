@@ -10,6 +10,7 @@ public enum CommandType {
     ROOM_UPDATE_SETTINGS,
     ROOM_TAKE_SEAT,
     ROOM_STAND,
+    CHAT_SEND,
     GAME_ACT,
     GAME_SIT_OUT,
     GAME_SIT_IN,

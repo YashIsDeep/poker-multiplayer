@@ -23,10 +23,30 @@ public record GameView(
     public record GameSeatView(int seat, UUID userId, long stack, String seatStatus, long committed,
                                List<String> holeCards, LastActionView lastAction,
                                List<LastActionView> actions, String position, String finalHandRank,
-                               int rebuyHandsRemaining, boolean rebought) {
+                               List<String> bestHandCards, int rebuyHandsRemaining,
+                               boolean rebought, int rebuyCount) {
+        /** Keeps the pre-best-five constructor usable for older protocol fixtures. */
+        public GameSeatView(int seat, UUID userId, long stack, String seatStatus, long committed,
+                            List<String> holeCards, LastActionView lastAction,
+                            List<LastActionView> actions, String position, String finalHandRank,
+                            int rebuyHandsRemaining, boolean rebought, int rebuyCount) {
+            this(seat, userId, stack, seatStatus, committed, holeCards, lastAction, actions,
+                    position, finalHandRank, List.of(), rebuyHandsRemaining, rebought, rebuyCount);
+        }
+
+        /** Keeps the pre-count constructor usable for older protocol fixtures. */
+        public GameSeatView(int seat, UUID userId, long stack, String seatStatus, long committed,
+                            List<String> holeCards, LastActionView lastAction,
+                            List<LastActionView> actions, String position, String finalHandRank,
+                            int rebuyHandsRemaining, boolean rebought) {
+            this(seat, userId, stack, seatStatus, committed, holeCards, lastAction, actions,
+                    position, finalHandRank, List.of(), rebuyHandsRemaining, rebought, rebought ? 1 : 0);
+        }
+
         public GameSeatView {
             holeCards = holeCards == null ? null : List.copyOf(holeCards);
             actions = List.copyOf(actions);
+            bestHandCards = bestHandCards == null ? List.of() : List.copyOf(bestHandCards);
         }
     }
     public record LegalActionsView(boolean canFold, boolean canCheck, boolean canCall, long callAmount,
