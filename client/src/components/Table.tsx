@@ -24,14 +24,23 @@ export function seatPosition(viewIndex: number, totalSeats: number) {
   // Dense 8/9-seat tables need a tighter rim so pods do not collide with the
   // top bar or viewport edges. Smaller tables can use the more dramatic oval.
   const rimX = totalSeats >= 8 ? 43 : 46
-  const rimY = totalSeats >= 8 ? 44 : 56
+  // Even tables put a seat dead-center above the pot, whose top pod + committed
+  // chip otherwise crowd the pot readout (top:26%) at the narrow scale phones
+  // use. A larger vertical rim opens that band; dense 8/9 tables keep a tighter
+  // rim (they'd hit the top bar / rescale too small otherwise) but still need
+  // more than the old 44 to lift the top pod clear.
+  const rimY = totalSeats >= 8 ? 62 : totalSeats === 2 ? 66 : 68
+  // Committed chips ride the inner curve, but the top and bottom seats need
+  // opposite vertical insets. Upper seats (sin<0) push their chip toward the pod
+  // so it clears the pot; the denser 8/9 rim sits the pod lower, so its chip
+  // takes a smaller inset. Lower seats (sin>0) pull their chip toward center so
+  // it clears the hole cards that rise from the pod.
+  const betRadiusY = sin < 0 ? (totalSeats >= 8 ? 41 : 43) : 28
   return {
     x: 50 + superellipse(cos, rimX),
     y: 50 + superellipse(sin, rimY),
     betX: 50 + superellipse(cos, 30),
-    // Keep committed chips on the inner curve. The tighter vertical inset
-    // leaves clearance below the hole cards after the mobile fit scale.
-    betY: 50 + superellipse(sin, 30),
+    betY: 50 + superellipse(sin, betRadiusY),
   }
 }
 
