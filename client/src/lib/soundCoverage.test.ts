@@ -81,4 +81,37 @@ describe('semantic button sound coverage', () => {
     expect(missing, `controls missing data-sound:\n${missing.join('\n')}`).toEqual([])
     expect(invalid, `controls with invalid data-sound:\n${invalid.join('\n')}`).toEqual([])
   })
+
+  it('requires every range action to declare its throttled change sound', () => {
+    const missing: string[] = []
+    const invalid: string[] = []
+
+    for (const file of tsxFiles(SOURCE_ROOT)) {
+      const source = readFileSync(file, 'utf8')
+      for (const tag of openingTags(source)) {
+        const isRange =
+          tag.name === 'input' &&
+          /\btype\s*=\s*['"]range['"]/.test(tag.source)
+        if (!isRange) continue
+
+        const line = source.slice(0, tag.offset).split('\n').length
+        const location = `${path.relative(SOURCE_ROOT, file)}:${line}`
+        const soundAttribute = tag.source.match(
+          /\bdata-sound-input\s*=\s*['"]([^'"]+)['"]/,
+        )
+
+        if (!soundAttribute) {
+          missing.push(location)
+        } else if (!isSoundName(soundAttribute[1])) {
+          invalid.push(`${location} (${soundAttribute[1]})`)
+        }
+      }
+    }
+
+    expect(missing, `range controls missing data-sound-input:\n${missing.join('\n')}`).toEqual([])
+    expect(
+      invalid,
+      `range controls with invalid data-sound-input:\n${invalid.join('\n')}`,
+    ).toEqual([])
+  })
 })

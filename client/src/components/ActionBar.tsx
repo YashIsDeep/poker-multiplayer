@@ -55,6 +55,23 @@ export default function ActionBar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionKey])
 
+  // Give the acting player a restrained audible countdown. The key prevents
+  // the 100ms countdown renders from replaying a cue within the same second.
+  const lastTimerCue = useRef('')
+  useEffect(() => {
+    const seconds = countdown.secondsRemaining
+    const active = connection === 'connected' && !readOnly && isYourTurn
+    if (!active || seconds <= 0 || seconds > 5) {
+      if (!active) lastTimerCue.current = ''
+      return
+    }
+
+    const cueKey = `${actionKey}:${seconds}`
+    if (lastTimerCue.current === cueKey) return
+    lastTimerCue.current = cueKey
+    playSound(seconds <= 3 ? 'timerUrgent' : 'timer')
+  }, [actionKey, connection, countdown.secondsRemaining, isYourTurn, readOnly])
+
   const potTotal = game?.potTotal ?? 0
   const presets = useMemo(
     () =>
@@ -242,6 +259,7 @@ export default function ActionBar() {
           </div>
           <input
             type="range"
+            data-sound-input="tick"
             min={minRaiseTo}
             max={maxRaiseTo}
             step={raiseIncrement}

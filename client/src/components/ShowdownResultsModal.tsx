@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import PixelCard from './PixelCard'
 import TrophyIcon from './TrophyIcon'
 import { formatChips } from '../lib/chips'
+import { playSound } from '../lib/sound'
 import {
   showdownCardFrame,
   visibleResultHoleCards,
@@ -60,7 +61,10 @@ export default function ShowdownResultsModal({ room, game, onClose }: ShowdownRe
   useEffect(() => {
     closeRef.current?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        playSound('close')
+        onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -80,10 +84,16 @@ export default function ShowdownResultsModal({ room, game, onClose }: ShowdownRe
     .map((seat) => nameForSeat(room, seat))
 
   return (
-    <div className="showdown-results-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className="showdown-results-backdrop"
+      data-sound="close"
+      role="presentation"
+      onClick={onClose}
+    >
       <section
         id="table-showdown-results"
         className="showdown-results panel"
+        data-sound-boundary=""
         role="dialog"
         aria-modal="true"
         aria-label="Last hand results"

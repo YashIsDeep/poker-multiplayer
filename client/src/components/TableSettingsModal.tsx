@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useGameStore } from '../store/gameStore'
+import { playSound } from '../lib/sound'
 import type { TableSettings } from '../store/types'
 import TableSettingsFields, {
   normalizeTableSettings,
@@ -21,6 +22,16 @@ export default function TableSettingsModal({ onClose }: { onClose: () => void })
   }))
   const error = tableSettingsError(settings)
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      playSound('close')
+      onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   const save = async () => {
     if (busy || error) return
     setBusy(true)
@@ -38,9 +49,15 @@ export default function TableSettingsModal({ onClose }: { onClose: () => void })
   }
 
   return (
-    <div className="modalback" onClick={onClose} role="presentation">
+    <div
+      className="modalback"
+      data-sound="close"
+      onClick={onClose}
+      role="presentation"
+    >
       <div
         className="modal panel table-settings-modal"
+        data-sound-boundary=""
         role="dialog"
         aria-modal="true"
         aria-label="Table settings"

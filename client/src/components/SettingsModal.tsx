@@ -28,7 +28,10 @@ export default function SettingsModal({
   // Close on Escape.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        playSound('close')
+        onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -40,12 +43,14 @@ export default function SettingsModal({
   return (
     <div
       className="modalback"
+      data-sound="close"
       data-testid="modal-settings"
       onClick={onClose}
       role="presentation"
     >
       <div
         className="modal settings-modal"
+        data-sound-boundary=""
         role="dialog"
         aria-modal="true"
         aria-label="Settings"
@@ -77,6 +82,7 @@ export default function SettingsModal({
             <span>Volume</span>
             <input
               type="range"
+              data-sound-input="call"
               className="volume-slider"
               min={0}
               max={100}

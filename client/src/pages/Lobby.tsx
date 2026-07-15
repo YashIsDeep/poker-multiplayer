@@ -11,6 +11,7 @@ import { useGameStore } from '../store/gameStore'
 import { endSession } from '../lib/auth'
 import { generateRandomTableName } from '../lib/tableNames'
 import { formatChips } from '../lib/chips'
+import { playSound } from '../lib/sound'
 import TableSettingsFields, {
   PUBLIC_TABLE_SETTINGS,
   tableSettingsError,
@@ -230,6 +231,16 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
   const createRoom = useGameStore((s) => s.createRoom)
   const pushToast = useGameStore((s) => s.pushToast)
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      playSound('close')
+      onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   const submit = () => {
     const trimmed = name.trim()
     if (!trimmed || busy || (privateTable && tableSettingsError(settings))) return
@@ -260,7 +271,17 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
             maxLength={40}
             autoFocus
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submit()}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Enter' &&
+                name.trim() &&
+                !busy &&
+                (!privateTable || !tableSettingsError(settings))
+              ) {
+                playSound('confirm')
+                submit()
+              }
+            }}
             aria-label="Table name"
           />
         </div>

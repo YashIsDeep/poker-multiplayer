@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { describeHistoryEvent, fetchHandHistories } from '../lib/handHistory'
 import { formatChips, formatChipsFull } from '../lib/chips'
+import { playSound } from '../lib/sound'
 import type { GamePhase, HandHistory } from '../store/types'
 import '../styles/hand-history.css'
 
@@ -96,7 +97,10 @@ export default function HandHistoryDrawer({
   useEffect(() => {
     closeRef.current?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        playSound('close')
+        onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -112,10 +116,16 @@ export default function HandHistoryDrawer({
   }, [selected])
 
   return (
-    <div className="history-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className="history-backdrop"
+      data-sound="close"
+      role="presentation"
+      onClick={onClose}
+    >
       <aside
         id="table-hand-history"
         className="history-drawer panel"
+        data-sound-boundary=""
         role="dialog"
         aria-modal="true"
         aria-label="Hand histories"

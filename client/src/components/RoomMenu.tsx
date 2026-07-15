@@ -4,12 +4,13 @@
 // .room-menu display rules in table.css.
 
 import { useEffect, useRef, useState } from 'react'
+import { playSound, type SoundName } from '../lib/sound'
 
 export type RoomMenuItem = {
   key: string
   label: string
   onClick: () => void
-  sound?: string
+  sound: SoundName
   disabled?: boolean
   danger?: boolean
 }
@@ -22,10 +23,14 @@ export default function RoomMenu({ items }: { items: RoomMenuItem[] }) {
   useEffect(() => {
     if (!open) return
     const onPointerDown = (e: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        playSound('close')
+        setOpen(false)
+      }
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        playSound('close')
         setOpen(false)
         buttonRef.current?.focus()
       }
@@ -44,7 +49,7 @@ export default function RoomMenu({ items }: { items: RoomMenuItem[] }) {
         ref={buttonRef}
         type="button"
         className="btn btn-dev room-menu-btn"
-        data-sound="open"
+        data-sound={open ? 'close' : 'open'}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Room menu"

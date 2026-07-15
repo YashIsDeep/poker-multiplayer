@@ -134,6 +134,7 @@ function OptionChipSlider({
       <input
         className={`power-chip-slider ${tone}`}
         type="range"
+        data-sound-input="tick"
         min={0}
         max={options.length - 1}
         step={1}

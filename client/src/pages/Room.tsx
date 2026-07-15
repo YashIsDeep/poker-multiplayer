@@ -242,30 +242,35 @@ export default function Room() {
           {
             key: 'table-settings',
             label: 'Table settings',
-            sound: 'open',
+            sound: 'open' as const,
             onClick: () => setTableSettingsOpen(true),
           },
         ]
       : []),
-    { key: 'settings', label: 'Settings', sound: 'open', onClick: () => setSettingsOpen(true) },
+    {
+      key: 'settings',
+      label: 'Settings',
+      sound: 'open' as const,
+      onClick: () => setSettingsOpen(true),
+    },
     ...(canSitOut
       ? [
           {
             key: 'sit-out',
             label: sittingOut ? 'Sitting out…' : 'Sit out',
-            sound: 'fold',
+            sound: 'fold' as const,
             disabled: sittingOut,
             onClick: () => void handleSitOut(),
           },
         ]
       : []),
     ...(room.viewer.canStand
-      ? [{ key: 'stand', label: 'Stand', sound: 'exit', onClick: () => void stand() }]
+      ? [{ key: 'stand', label: 'Stand', sound: 'exit' as const, onClick: () => void stand() }]
       : []),
     {
       key: 'leave',
       label: leaving ? 'Leaving…' : 'Leave table',
-      sound: 'exit',
+      sound: 'exit' as const,
       danger: true,
       disabled: leaving,
       onClick: () => void handleLeave(),
