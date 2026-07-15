@@ -18,19 +18,27 @@ export type SoundName =
   | 'seat' // take a seat or sit back in
   | 'rebuy' // buy a fresh chip stack
   | 'deal' // new hand — cards riffled out
+  | 'flop' // three community cards fan onto the felt
   | 'card' // a single community card flips
   | 'check' // a player knocks / checks
   | 'call' // a player calls — one chip
   | 'raise' // a player bets or raises — chip stack
   | 'fold' // a player folds — cards slide away
   | 'yourTurn' // it is now your turn to act
+  | 'timer' // low-time countdown pulse
+  | 'timerUrgent' // final countdown pulse
   | 'win' // pot awarded to someone else
   | 'winBig' // pot awarded to you
+  | 'message' // incoming table chat
+  | 'playerJoin' // another player joins the room
+  | 'playerLeave' // another player leaves the room
+  | 'connectionLost' // live connection dropped
+  | 'connectionRestored' // live connection recovered
   | 'notify' // soft positive confirmation (seat taken, room joined)
   | 'error' // rejected action / error toast
 
 export function isSoundName(value: string | null): value is SoundName {
-  return value !== null && value in RECIPES
+  return value !== null && Object.prototype.hasOwnProperty.call(RECIPES, value)
 }
 
 type Prefs = { muted: boolean; volume: number }
@@ -169,14 +177,37 @@ export function bindAutoUnlock() {
 }
 
 // Resolve the nearest semantic sound in the click's composed path. Components
-// declare intent with data-sound; unannotated clicks retain the generic guardrail.
-export function soundForClick(event: Event): SoundName {
+// declare intent with data-sound; unannotated controls retain the generic
+// guardrail while blank surfaces stay quiet.
+const INTERACTIVE_TAGS = new Set(['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'SUMMARY'])
+
+export function soundForClick(event: Event): SoundName | null {
+  let interactive = false
   for (const target of event.composedPath()) {
-    const candidate = target as { getAttribute?: (name: string) => string | null }
+    const candidate = target as {
+      getAttribute?: (name: string) => string | null
+      tagName?: string
+    }
     const sound = candidate.getAttribute?.('data-sound') ?? null
     if (isSoundName(sound)) return sound
+    // Sliders announce their value changes through a throttled input handler;
+    // suppress the trailing click so one gesture never produces two cues.
+    const inputSound = candidate.getAttribute?.('data-sound-input') ?? null
+    if (isSoundName(inputSound)) return null
+    const role = candidate.getAttribute?.('role') ?? null
+    if (
+      (candidate.tagName && INTERACTIVE_TAGS.has(candidate.tagName)) ||
+      role === 'button' ||
+      role === 'menuitem'
+    ) {
+      interactive = true
+    }
+    const boundary = candidate.getAttribute?.('data-sound-boundary')
+    if (boundary !== null && boundary !== undefined) {
+      return interactive ? 'click' : null
+    }
   }
-  return 'click'
+  return interactive ? 'click' : null
 }
 
 // One capture-phase boundary plays exactly one resolved sound for the whole
@@ -186,7 +217,10 @@ export function bindGlobalClickSound(
 ) {
   if (!target) return () => {}
 
-  const handler = (event: Event) => soundEngine.play(soundForClick(event))
+  const handler = (event: Event) => {
+    const sound = soundForClick(event)
+    if (sound) soundEngine.play(sound)
+  }
   target.addEventListener('click', handler, { capture: true })
   return () => target.removeEventListener('click', handler, { capture: true })
 }
@@ -275,6 +309,25 @@ function chip(at: number, gain = 0.22) {
   tone({ start: at, freq: 2300, type: 'square', dur: 0.05, gain: gain * 0.3, release: 0.05 })
 }
 
+function cardFlip(at = 0, gain = 1) {
+  noise({
+    start: at,
+    dur: 0.06,
+    gain: 0.2 * gain,
+    filter: 'bandpass',
+    freq: 1600,
+    q: 0.7,
+    sweepTo: 900,
+  })
+  tone({
+    start: at + 0.02,
+    freq: 520,
+    type: 'triangle',
+    dur: 0.05,
+    gain: 0.1 * gain,
+  })
+}
+
 // ---------- the sound recipes ----------
 
 const RECIPES: Record<SoundName, () => void> = {
@@ -329,9 +382,13 @@ const RECIPES: Record<SoundName, () => void> = {
       noise({ start: i * 0.045, dur: 0.05, gain: 0.16, filter: 'bandpass', freq: 2000, q: 0.8 })
     }
   },
+  flop() {
+    cardFlip(0, 0.9)
+    cardFlip(0.09, 1)
+    cardFlip(0.18, 1.05)
+  },
   card() {
-    noise({ dur: 0.06, gain: 0.2, filter: 'bandpass', freq: 1600, q: 0.7, sweepTo: 900 })
-    tone({ freq: 520, type: 'triangle', dur: 0.05, gain: 0.1, start: 0.02 })
+    cardFlip()
   },
   check() {
     // two soft knuckle knocks on the felt
@@ -357,6 +414,13 @@ const RECIPES: Record<SoundName, () => void> = {
     tone({ freq: 660, type: 'triangle', dur: 0.12, gain: 0.3 })
     tone({ freq: 990, type: 'triangle', dur: 0.16, gain: 0.32, start: 0.12 })
   },
+  timer() {
+    tone({ freq: 740, type: 'square', dur: 0.045, gain: 0.11, release: 0.045 })
+  },
+  timerUrgent() {
+    tone({ freq: 880, type: 'square', dur: 0.055, gain: 0.16, release: 0.055 })
+    tone({ freq: 440, type: 'triangle', start: 0.035, dur: 0.08, gain: 0.11, release: 0.08 })
+  },
   win() {
     // Short major-key victory cadence for the rest of the table.
     tone({ freq: 392, type: 'sine', dur: 0.34, gain: 0.12, release: 0.34 })
@@ -377,6 +441,35 @@ const RECIPES: Record<SoundName, () => void> = {
       tone({ freq, type: 'triangle', dur: 0.48, gain: 0.1, start: 0.42, release: 0.5 })
     }
     tone({ freq: 1568, type: 'sine', dur: 0.38, gain: 0.16, start: 0.44, release: 0.38 })
+  },
+  message() {
+    tone({ freq: 880, type: 'sine', dur: 0.07, gain: 0.16, release: 0.07 })
+    tone({ freq: 1175, type: 'triangle', start: 0.065, dur: 0.1, gain: 0.18, release: 0.1 })
+  },
+  playerJoin() {
+    tone({ freq: 330, type: 'triangle', dur: 0.08, gain: 0.13, release: 0.08 })
+    tone({ freq: 494, type: 'triangle', start: 0.07, dur: 0.1, gain: 0.15, release: 0.1 })
+    chip(0.13, 0.12)
+  },
+  playerLeave() {
+    tone({ freq: 494, type: 'triangle', dur: 0.08, gain: 0.13, release: 0.08 })
+    tone({ freq: 294, type: 'triangle', start: 0.065, dur: 0.12, gain: 0.13, release: 0.12 })
+  },
+  connectionLost() {
+    noise({ dur: 0.18, gain: 0.12, filter: 'lowpass', freq: 1100, sweepTo: 180 })
+    tone({ freq: 260, type: 'sawtooth', dur: 0.18, gain: 0.12, glideTo: 110, release: 0.18 })
+  },
+  connectionRestored() {
+    for (const [index, freq] of [392, 587, 784].entries()) {
+      tone({
+        freq,
+        type: 'square',
+        start: index * 0.06,
+        dur: 0.06,
+        gain: 0.11 + index * 0.02,
+        release: 0.06,
+      })
+    }
   },
   notify() {
     tone({ freq: 587, type: 'triangle', dur: 0.1, gain: 0.24 })

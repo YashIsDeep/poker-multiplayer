@@ -5,12 +5,37 @@
 // simply no-op safely without an AudioContext.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bindGlobalClickSound, soundEngine, playSound } from './sound'
+import {
+  bindGlobalClickSound,
+  isSoundName,
+  soundEngine,
+  soundForClick,
+  playSound,
+} from './sound'
 
 function annotatedClick(sound: string): Event {
   const event = new Event('click')
   Object.defineProperty(event, 'composedPath', {
     value: () => [{ getAttribute: (name: string) => (name === 'data-sound' ? sound : null) }],
+  })
+  return event
+}
+
+function unannotatedControlClick(): Event {
+  const event = new Event('click')
+  Object.defineProperty(event, 'composedPath', {
+    value: () => [{ tagName: 'BUTTON', getAttribute: () => null }],
+  })
+  return event
+}
+
+function rangeControlClick(): Event {
+  const event = new Event('click')
+  Object.defineProperty(event, 'composedPath', {
+    value: () => [{
+      tagName: 'INPUT',
+      getAttribute: (name: string) => (name === 'data-sound-input' ? 'tick' : null),
+    }],
   })
   return event
 }
@@ -23,6 +48,27 @@ afterEach(() => {
 })
 
 describe('soundEngine preferences', () => {
+  it('accepts only owned recipe names', () => {
+    expect(isSoundName('flop')).toBe(true)
+    expect(isSoundName('toString')).toBe(false)
+    expect(isSoundName(null)).toBe(false)
+  })
+
+  it('keeps modal surfaces quiet without swallowing nested controls', () => {
+    const boundary = {
+      getAttribute: (name: string) => (name === 'data-sound-boundary' ? '' : null),
+    }
+    const surfaceClick = new Event('click')
+    Object.defineProperty(surfaceClick, 'composedPath', { value: () => [boundary] })
+    expect(soundForClick(surfaceClick)).toBeNull()
+
+    const inputClick = new Event('click')
+    Object.defineProperty(inputClick, 'composedPath', {
+      value: () => [{ tagName: 'INPUT', getAttribute: () => null }, boundary],
+    })
+    expect(soundForClick(inputClick)).toBe('click')
+  })
+
   it('defaults to unmuted at a sensible volume', () => {
     expect(soundEngine.isMuted()).toBe(false)
     expect(soundEngine.getVolume()).toBeGreaterThan(0)
@@ -72,13 +118,15 @@ describe('soundEngine preferences', () => {
     expect(() => playSound('click')).not.toThrow()
   })
 
-  it('plays one semantic sound per annotated click and falls back safely', () => {
+  it('plays one semantic sound per control click and keeps blank surfaces quiet', () => {
     const target = new EventTarget()
     const play = vi.spyOn(soundEngine, 'play').mockImplementation(() => {})
     const unbind = bindGlobalClickSound(target)
 
     target.dispatchEvent(annotatedClick('confirm'))
     target.dispatchEvent(new Event('click'))
+    target.dispatchEvent(unannotatedControlClick())
+    target.dispatchEvent(rangeControlClick())
 
     expect(play).toHaveBeenCalledTimes(2)
     expect(play).toHaveBeenNthCalledWith(1, 'confirm')

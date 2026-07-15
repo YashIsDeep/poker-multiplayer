@@ -47,7 +47,8 @@ export function deriveSoundEvents(
 
   // Community cards revealed (flop/turn/river) within the same hand.
   if (sameHand && game.board.length > prev.board.length) {
-    events.push('card')
+    const cardsRevealed = game.board.length - prev.board.length
+    events.push(cardsRevealed === 3 ? 'flop' : 'card')
   }
 
   // Player actions: a seat's lastAction changing to a new non-null value.
@@ -76,14 +77,14 @@ export function deriveSoundEvents(
     events.push('yourTurn')
   }
 
-  // Hand just completed with a pot award → only a winning viewer hears the
-  // victory fanfare. Losing viewers and spectators stay quiet.
+  // Hand just completed with a pot award. The winner gets the full fanfare;
+  // everyone else hears a lighter cadence so the hand has an audible ending.
   const justCompleted = game.phase === 'COMPLETE' && prev.phase !== 'COMPLETE'
   if (justCompleted && game.awards.length > 0) {
     const winnerSeats = new Set(
       game.awards.flatMap((award) => award.winners.map((w) => w.seat)),
     )
-    if (yourSeat !== null && winnerSeats.has(yourSeat)) events.push('winBig')
+    events.push(yourSeat !== null && winnerSeats.has(yourSeat) ? 'winBig' : 'win')
   }
 
   return events

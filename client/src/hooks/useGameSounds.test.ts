@@ -66,10 +66,12 @@ describe('deriveSoundEvents', () => {
     )
   })
 
-  it('flips a card when the board grows within a hand', () => {
+  it('fans the flop and flips later streets within a hand', () => {
     const prev = game({ board: [] })
-    const next = game({ board: ['Ah', '9c', '2d'] })
-    expect(deriveSoundEvents(prev, next, 0)).toContain('card')
+    const flop = game({ board: ['Ah', '9c', '2d'] })
+    const turn = game({ board: ['Ah', '9c', '2d', 'Ks'] })
+    expect(deriveSoundEvents(prev, flop, 0)).toContain('flop')
+    expect(deriveSoundEvents(flop, turn, 0)).toContain('card')
   })
 
   it('maps a seat lastAction change to its action sound', () => {
@@ -145,8 +147,8 @@ describe('deriveSoundEvents', () => {
       completionReason: 'SHOWDOWN',
       awards: [{ potIndex: 0, potAmount: 100, winners: [{ seat: 1, amount: 100 }] }],
     })
-    expect(deriveSoundEvents(prev, theyWin, 0)).toEqual([])
+    expect(deriveSoundEvents(prev, theyWin, 0)).toEqual(['win'])
     expect(deriveSoundEvents(prev, theyWin, 0)).not.toContain('winBig')
-    expect(deriveSoundEvents(prev, theyWin, null)).toEqual([])
+    expect(deriveSoundEvents(prev, theyWin, null)).toEqual(['win'])
   })
 })
