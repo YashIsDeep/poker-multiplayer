@@ -9,3 +9,7 @@ poker:
   admin:
     live:
       enabled: true
+  hand-archive:
+    # `npm run dev` starts the server with cwd=server/, so point the archive
+    # at the same repo-root data directory the analytics app reads.
+    directory: ../data/hand-archive

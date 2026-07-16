@@ -31,6 +31,11 @@ server:
         secure: ${SESSION_COOKIE_SECURE:false}
 
 poker:
+  hand-archive:
+    # Compressed local analytics archive; independent of the database so it
+    # keeps recording completed hands during a database outage.
+    enabled: true
+    directory: ./data/hand-archive
   websocket:
     heartbeat-interval: 5s
     allowed-origins:

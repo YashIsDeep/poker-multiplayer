@@ -16,3 +16,9 @@ spring:
     jdbc:
       initialize-schema: always
     timeout: 30d
+
+poker:
+  hand-archive:
+    # Spring context tests must not write into a real archive directory.
+    enabled: false
+    directory: target/test-hand-archive
