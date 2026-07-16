@@ -9,12 +9,20 @@ import java.util.Scanner;
 
 public final class AdminConsole {
     private static final String HELP = """
-            Commands:
+            Database commands:
               tables                    List application tables and row counts
               describe <table>          Show a table's columns and primary key
               rows <table> [limit]      Browse rows (default 50, maximum 500)
               count <table>             Count rows in one table
               sql <query>               Run a read-only query (maximum 500 rows)
+
+            Live server commands (need the game server running, e.g. npm run dev):
+              live                      Show a live server overview
+              rooms                     List live rooms, including private tables
+              room <id | join-code>     Inspect one live room's members and game
+              sockets                   List connected users and socket counts
+
+            Other:
               clear                     Clear the terminal
               help                      Show this help
               quit                      Exit Admin Console
@@ -27,6 +35,7 @@ public final class AdminConsole {
 
     public static void main(String[] args) {
         AdminConfig config = AdminConfig.fromEnvironment();
+        LiveCommands live = new LiveCommands(LiveServerClient.fromEnvironment());
 
         try {
             Class.forName("org.h2.Driver");
@@ -34,24 +43,24 @@ public final class AdminConsole {
                 connection.setAutoCommit(false);
                 connection.setReadOnly(true);
                 DatabaseBrowser browser = new DatabaseBrowser(connection);
-                printBanner(config, browser.tableCount());
+                printBanner(config, live, browser.tableCount());
 
                 if (args.length > 0) {
-                    execute(browser, String.join(" ", args));
+                    execute(browser, live, String.join(" ", args));
                     return;
                 }
-                interactiveLoop(browser);
+                interactiveLoop(browser, live);
             }
         } catch (ClassNotFoundException exception) {
             fail("The H2 driver is missing. Rebuild Admin Console with run.cmd.");
         } catch (SQLException exception) {
             fail("Could not open the database: " + exception.getMessage());
-        } catch (IllegalArgumentException exception) {
+        } catch (IllegalArgumentException | LiveServerException exception) {
             fail(exception.getMessage());
         }
     }
 
-    private static void interactiveLoop(DatabaseBrowser browser) {
+    private static void interactiveLoop(DatabaseBrowser browser, LiveCommands live) {
         Console console = System.console();
         Scanner scanner = console == null ? new Scanner(System.in) : null;
         System.out.println(HELP);
@@ -74,14 +83,14 @@ public final class AdminConsole {
             }
 
             try {
-                execute(browser, line);
-            } catch (SQLException | IllegalArgumentException exception) {
+                execute(browser, live, line);
+            } catch (SQLException | IllegalArgumentException | LiveServerException exception) {
                 System.err.println("Error: " + exception.getMessage());
             }
         }
     }
 
-    private static void execute(DatabaseBrowser browser, String input) throws SQLException {
+    private static void execute(DatabaseBrowser browser, LiveCommands live, String input) throws SQLException {
         String trimmed = input.trim();
         int separator = trimmed.indexOf(' ');
         String command = (separator < 0 ? trimmed : trimmed.substring(0, separator)).toLowerCase(Locale.ROOT);
@@ -93,6 +102,10 @@ public final class AdminConsole {
             case "rows" -> showRows(browser, remainder);
             case "count" -> browser.count(requireArgument(command, remainder));
             case "sql" -> browser.runQuery(requireArgument(command, remainder));
+            case "live" -> requireNoArguments(command, remainder, live::overview);
+            case "rooms" -> requireNoArguments(command, remainder, live::rooms);
+            case "room" -> live.room(requireArgument(command, remainder));
+            case "sockets", "connections" -> requireNoArguments(command, remainder, live::sockets);
             case "help", "?" -> System.out.println(HELP);
             case "clear", "cls" -> clearScreen();
             default -> throw new IllegalArgumentException("Unknown command: " + command + ". Run 'help' for available commands.");
@@ -129,13 +142,14 @@ public final class AdminConsole {
         action.run();
     }
 
-    private static void printBanner(AdminConfig config, int tableCount) {
+    private static void printBanner(AdminConfig config, LiveCommands live, int tableCount) {
         String target = config.url().replaceAll(";.*$", "");
         System.out.println("============================================================");
-        System.out.println("  ADMIN CONSOLE  |  Standalone read-only database browser");
+        System.out.println("  ADMIN CONSOLE  |  Read-only database and live-state browser");
         System.out.println("============================================================");
-        System.out.println("Connected: " + target);
+        System.out.println("Database:  " + target);
         System.out.println("User: " + config.username() + " | Tables: " + tableCount + " | Mode: READ ONLY");
+        System.out.println("Live API:  " + live.status());
         System.out.println();
     }
 

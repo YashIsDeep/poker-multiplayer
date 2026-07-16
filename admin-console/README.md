@@ -1,8 +1,10 @@
 # Admin Console
 
-A standalone, read-only terminal browser for the Poker Multiplayer H2 database.
-It connects directly through JDBC. It is not imported, served, or referenced by
-the Spring application or the React frontend.
+A standalone, read-only terminal browser for the Poker Multiplayer H2 database
+and the running server's live state. Database commands connect directly through
+JDBC; live commands call the server's loopback-only admin API. The console is
+not imported, served, or referenced by the Spring application or the React
+frontend.
 
 ## Start it
 
@@ -27,6 +29,33 @@ count spring_session
 sql SELECT display_name, last_login_at FROM app_user ORDER BY last_login_at DESC
 quit
 ```
+
+## Live server data
+
+While the game server is running (`npm run dev`), the console can also inspect
+live in-memory state — rooms, seats, stacks, game status, and connected
+sockets — through the server's read-only admin API:
+
+```text
+live                      Server overview: rooms, members, sockets, uptime
+rooms                     Every live room, including private tables
+room <id | join-code>     One room's members, seats, stacks, and game status
+sockets                   Connected users and their socket counts
+```
+
+The API is served at `/internal/admin/live/*`, exists only when
+`poker.admin.live.enabled=true` (enabled by the server's `dev` profile,
+disabled otherwise), answers loopback clients only, and never exposes hole
+cards or hand snapshots. Optional overrides:
+
+```text
+ADMIN_LIVE_URL      Base URL of the game server (default http://127.0.0.1:8080)
+ADMIN_LIVE_TOKEN    Shared secret sent as X-Admin-Token; required only when the
+                    server sets poker.admin.live.token
+```
+
+If you enable the API outside the dev profile, set `poker.admin.live.token`
+and do not forward `/internal/**` through any reverse proxy.
 
 You can also run one command without entering the interactive prompt:
 
