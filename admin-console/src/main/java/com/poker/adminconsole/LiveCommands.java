@@ -114,6 +114,176 @@ final class LiveCommands {
         System.out.println("Total sockets: " + node.path("totalSockets").asInt());
     }
 
+    void liveHand(String idOrJoinCode) {
+        JsonNode hand = client.liveHand(resolveRoomId(idOrJoinCode));
+        if (!hand.path("active").asBoolean()) {
+            System.out.printf("No hand is being presented. Table status: %s | last hand id %s | next hand at %s%n",
+                    text(hand, "tableStatus"), text(hand, "handId"), text(hand, "nextHandAt"));
+            return;
+        }
+
+        System.out.printf("Hand #%s | %s%s | board %s | pot %s | table %s%n",
+                text(hand, "handId"),
+                text(hand, "phase"),
+                hand.hasNonNull("completionReason") ? " (" + text(hand, "completionReason") + ")" : "",
+                cardList(hand.path("board")),
+                text(hand, "potTotal"),
+                text(hand, "tableStatus"));
+        System.out.printf("Bets:    current bet %s | last full raise %s | chips in play %s%n",
+                text(hand, "currentBet"), text(hand, "lastFullRaiseSize"), text(hand, "totalChipsAtStart"));
+        System.out.println("Acting:  " + actingLine(hand));
+        System.out.println();
+
+        List<List<String>> rows = new ArrayList<>();
+        for (JsonNode player : hand.path("players")) {
+            String state = player.path("folded").asBoolean() ? "folded"
+                    : player.path("allIn").asBoolean() ? "all-in" : "active";
+            rows.add(List.of(
+                    text(player, "seat"),
+                    text(player, "displayName"),
+                    player.hasNonNull("role") ? player.get("role").asText() : "",
+                    cardList(player.path("holeCards")),
+                    text(player, "stack"),
+                    text(player, "streetCommitted"),
+                    text(player, "handCommitted"),
+                    state));
+        }
+        TablePrinter.print(
+                List.of("SEAT", "NAME", "ROLE", "CARDS", "STACK", "STREET_BET", "HAND_BET", "STATE"),
+                rows);
+
+        JsonNode pots = hand.path("pots");
+        if (pots.size() > 1 || hand.hasNonNull("pendingUnmatched")) {
+            System.out.println();
+            List<List<String>> potRows = new ArrayList<>();
+            for (JsonNode pot : pots) {
+                potRows.add(List.of(
+                        text(pot, "index"), text(pot, "amount"), text(pot, "cap"),
+                        joinInts(pot.path("eligibleSeats"))));
+            }
+            TablePrinter.print(List.of("POT", "AMOUNT", "CAP", "ELIGIBLE_SEATS"), potRows);
+            JsonNode pending = hand.path("pendingUnmatched");
+            if (!pending.isMissingNode() && !pending.isNull()) {
+                System.out.printf("Unmatched bet: %s from seat %s%n",
+                        text(pending, "amount"), text(pending, "seat"));
+            }
+        }
+        printAwards(hand.path("awards"));
+    }
+
+    void hands(String idOrJoinCode) {
+        JsonNode node = client.hands(resolveRoomId(idOrJoinCode));
+        List<List<String>> rows = new ArrayList<>();
+        for (JsonNode hand : node) {
+            rows.add(List.of(
+                    text(hand, "handId"),
+                    hand.path("inProgress").asBoolean() ? "live" : "done",
+                    text(hand, "phase"),
+                    hand.hasNonNull("completionReason") ? hand.get("completionReason").asText() : "-",
+                    cardList(hand.path("board")),
+                    text(hand, "potAwarded"),
+                    hand.hasNonNull("winners") ? hand.get("winners").asText() : "-",
+                    text(hand, "playerCount"),
+                    text(hand, "completedAt")));
+        }
+        TablePrinter.print(
+                List.of("HAND", "STATE", "PHASE", "REASON", "BOARD", "POT", "WINNERS", "PLAYERS", "COMPLETED_AT"),
+                rows);
+        System.out.println("The server retains the last 20 hands per room. Use 'hand <room> <hand-id>' for the full event log.");
+    }
+
+    void handDetail(String idOrJoinCode, long handId) {
+        JsonNode hand = client.handDetail(resolveRoomId(idOrJoinCode), handId);
+
+        System.out.printf("Hand #%s (%s) | blinds %s/%s | started %s | completed %s%n",
+                text(hand, "handId"),
+                hand.path("inProgress").asBoolean() ? "in progress" : "complete",
+                text(hand, "smallBlind"), text(hand, "bigBlind"),
+                text(hand, "startedAt"), text(hand, "completedAt"));
+        System.out.printf("Board:   %s%n", cardList(hand.path("finalBoard")));
+        System.out.println();
+
+        List<List<String>> playerRows = new ArrayList<>();
+        for (JsonNode player : hand.path("players")) {
+            playerRows.add(List.of(
+                    text(player, "seat"),
+                    text(player, "displayName"),
+                    text(player, "userId"),
+                    text(player, "startingStack")));
+        }
+        TablePrinter.print(List.of("SEAT", "NAME", "USER_ID", "STARTING_STACK"), playerRows);
+        System.out.println();
+
+        List<List<String>> eventRows = new ArrayList<>();
+        for (JsonNode event : hand.path("events")) {
+            eventRows.add(List.of(
+                    text(event, "sequence"),
+                    timeOnly(text(event, "occurredAt")),
+                    text(event, "phase"),
+                    text(event, "description")));
+        }
+        TablePrinter.print(List.of("SEQ", "TIME", "PHASE", "EVENT"), eventRows);
+        printAwards(hand.path("awards"));
+    }
+
+    private void printAwards(JsonNode awards) {
+        if (awards.isMissingNode() || awards.isEmpty()) return;
+        System.out.println();
+        List<List<String>> rows = new ArrayList<>();
+        for (JsonNode award : awards) {
+            StringBuilder winners = new StringBuilder();
+            for (JsonNode winner : award.path("winners")) {
+                if (!winners.isEmpty()) winners.append(", ");
+                winners.append("seat ").append(text(winner, "seat"))
+                        .append(" (").append(text(winner, "displayName")).append(") +")
+                        .append(text(winner, "amount"));
+            }
+            rows.add(List.of(text(award, "potIndex"), text(award, "potAmount"), winners.toString()));
+        }
+        TablePrinter.print(List.of("POT", "AMOUNT", "WINNERS"), rows);
+    }
+
+    private static String actingLine(JsonNode hand) {
+        if (!hand.hasNonNull("actingSeat")) {
+            return "nobody (between streets or hand complete)";
+        }
+        StringBuilder line = new StringBuilder("seat " + hand.get("actingSeat").asText());
+        JsonNode legal = hand.path("legalActions");
+        if (!legal.isMissingNode() && !legal.isNull()) {
+            List<String> options = new ArrayList<>();
+            if (legal.path("canFold").asBoolean()) options.add("fold");
+            if (legal.path("canCheck").asBoolean()) options.add("check");
+            if (legal.path("canCall").asBoolean()) options.add("call " + legal.path("callAmount").asText());
+            if (legal.path("canRaise").asBoolean()) {
+                options.add("raise " + legal.path("minimumRaiseTo").asText()
+                        + ".." + legal.path("maximumRaiseTo").asText());
+            }
+            line.append(" | options: ").append(String.join(" / ", options));
+        }
+        if (hand.hasNonNull("deadline")) {
+            line.append(" | deadline ").append(hand.get("deadline").asText());
+        }
+        return line.toString();
+    }
+
+    private static String cardList(JsonNode cards) {
+        if (cards.isMissingNode() || cards.isEmpty()) return "-";
+        List<String> values = new ArrayList<>();
+        cards.forEach(card -> values.add(card.asText()));
+        return String.join(" ", values);
+    }
+
+    private static String joinInts(JsonNode numbers) {
+        List<String> values = new ArrayList<>();
+        numbers.forEach(number -> values.add(number.asText()));
+        return String.join(",", values);
+    }
+
+    private static String timeOnly(String instant) {
+        int t = instant.indexOf('T');
+        return t < 0 ? instant : instant.substring(t + 1);
+    }
+
     private String resolveRoomId(String idOrJoinCode) {
         try {
             return UUID.fromString(idOrJoinCode.trim()).toString();

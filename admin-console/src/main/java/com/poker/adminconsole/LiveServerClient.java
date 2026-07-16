@@ -70,6 +70,18 @@ final class LiveServerClient {
         return get("/connections");
     }
 
+    JsonNode liveHand(String roomId) {
+        return get("/rooms/" + roomId + "/hand");
+    }
+
+    JsonNode hands(String roomId) {
+        return get("/rooms/" + roomId + "/hands");
+    }
+
+    JsonNode handDetail(String roomId, long handId) {
+        return get("/rooms/" + roomId + "/hands/" + handId);
+    }
+
     private JsonNode get(String path) {
         HttpRequest.Builder request = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + BASE_PATH + path))
@@ -93,13 +105,21 @@ final class LiveServerClient {
 
         return switch (response.statusCode()) {
             case 200 -> parse(response.body());
-            case 404 -> throw new LiveServerException(path.startsWith("/rooms/")
-                    ? "No live room has that id."
-                    : disabledMessage(response.statusCode()));
+            case 404 -> throw new LiveServerException(notFoundMessage(path));
             case 401, 403 -> throw new LiveServerException(disabledMessage(response.statusCode()));
             default -> throw new LiveServerException(
                     "The live admin API returned HTTP " + response.statusCode() + ".");
         };
+    }
+
+    private String notFoundMessage(String path) {
+        if (path.matches("/rooms/[^/]+/hands/\\d+")) {
+            return "No retained hand history has that id (the server keeps the last 20 hands per room).";
+        }
+        if (path.startsWith("/rooms/")) {
+            return "No live room has that id.";
+        }
+        return disabledMessage(404);
     }
 
     private String disabledMessage(int status) {

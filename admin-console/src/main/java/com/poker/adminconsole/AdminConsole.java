@@ -19,8 +19,13 @@ public final class AdminConsole {
             Live server commands (need the game server running, e.g. npm run dev):
               live                      Show a live server overview
               rooms                     List live rooms, including private tables
-              room <id | join-code>     Inspect one live room's members and game
+              room <room>               Inspect one live room's members and game
+              hand <room>               Live hand: board, pots, hole cards, action
+              hand <room> <hand-id>     One hand's full event log, card by card
+              hands <room>              Recent hands with boards, pots, winners
               sockets                   List connected users and socket counts
+
+            <room> is a room id or join code. Hand views show every dealt card.
 
             Other:
               clear                     Clear the terminal
@@ -105,6 +110,8 @@ public final class AdminConsole {
             case "live" -> requireNoArguments(command, remainder, live::overview);
             case "rooms" -> requireNoArguments(command, remainder, live::rooms);
             case "room" -> live.room(requireArgument(command, remainder));
+            case "hand" -> showHand(live, remainder);
+            case "hands" -> live.hands(requireArgument(command, remainder));
             case "sockets", "connections" -> requireNoArguments(command, remainder, live::sockets);
             case "help", "?" -> System.out.println(HELP);
             case "clear", "cls" -> clearScreen();
@@ -126,6 +133,23 @@ public final class AdminConsole {
             }
         }
         browser.showRows(arguments[0], limit);
+    }
+
+    private static void showHand(LiveCommands live, String remainder) {
+        String[] arguments = remainder.isBlank() ? new String[0] : remainder.split("\\s+");
+        if (arguments.length == 1) {
+            live.liveHand(arguments[0]);
+            return;
+        }
+        if (arguments.length == 2) {
+            try {
+                live.handDetail(arguments[0], Long.parseLong(arguments[1]));
+                return;
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException("The hand id must be a number.");
+            }
+        }
+        throw new IllegalArgumentException("Usage: hand <room> [hand-id]");
     }
 
     private static String requireArgument(String command, String argument) {

@@ -31,8 +31,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Read-only projection of live in-memory server state for the standalone
- * Admin Console. Never exposes hand snapshots, hole cards, or pending action
- * options; only membership, seating, balances, and lifecycle metadata.
+ * Admin Console. The room and connection views expose only membership,
+ * seating, balances, and lifecycle metadata. The hand drilldown views
+ * intentionally expose complete hand state, including every dealt card —
+ * they exist for local debugging and are reachable only through this
+ * loopback-guarded, disabled-by-default API.
  */
 @RestController
 @RequestMapping("/internal/admin/live")
@@ -88,9 +91,36 @@ public class AdminLiveController {
     @GetMapping("/rooms/{roomId}")
     public RoomDetail room(HttpServletRequest request, @PathVariable UUID roomId) {
         requireLocalAdmin(request);
-        RoomState room = roomManager.room(roomId)
+        return detail(requiredRoom(roomId));
+    }
+
+    private RoomState requiredRoom(UUID roomId) {
+        return roomManager.room(roomId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "room not found"));
-        return detail(room);
+    }
+
+    @GetMapping("/rooms/{roomId}/hand")
+    public AdminHandViews.LiveHandView liveHand(HttpServletRequest request, @PathVariable UUID roomId) {
+        requireLocalAdmin(request);
+        return AdminHandViews.liveHand(requiredRoom(roomId));
+    }
+
+    @GetMapping("/rooms/{roomId}/hands")
+    public List<AdminHandViews.HandSummaryView> hands(HttpServletRequest request, @PathVariable UUID roomId) {
+        requireLocalAdmin(request);
+        return AdminHandViews.handSummaries(requiredRoom(roomId));
+    }
+
+    @GetMapping("/rooms/{roomId}/hands/{handId}")
+    public AdminHandViews.HandDetailView handDetail(
+            HttpServletRequest request, @PathVariable UUID roomId, @PathVariable long handId) {
+        requireLocalAdmin(request);
+        AdminHandViews.HandDetailView detail = AdminHandViews.handDetail(requiredRoom(roomId), handId);
+        if (detail == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "no retained hand history with that id");
+        }
+        return detail;
     }
 
     @GetMapping("/connections")

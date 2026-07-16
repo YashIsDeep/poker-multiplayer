@@ -4,9 +4,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.poker.room.GameAction;
+import com.poker.room.GameState;
 import com.poker.room.MemberProfile;
 import com.poker.room.RoomChange;
 import com.poker.room.RoomManager;
+import com.poker.room.RoomState;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,6 +67,78 @@ class AdminLiveControllerIntegrationTest {
                     .andExpect(jsonPath("$.totalSockets").value(0));
         } finally {
             roomManager.leave(aliceId, roomId);
+        }
+    }
+
+    @Test
+    void handDrilldownExposesCardsAndHistory() throws Exception {
+        UUID aliceId = UUID.randomUUID();
+        UUID bobId = UUID.randomUUID();
+        RoomChange created = roomManager.create(
+                new MemberProfile(aliceId, "Alice", null), "Drilldown Room", 6);
+        UUID roomId = created.roomId();
+        try {
+            roomManager.join(new MemberProfile(bobId, "Bob", null), created.room().joinCodeValue());
+            roomManager.takeSeat(aliceId, roomId, 0);
+            roomManager.takeSeat(bobId, roomId, 1);
+
+            mockMvc.perform(get("/internal/admin/live/rooms/" + roomId + "/hand")
+                            .header(TOKEN_HEADER, "test-admin-token"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.active").value(false));
+            mockMvc.perform(get("/internal/admin/live/rooms/" + roomId + "/hands")
+                            .header(TOKEN_HEADER, "test-admin-token"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(0));
+
+            GameState pending = roomManager.room(roomId).orElseThrow().game();
+            Thread.sleep(2_100);
+            roomManager.startHand(roomId, pending.lifecycleSeq(), pending.scheduleGeneration());
+
+            mockMvc.perform(get("/internal/admin/live/rooms/" + roomId + "/hand")
+                            .header(TOKEN_HEADER, "test-admin-token"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.active").value(true))
+                    .andExpect(jsonPath("$.phase").value("PREFLOP"))
+                    .andExpect(jsonPath("$.players.length()").value(2))
+                    .andExpect(jsonPath("$.players[0].holeCards.length()").value(2))
+                    .andExpect(jsonPath("$.players[1].holeCards.length()").value(2))
+                    .andExpect(jsonPath("$.legalActions.callAmount").isNumber());
+
+            mockMvc.perform(get("/internal/admin/live/rooms/" + roomId + "/hands")
+                            .header(TOKEN_HEADER, "test-admin-token"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].handId").value(1))
+                    .andExpect(jsonPath("$[0].inProgress").value(true));
+
+            mockMvc.perform(get("/internal/admin/live/rooms/" + roomId + "/hands/1")
+                            .header(TOKEN_HEADER, "test-admin-token"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.players.length()").value(2))
+                    .andExpect(jsonPath("$.events[0].description").isNotEmpty());
+
+            mockMvc.perform(get("/internal/admin/live/rooms/" + roomId + "/hands/99")
+                            .header(TOKEN_HEADER, "test-admin-token"))
+                    .andExpect(status().isNotFound());
+        } finally {
+            endAnyHandByFolding(roomId);
+            roomManager.leave(bobId, roomId);
+            roomManager.leave(aliceId, roomId);
+        }
+    }
+
+    /** Folds and drains presentation until the room reaches a safe boundary so members can leave. */
+    private void endAnyHandByFolding(UUID roomId) {
+        for (int attempt = 0; attempt < 30 && !roomManager.room(roomId).orElseThrow().game().safeBoundary(); attempt++) {
+            RoomState room = roomManager.room(roomId).orElseThrow();
+            GameState game = room.game();
+            var hand = game.presentedHand();
+            if (hand != null && game.deadline() != null && hand.actingSeat().isPresent()) {
+                UUID actor = room.seats().get(hand.actingSeat().getAsInt());
+                roomManager.act(actor, roomId, game.actionSeq(), GameAction.FOLD, null);
+            } else {
+                roomManager.advancePresentation(roomId, game.handId(), game.scheduleGeneration());
+            }
         }
     }
 

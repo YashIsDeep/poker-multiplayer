@@ -39,14 +39,20 @@ sockets — through the server's read-only admin API:
 ```text
 live                      Server overview: rooms, members, sockets, uptime
 rooms                     Every live room, including private tables
-room <id | join-code>     One room's members, seats, stacks, and game status
+room <room>               One room's members, seats, stacks, and game status
+hand <room>               The hand in play: board, pots, hole cards, legal actions
+hand <room> <hand-id>     One hand's full event log — blinds, deals, actions, awards
+hands <room>              Recent hands (last 20) with boards, pots, and winners
 sockets                   Connected users and their socket counts
 ```
 
+`<room>` accepts a room id or a join code. The hand drilldown views show every
+dealt card, including live hole cards — they exist for debugging, so avoid
+running them during a real game you are playing in.
+
 The API is served at `/internal/admin/live/*`, exists only when
 `poker.admin.live.enabled=true` (enabled by the server's `dev` profile,
-disabled otherwise), answers loopback clients only, and never exposes hole
-cards or hand snapshots. Optional overrides:
+disabled otherwise), and answers loopback clients only. Optional overrides:
 
 ```text
 ADMIN_LIVE_URL      Base URL of the game server (default http://127.0.0.1:8080)
