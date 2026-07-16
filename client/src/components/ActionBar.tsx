@@ -9,7 +9,7 @@ import type { CSSProperties } from 'react'
 import { formatChips, formatChipsFull } from '../lib/chips'
 import { playSound } from '../lib/sound'
 
-export default function ActionBar() {
+export default function ActionBar({ presentationLocked = false }: { presentationLocked?: boolean }) {
   const connection = useGameStore((s) => s.connection)
   const readOnly = useGameStore((s) => s.readOnly)
   const room = useGameStore((s) => s.room)
@@ -34,9 +34,27 @@ export default function ActionBar() {
   )
 
   const [raiseTo, setRaiseTo] = useState(0)
+  const [allInBurst, setAllInBurst] = useState(false)
   const minRaiseTo = legalActions?.minRaiseTo ?? 0
   const maxRaiseTo = legalActions?.maxRaiseTo ?? 0
   const raiseIncrement = room?.config.smallBlind ?? 1
+  const allInBurstTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const triggerAllInBurst = () => {
+    setAllInBurst(true)
+    if (allInBurstTimer.current !== null) clearTimeout(allInBurstTimer.current)
+    allInBurstTimer.current = setTimeout(() => {
+      setAllInBurst(false)
+      allInBurstTimer.current = null
+    }, 700)
+  }
+
+  useEffect(
+    () => () => {
+      if (allInBurstTimer.current !== null) clearTimeout(allInBurstTimer.current)
+    },
+    [],
+  )
 
   // Throttle the slider's tick so dragging doesn't machine-gun it (mirrors the
   // volume slider in SettingsModal). Preset pills play their own tick on click.
@@ -100,6 +118,16 @@ export default function ActionBar() {
   }
 
   if (!room) return null
+
+  if (presentationLocked) {
+    return (
+      <div className="actionbar panel wait presentation-lock" data-testid="actionbar-cleanup">
+        <p className="waiting">
+          Clearing the table for the next hand<span className="dots" />
+        </p>
+      </div>
+    )
+  }
 
   const viewerSeated = room.viewer.seated
   const gameSeat =
@@ -189,6 +217,7 @@ export default function ActionBar() {
   const callAmount = legal.callAmount
   const canRaise = legal.canRaise && maxRaiseTo >= minRaiseTo && maxRaiseTo > 0
   const raiseValue = clampRaise(raiseTo, minRaiseTo, maxRaiseTo, raiseIncrement)
+  const isAllIn = canRaise && raiseValue === maxRaiseTo
   const fillPct =
     maxRaiseTo > minRaiseTo ? ((raiseValue - minRaiseTo) / (maxRaiseTo - minRaiseTo)) * 100 : 100
   const sliderStyle = { '--fill': `${fillPct}%` } as CSSProperties
@@ -233,12 +262,37 @@ export default function ActionBar() {
         ) : null}
         {canRaise && (
           <button
-            className="btn btn-orange"
+            className={`btn btn-orange raise-action${isAllIn ? ' btn-allin' : ''}${allInBurst ? ' is-bursting' : ''}`}
             data-sound="raise"
             disabled={locked}
-            onClick={() => act('raiseTo', raiseValue)}
+            aria-label={isAllIn ? `Go all-in to ${formatChipsFull(raiseValue)}` : undefined}
+            onPointerDown={() => {
+              if (isAllIn) triggerAllInBurst()
+            }}
+            onClick={() => {
+              if (isAllIn && !allInBurst) triggerAllInBurst()
+              act('raiseTo', raiseValue)
+            }}
           >
-            Raise to <span className="num" title={formatChipsFull(raiseValue)}>{formatChips(raiseValue)}</span>
+            {isAllIn ? (
+              <>
+                <span className="allin-label">ALL-IN</span>
+                <span className="allin-amount num" title={formatChipsFull(raiseValue)}>
+                  {formatChips(raiseValue)}
+                </span>
+                {allInBurst && (
+                  <span className="allin-sparks" aria-hidden="true">
+                    {Array.from({ length: 10 }, (_, index) => (
+                      <span className="allin-spark" key={index} />
+                    ))}
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                Raise to <span className="num" title={formatChipsFull(raiseValue)}>{formatChips(raiseValue)}</span>
+              </>
+            )}
           </button>
         )}
       </div>
@@ -248,9 +302,10 @@ export default function ActionBar() {
             {(['min', 'half', 'pot', 'allin'] as const).map((key) => (
               <button
                 key={key}
-                className="pill"
+                className={`pill${key === 'allin' ? ' pill-allin' : ''}${key === 'allin' && isAllIn ? ' is-selected' : ''}`}
                 data-sound="tick"
                 disabled={locked}
+                aria-pressed={key === 'allin' ? isAllIn : undefined}
                 onClick={() => setRaiseTo(presets[key])}
               >
                 {key === 'min' ? 'Min' : key === 'half' ? '½ Pot' : key === 'pot' ? 'Pot' : 'All-in'}
@@ -259,6 +314,7 @@ export default function ActionBar() {
           </div>
           <input
             type="range"
+            className={isAllIn ? 'is-allin' : undefined}
             data-sound-input="tick"
             min={minRaiseTo}
             max={maxRaiseTo}
@@ -272,7 +328,7 @@ export default function ActionBar() {
             }}
             aria-label="Raise amount"
           />
-          <span className="raise-amt num" title={formatChipsFull(raiseValue)}>{formatChips(raiseValue)}</span>
+          <span className={`raise-amt num${isAllIn ? ' is-allin' : ''}`} title={formatChipsFull(raiseValue)}>{formatChips(raiseValue)}</span>
         </div>
       )}
     </div>

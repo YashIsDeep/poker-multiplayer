@@ -369,7 +369,9 @@ function runScriptedHand(seatCount: number) {
         toCall: 120,
         minRaiseTo: 240,
         maxRaiseTo: 1850,
-        pots: [{ amount: 30, eligibleSeats: [0, 1 % seatCount, 2 % seatCount] }],
+        // Server potTotal includes both previously collected chips and current
+        // street commitments. Keep the visual driver on that same contract.
+        pots: [{ amount: 150, eligibleSeats: [0, 1 % seatCount, 2 % seatCount] }],
       },
       [you(), opp(1, { committed: 120, lastAction: { action: 'RAISE_TO', amount: 120 } }), opp(2 % seatCount)],
     )

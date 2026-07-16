@@ -52,20 +52,123 @@
 
 @keyframes dealin {
   from {
-    transform: translate(-14px, -10px) rotate(-4deg);
+    transform:
+      translate(var(--deal-x, 190px), var(--deal-y, -105px))
+      rotate(var(--deal-rotate, -10deg))
+      scale(0.82);
+    opacity: 0;
+    filter: brightness(0.72);
+  }
+  72% {
+    transform: translate(-2px, -4px) rotate(1.5deg) scale(1.035);
+    opacity: 1;
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes chipflypath {
+  from { transform: translate(var(--motion-x, 0%), var(--motion-y, 0%)); }
+  to { transform: translate(0, 0); }
+}
+
+@keyframes chipcollect {
+  0% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  78% {
+    transform: translate(var(--motion-x), var(--motion-y));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--motion-x), var(--motion-y));
     opacity: 0;
   }
 }
 
-@keyframes chipfly {
-  from {
-    transform: translate(-50%, -50%) translate(var(--fly-x, 0px), var(--fly-y, -26px)) scale(0.6);
+@keyframes awardchips {
+  0% {
+    transform: translate(0, 0);
     opacity: 0;
   }
-  to {
-    transform: translate(-50%, -50%);
+  14% {
+    transform: translate(0, 0);
     opacity: 1;
   }
+  82% {
+    transform: translate(var(--motion-x), var(--motion-y));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--motion-x), var(--motion-y));
+    opacity: 0;
+  }
+}
+
+@keyframes chiparrive {
+  0% { transform: translate(-50%, -50%) scale(0.78); opacity: 0.35; }
+  72% { transform: translate(-50%, -50%) scale(1.045); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+@keyframes chipdepart {
+  0%, 74% { transform: translate(-50%, -50%) scale(1); }
+  100% { transform: translate(-50%, -50%) scale(0.72); }
+}
+
+@keyframes chipawardpop {
+  0% { transform: translate(-50%, -50%) scale(0.58); }
+  20% { transform: translate(-50%, -50%) scale(1); }
+  82% { transform: translate(-50%, -50%) scale(1.04); }
+  100% { transform: translate(-50%, -50%) scale(0.78); }
+}
+
+@keyframes cardmuck {
+  to {
+    transform:
+      translate(var(--deal-x, var(--muck-x, 120px)), var(--deal-y, var(--muck-y, -70px)))
+      rotate(var(--deal-rotate, 18deg))
+      scale(0.62);
+    opacity: 0;
+    filter: brightness(0.55);
+  }
+}
+
+@keyframes cardcleanup {
+  0% { opacity: 1; }
+  100% {
+    transform:
+      translate(var(--deal-x, 210px), var(--deal-y, -125px))
+      rotate(var(--deal-rotate, 14deg))
+      scale(0.58);
+    opacity: 0;
+    filter: brightness(0.55);
+  }
+}
+
+@keyframes cardreveal {
+  0% { transform: perspective(420px) rotateY(90deg) scale(0.96); filter: brightness(1.5); }
+  58% { transform: perspective(420px) rotateY(-7deg) scale(1.03); }
+  100% { transform: perspective(420px) rotateY(0deg) scale(1); filter: brightness(1); }
+}
+
+@keyframes actioncallout {
+  0% { transform: translate(-50%, 8px) scale(0.68) rotate(-2deg); opacity: 0; }
+  22% { transform: translate(-50%, -7px) scale(1.08) rotate(1deg); opacity: 1; }
+  72% { transform: translate(-50%, -5px) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -14px) scale(0.94); opacity: 0; }
+}
+
+@keyframes streetflash {
+  0% { transform: translate(-50%, -50%) scale(0.62); opacity: 0; letter-spacing: 2px; }
+  24% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; letter-spacing: 7px; }
+  72% { transform: translate(-50%, -50%) scale(1); opacity: 0.92; letter-spacing: 6px; }
+  100% { transform: translate(-50%, -54%) scale(1.06); opacity: 0; letter-spacing: 8px; }
+}
+
+@keyframes stackpop {
+  0% { transform: translateY(-3px) scale(1.16); color: #fff4ba; }
+  100% { transform: translateY(0) scale(1); }
 }
 
 @keyframes bannerin {

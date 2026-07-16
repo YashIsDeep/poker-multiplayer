@@ -88,6 +88,7 @@ export default function Room() {
 
   const reducedMotion = useReducedMotion()
   const animations = useAnimationQueue(game, reducedMotion)
+  const tableGame = animations.displayGame
   useGameSounds(game, yourSeat)
 
   const mockState = import.meta.env.DEV ? search.get('mock') : null
@@ -306,10 +307,10 @@ export default function Room() {
               (room.config.startingStack ?? room.config.minBuyIn) / room.config.bigBlind,
             )} BB
           </span>
-          {game && (
+          {tableGame && (
             <>
               <span className="label">hand</span>
-              <b className="num">#{game.handId}</b>
+              <b className="num">#{tableGame.handId}</b>
             </>
           )}
         </div>
@@ -390,7 +391,7 @@ export default function Room() {
         </div>
       )}
 
-      <Table room={room} game={game} animations={animations} />
+      <Table room={room} game={tableGame} animations={animations} />
       <ChatPanel
         room={room}
         game={game}
@@ -416,7 +417,7 @@ export default function Room() {
           <TrophyIcon />
         </span>
       )}
-      <ActionBar />
+      <ActionBar presentationLocked={animations.handCleanup} />
 
       <AutoSeatPrompt room={room} />
 

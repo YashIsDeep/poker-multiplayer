@@ -3,15 +3,23 @@
 // to bottom-center. Board, pot, committed bet chips render at center/inner curve.
 
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import type { RefObject } from 'react'
+import type { CSSProperties, RefObject } from 'react'
 import PixelCard from './PixelCard'
 import SeatPod from './SeatPod'
+import ChipStack from './ChipStack'
 import { useGameStore } from '../store/gameStore'
 import type { AnimationEvents } from '../hooks/useAnimationQueue'
+import { settledPotAmount } from '../hooks/useAnimationQueue'
 import type { ChatMessage, Game, RoomSnapshot } from '../store/types'
 import { formatChips, formatChipsFull } from '../lib/chips'
 
 const K = 0.72 // superellipse power
+// Keep the visible deck in the open lane to the pot's right. These coordinates
+// mirror .deck-shoe so dealt cards visibly originate from the same place.
+const DECK_ORIGIN = { x: 63, y: 26 }
+// This is the single physical chip pile beside POT. Street collection and
+// winner payouts both use it so chips never teleport through the pill.
+const POT_CHIP_ORIGIN = { x: 42, y: 26 }
 
 function superellipse(t: number, radius: number): number {
   return radius * Math.sign(t) * Math.pow(Math.abs(t), K)
@@ -191,6 +199,7 @@ export default function Table({ room, game, animations }: TableProps) {
   const potMain = game?.pots[0]?.amount ?? 0
   const potSide = game?.pots.slice(1).reduce((total, pot) => total + pot.amount, 0) || undefined
   const potTotal = game?.potTotal ?? 0
+  const settledPot = settledPotAmount(game, animations.collectingBets)
 
   const handleTakeSeat = (seat: number) => {
     takeSeat(seat).then(
@@ -212,8 +221,25 @@ export default function Table({ room, game, animations }: TableProps) {
         H<span className="lt-o">O</span>LD&#39;EM
       </div>
 
+      {game && !animations.handCleanup && game.phase !== 'COMPLETE' && (
+        <div className="deck-shoe" aria-hidden="true">
+          <span className="deck-card deck-card-back" />
+          <span className="deck-card deck-card-front" />
+        </div>
+      )}
+
+      {settledPot > 0 && (
+        <div
+          className="pot-chip-visual"
+          style={{ left: `${POT_CHIP_ORIGIN.x}%`, top: `${POT_CHIP_ORIGIN.y}%` }}
+          data-testid="settled-pot-chips"
+        >
+          <ChipStack amount={settledPot} compact />
+        </div>
+      )}
+
       <div className="pot-wrap">
-        <div className="pot">
+        <div className={`pot${animations.awardActive ? ' is-awarding' : ''}`}>
           <span className="label">pot</span>
           <b className="num pop" key={animations.potPopKey} data-testid="pot" title={formatChipsFull(potTotal)}>
             {formatChips(potTotal)}
@@ -233,11 +259,13 @@ export default function Table({ room, game, animations }: TableProps) {
             key={game ? `${game.handId}-${i}-${code ?? 'slot'}` : `empty-${i}`}
             code={code}
             win={isShowdown && code !== null && winningCards.has(code)}
+            motion={animations.handCleanup && code !== null ? 'cleanup' : undefined}
             dealDelayMs={
               animations.boardDealFrom !== null && code !== null && i >= animations.boardDealFrom
-                ? (i - animations.boardDealFrom) * 120
+                ? (i - animations.boardDealFrom) * 135
                 : undefined
             }
+            dealFrom={{ x: 280 - i * 74, y: -122, rotate: -12 + i * 4 }}
           />
         ))}
       </div>
@@ -276,7 +304,15 @@ export default function Table({ room, game, animations }: TableProps) {
                 onStatusChipClick={handleStatusChipClick}
                 chatMessage={chatMessage}
                 chatBubbleBottomRow={isBottomRow}
-                dealDelayMs={animations.holeDeal ? viewIndex * 90 : undefined}
+                dealDelayMs={animations.holeDeal ? viewIndex * 85 : undefined}
+                revealDelayMs={isShowdown ? viewIndex * 180 : undefined}
+                dealFrom={{
+                  x: (DECK_ORIGIN.x - pos.x) * 10.2,
+                  y: (DECK_ORIGIN.y - pos.y) * 5.1,
+                  rotate: viewIndex % 2 === 0 ? -10 : 10,
+                }}
+                handCleanup={animations.handCleanup}
+                action={animations.action}
               />
             </div>
           )
@@ -288,23 +324,92 @@ export default function Table({ room, game, animations }: TableProps) {
           !isShowdown &&
           game.seats
             .filter((gs) => (gs.committed ?? 0) > 0)
+            .filter((gs) => !animations.collectingBets.some((bet) => bet.seat === gs.seat))
             .map((gs) => {
               const viewIndex = (gs.seat - anchor + totalSeats) % totalSeats
               const pos = seatPosition(viewIndex, totalSeats)
               return (
                 <div
                   key={gs.seat}
-                  className={`betchip${animations.chipFlySeats.has(gs.seat) ? ' fly' : ''}`}
-                  style={{ left: `${pos.betX}%`, top: `${pos.betY}%` }}
+                  className={`chip-motion chip-motion--bet${animations.chipFlySeats.has(gs.seat) ? ' is-flying' : ''}`}
+                  style={
+                    {
+                      '--motion-x': `${pos.x - pos.betX}%`,
+                      '--motion-y': `${pos.y - pos.betY}%`,
+                    } as CSSProperties
+                  }
                 >
-                  <span className="chip" />
-                  <b className="num" title={formatChipsFull(gs.committed ?? 0)}>
-                    {formatChips(gs.committed ?? 0)}
-                  </b>
+                  <div
+                    className="betchip chip-payload"
+                    style={{ left: `${pos.betX}%`, top: `${pos.betY}%` }}
+                  >
+                    <ChipStack amount={gs.committed ?? 0} compact />
+                    <b className="num" title={formatChipsFull(gs.committed ?? 0)}>
+                      {formatChips(gs.committed ?? 0)}
+                    </b>
+                  </div>
                 </div>
               )
             })}
+        {animations.collectingBets.map((bet) => {
+          const viewIndex = (bet.seat - anchor + totalSeats) % totalSeats
+          const pos = seatPosition(viewIndex, totalSeats)
+          return (
+            <div
+              key={`collect-${game?.handId ?? 0}-${bet.seat}-${bet.amount}`}
+              className="chip-motion chip-motion--collect"
+              style={
+                {
+                  '--motion-x': `${POT_CHIP_ORIGIN.x - pos.betX}%`,
+                  '--motion-y': `${POT_CHIP_ORIGIN.y - pos.betY}%`,
+                } as CSSProperties
+              }
+            >
+              <div
+                className="betchip chip-payload"
+                style={{ left: `${pos.betX}%`, top: `${pos.betY}%` }}
+              >
+                <ChipStack amount={bet.amount} compact />
+                <b className="num">{formatChips(bet.amount)}</b>
+              </div>
+            </div>
+          )
+        })}
       </div>
+
+      {game?.phase === 'COMPLETE' && animations.awardActive && !animations.handCleanup && game.awards.flatMap((award) =>
+        award.winners.map((winner, winnerIndex) => {
+          const viewIndex = (winner.seat - anchor + totalSeats) % totalSeats
+          const pos = seatPosition(viewIndex, totalSeats)
+          return (
+            <div
+              key={`award-${animations.awardKey}-${award.potIndex}-${winner.seat}`}
+              className="chip-motion chip-motion--award"
+              style={
+                {
+                  '--motion-x': `${pos.x - POT_CHIP_ORIGIN.x}%`,
+                  '--motion-y': `${pos.y - POT_CHIP_ORIGIN.y}%`,
+                  '--motion-delay': `${award.potIndex * 160 + winnerIndex * 110}ms`,
+                } as CSSProperties
+              }
+            >
+              <div
+                className="award-flight chip-payload"
+                style={{ left: `${POT_CHIP_ORIGIN.x}%`, top: `${POT_CHIP_ORIGIN.y}%` }}
+              >
+                <ChipStack amount={winner.amount} />
+                <b className="num">+{formatChips(winner.amount)}</b>
+              </div>
+            </div>
+          )
+        }),
+      )}
+
+      {animations.phaseFlash && (
+        <div key={animations.phaseFlashKey} className="street-flash" role="status">
+          <span>{animations.phaseFlash}</span>
+        </div>
+      )}
     </div>
   )
 }

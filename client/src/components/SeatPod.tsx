@@ -1,10 +1,11 @@
 // One seat pod on the felt: name / stack / actions, position chips (dealer/SB/BB),
 // status badges, hole cards above, and the timer ring when acting.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import PixelCard from './PixelCard'
 import TimerRing from './TimerRing'
 import type { ChatMessage, GameSeat, LastAction, RoomMemberView } from '../store/types'
+import type { AnimatedAction } from '../hooks/useAnimationQueue'
 import { formatChips, formatChipsFull } from '../lib/chips'
 
 const CHAT_BUBBLE_TTL_MS = 6_000
@@ -31,6 +32,10 @@ export type SeatPodProps = {
   chatBubbleBottomRow?: boolean
   /** T8 deal stagger for freshly dealt hole cards. */
   dealDelayMs?: number
+  revealDelayMs?: number
+  dealFrom?: { x: number; y: number; rotate?: number }
+  handCleanup?: boolean
+  action?: AnimatedAction | null
 }
 
 function actionLabel(action: LastAction): string {
@@ -102,6 +107,76 @@ export function splitShowdownHand(description: string): ShowdownHandLabel {
   if (fullHouse) return { category: 'Full House', detail: `${fullHouse[1]} full of ${fullHouse[2]}` }
 
   return { category: description, detail: null }
+}
+
+type HoleCardsProps = {
+  cards: (string | null)[] | null
+  isWinner: boolean
+  showdown: boolean
+  bestHandCards?: string[] | null
+  showdownHand: ShowdownHandLabel | null
+  dealDelayMs?: number
+  revealDelayMs?: number
+  dealFrom?: { x: number; y: number; rotate?: number }
+  handCleanup: boolean
+}
+
+function HoleCards({
+  cards,
+  isWinner,
+  showdown,
+  bestHandCards,
+  showdownHand,
+  dealDelayMs,
+  revealDelayMs,
+  dealFrom,
+  handCleanup,
+}: HoleCardsProps) {
+  const [renderedCards, setRenderedCards] = useState(cards)
+  const [mucking, setMucking] = useState(false)
+  const renderedRef = useRef(renderedCards)
+  renderedRef.current = renderedCards
+  const signature = cards?.join('|') ?? ''
+
+  useEffect(() => {
+    if (cards) {
+      setRenderedCards(cards)
+      setMucking(false)
+      return
+    }
+    if (!renderedRef.current) return
+    setMucking(true)
+    const timer = window.setTimeout(() => {
+      setRenderedCards(null)
+      setMucking(false)
+    }, 480)
+    return () => window.clearTimeout(timer)
+  }, [signature]) // card identity, not array allocation, drives lifecycle
+
+  if (!renderedCards) return null
+  return (
+    <div
+      className={[
+        'mini-cards',
+        showdownHand ? 'has-rank' : '',
+        mucking ? 'is-mucking' : '',
+        handCleanup ? 'is-cleaning' : '',
+      ].filter(Boolean).join(' ')}
+    >
+      {renderedCards.map((card, index) => (
+        <PixelCard
+          key={`hole-${index}`}
+          code={card}
+          size="hole"
+          win={Boolean(isWinner && showdown && card !== null && bestHandCards?.includes(card))}
+          dealDelayMs={dealDelayMs !== undefined ? dealDelayMs + index * 140 : undefined}
+          revealDelayMs={revealDelayMs !== undefined ? revealDelayMs + index * 120 : undefined}
+          dealFrom={dealFrom ? { ...dealFrom, rotate: (dealFrom.rotate ?? -8) + index * 6 } : undefined}
+          motion={handCleanup ? 'cleanup' : mucking ? 'muck' : undefined}
+        />
+      ))}
+    </div>
+  )
 }
 
 export default function SeatPod(props: SeatPodProps) {
@@ -181,19 +256,17 @@ export default function SeatPod(props: SeatPodProps) {
       {chatMessage && (
         <ChatBubble key={chatMessage.id} message={chatMessage} bottomRow={chatBubbleBottomRow} />
       )}
-      {cards && (
-        <div className={`mini-cards${showdownHand ? ' has-rank' : ''}`}>
-          {cards.map((c, i) => (
-            <PixelCard
-              key={`${gameSeat?.holeCards ? 'face' : 'back'}-${i}`}
-              code={c}
-              size="hole"
-              win={Boolean(isWinner && showdown && c !== null && gameSeat?.bestHandCards?.includes(c))}
-              dealDelayMs={props.dealDelayMs !== undefined ? props.dealDelayMs + i * 120 : undefined}
-            />
-          ))}
-        </div>
-      )}
+      <HoleCards
+        cards={cards}
+        isWinner={isWinner}
+        showdown={showdown}
+        bestHandCards={gameSeat?.bestHandCards}
+        showdownHand={showdownHand}
+        dealDelayMs={props.dealDelayMs}
+        revealDelayMs={props.revealDelayMs}
+        dealFrom={props.dealFrom}
+        handCleanup={Boolean(props.handCleanup)}
+      />
       {showdownHand && gameSeat?.finalHandRank && (
         <div
           className={`showdown-rank${isWinner ? ' winner' : ''}`}
@@ -204,6 +277,11 @@ export default function SeatPod(props: SeatPodProps) {
           {showdownHand.detail && (
             <span className="showdown-rank__detail">({showdownHand.detail})</span>
           )}
+        </div>
+      )}
+      {props.action?.seat === seat && (
+        <div key={props.action.key} className={`action-callout action-${props.action.tone}`}>
+          {props.action.label}
         </div>
       )}
       <div className="pod">
@@ -292,7 +370,8 @@ export default function SeatPod(props: SeatPodProps) {
           </span>
         </div>
         <div
-          className="pstack num"
+          key={gameSeat?.stack ?? 'no-stack'}
+          className="pstack num stack-change"
           title={gameSeat ? `${formatChipsFull(gameSeat.stack)} chips` : undefined}
         >
           {gameSeat ? (allin ? 'ALL-IN' : formatChips(gameSeat.stack)) : '—'}
