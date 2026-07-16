@@ -6,6 +6,7 @@
     "stop:db": "node scripts/database.mjs stop",
     "restart:db": "node scripts/database.mjs restart",
     "admin-console": "admin-console\\run.cmd",
+    "analytics": "node analytics/server.mjs",
     "dev": "node --env-file=.env scripts/dev.mjs",
     "dev:proxy": "node --env-file=.env scripts/dev-proxy.mjs",
     "dev:server": "node --env-file=.env scripts/dev.mjs --server-only",

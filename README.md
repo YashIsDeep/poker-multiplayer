@@ -87,11 +87,34 @@ serves the complete application from port `8080` by default. Set
 proxy must forward the original host and protocol so Spring generates the
 public HTTPS OAuth callback URL.
 
+## Hand archive & analytics
+
+Every completed hand is archived locally by the server, independent of the
+database: `com.poker.analytics` appends one JSON record per hand (players,
+hole cards, board, every action, pot awards, net chips) to daily
+gzip-compressed files under `data/hand-archive/hands-YYYY-MM-DD.jsonl.gz`.
+Each write is an independent gzip member with an fsync, so the archive stays
+readable after a crash and keeps recording while the H2 database is down.
+Configure with `poker.hand-archive.enabled` / `poker.hand-archive.directory`.
+
+To browse the archive, run the analytics dashboard (works even when the game
+server and database are stopped):
+
+```
+npm run analytics
+```
+
+It serves http://127.0.0.1:8090 with per-player stats (VPIP, PFR, showdowns,
+net chips), cumulative winnings and hands-per-day charts, and a full replay
+of any hand. Set `ANALYTICS_PORT` / `HAND_ARCHIVE_DIR` to override defaults.
+The files decompress with standard tools too: `gzip -dc hands-*.jsonl.gz`.
+
 ## Layout
 
 ```
-server/   Spring Boot — com.poker.{engine,game,ws,auth,db,api}
-client/   Vite + React app
+server/     Spring Boot — com.poker.{engine,game,ws,auth,db,api,analytics}
+client/     Vite + React app
+analytics/  Local hand-archive dashboard (Node, no dependencies)
 ```
 
 `server/src/main/java/com/poker/engine` is pure, deterministic game logic (no Spring, no I/O) — run `npm test` for the engine suites.
