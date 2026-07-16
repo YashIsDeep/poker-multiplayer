@@ -73,6 +73,13 @@ public final class UserSocketRegistry {
         return bySession.size();
     }
 
+    /** Immutable per-user socket counts for read-only diagnostics. */
+    public synchronized Map<UUID, Integer> socketCountsByUser() {
+        Map<UUID, Integer> counts = new HashMap<>();
+        byUser.forEach((userId, sessions) -> counts.put(userId, sessions.size()));
+        return Map.copyOf(counts);
+    }
+
     /** Removes every STOMP socket backed by an explicitly invalidated HTTP session. */
     public synchronized Set<UUID> removeHttpSession(String httpSessionId) {
         if (httpSessionId == null) return Set.of();

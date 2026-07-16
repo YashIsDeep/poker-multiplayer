@@ -3,6 +3,7 @@ package com.poker.auth;
 import com.poker.ws.WebSocketSessionLogoutHandler;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -78,7 +79,8 @@ public class SecurityConfig {
             OAuthLoginSuccessHandler oauthLoginSuccessHandler,
             DiscardingAuthorizedClientRepository authorizedClientRepository,
             CsrfTokenRepository csrfTokenRepository,
-            WebSocketSessionLogoutHandler webSocketSessionLogoutHandler) throws Exception {
+            WebSocketSessionLogoutHandler webSocketSessionLogoutHandler,
+            @Value("${poker.admin.live.enabled:false}") boolean adminLiveEnabled) throws Exception {
         http
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
@@ -90,16 +92,24 @@ public class SecurityConfig {
                         .requireExplicitSave(true))
                 .sessionManagement(session -> session
                         .sessionAuthenticationStrategy(sessionAuthenticationStrategy))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/api/health", "/api/meta").permitAll()
-                        .requestMatchers(HttpMethod.GET,
-                                "/", "/index.html", "/favicon.ico", "/assets/**", "/lobby", "/room/**")
-                        .permitAll()
-                        .requestMatchers("/oauth2/authorization/**", "/login/oauth2/code/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/auth/dev").permitAll()
-                        .requestMatchers("/error", "/logout").permitAll()
-                        .requestMatchers("/api/**", "/ws", "/ws/**").authenticated()
-                        .anyRequest().denyAll())
+                .authorizeHttpRequests(auth -> {
+                    auth
+                            .requestMatchers(HttpMethod.GET, "/api/health", "/api/meta").permitAll()
+                            .requestMatchers(HttpMethod.GET,
+                                    "/", "/index.html", "/favicon.ico", "/assets/**", "/lobby", "/room/**")
+                            .permitAll()
+                            .requestMatchers("/oauth2/authorization/**", "/login/oauth2/code/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/auth/dev").permitAll();
+                    if (adminLiveEnabled) {
+                        // The controller itself enforces loopback-only access
+                        // and the optional shared admin token.
+                        auth.requestMatchers(HttpMethod.GET, "/internal/admin/live/**").permitAll();
+                    }
+                    auth
+                            .requestMatchers("/error", "/logout").permitAll()
+                            .requestMatchers("/api/**", "/ws", "/ws/**").authenticated()
+                            .anyRequest().denyAll();
+                })
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
