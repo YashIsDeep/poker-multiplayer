@@ -9,7 +9,9 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const projectDirectory = resolve(scriptDirectory, '..')
 const serverDirectory = resolve(projectDirectory, 'server')
 const dataDirectory = resolve(serverDirectory, 'data')
-const toolsDirectory = resolve(serverDirectory, 'target', 'db-tools')
+// Kept outside server/target so `mvn clean` cannot collide with the jar that a
+// running dev database holds open.
+const toolsDirectory = resolve(projectDirectory, '.cache', 'db-tools')
 const logFile = resolve(dataDirectory, 'h2-server.log')
 const host = process.env.DB_HOST?.trim() || '127.0.0.1'
 const port = Number.parseInt(process.env.DB_PORT?.trim() || '9092', 10)
