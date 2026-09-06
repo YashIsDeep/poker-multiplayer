@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import PixelCard from './PixelCard'
 import TrophyIcon from './TrophyIcon'
-import { formatChips } from '../lib/chips'
+import { useTableChipFormat } from '../hooks/useTableChipFormat'
 import { playSound } from '../lib/sound'
 import {
   showdownCardFrame,
@@ -56,6 +56,7 @@ function participating(gameSeat: GameSeat): boolean {
 }
 
 export default function ShowdownResultsModal({ room, game, onClose }: ShowdownResultsModalProps) {
+  const { formatChips } = useTableChipFormat()
   const closeRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {

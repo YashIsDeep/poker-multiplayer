@@ -11,7 +11,7 @@ import { useGameStore } from '../store/gameStore'
 import type { AnimationEvents } from '../hooks/useAnimationQueue'
 import { settledPotAmount } from '../hooks/useAnimationQueue'
 import type { ChatMessage, Game, RoomSnapshot } from '../store/types'
-import { formatChips, formatChipsFull } from '../lib/chips'
+import { useTableChipFormat } from '../hooks/useTableChipFormat'
 
 const K = 0.72 // superellipse power
 // Keep the visible deck in the open lane to the pot's right. These coordinates
@@ -162,6 +162,7 @@ export default function Table({ room, game, animations }: TableProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   useTableFit(wrapRef, room.maxSeats)
 
+  const { formatChips, formatChipsFull } = useTableChipFormat()
   const membersBySeat = useMemo(() => {
     const map = new Map<number, string>()
     for (const seatView of room.seats) {

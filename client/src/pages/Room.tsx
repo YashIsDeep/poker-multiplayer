@@ -295,13 +295,13 @@ export default function Room() {
             onClick={() => void copyRoomCode()}
           >
             {room.joinCode}
-          </button>
+          </button></>}
           <span className="table-config-chip table-config-chip--blind num" title="Current big blind">
-            BB {formatChips(room.config.bigBlind)}
+            {room.privateTable ? `BB ${formatChips(room.config.bigBlind)}` : 'BLINDS 0.5 / 1 BB'}
           </span>
           <span
             className="table-config-chip table-config-chip--stack num"
-            title={`${formatChips(room.config.startingStack ?? room.config.minBuyIn)} chips for future seats`}
+            title="Initial buy-in; existing stacks carry forward"
           >
             STACK {formatChips(
               (room.config.startingStack ?? room.config.minBuyIn) / room.config.bigBlind,

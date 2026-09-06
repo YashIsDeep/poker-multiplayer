@@ -6,7 +6,7 @@ import PixelCard from './PixelCard'
 import TimerRing from './TimerRing'
 import type { ChatMessage, GameSeat, LastAction, RoomMemberView } from '../store/types'
 import type { AnimatedAction } from '../hooks/useAnimationQueue'
-import { formatChips, formatChipsFull } from '../lib/chips'
+import { useTableChipFormat } from '../hooks/useTableChipFormat'
 
 const CHAT_BUBBLE_TTL_MS = 6_000
 const CHAT_EMOJI_TTL_MS = 3_000
@@ -38,7 +38,7 @@ export type SeatPodProps = {
   action?: AnimatedAction | null
 }
 
-function actionLabel(action: LastAction): string {
+function actionLabel(action: LastAction, formatChips: (value: number) => string): string {
   const verb = action.action === 'RAISE_TO' ? 'raise' : action.action.toLowerCase()
   return action.amount !== null && action.amount > 0
     ? `${verb} ${formatChips(action.amount)}`
@@ -180,6 +180,7 @@ function HoleCards({
 }
 
 export default function SeatPod(props: SeatPodProps) {
+  const { formatChips, formatChipsFull } = useTableChipFormat()
   const {
     seat,
     member,
@@ -372,7 +373,7 @@ export default function SeatPod(props: SeatPodProps) {
         <div
           key={gameSeat?.stack ?? 'no-stack'}
           className="pstack num stack-change"
-          title={gameSeat ? `${formatChipsFull(gameSeat.stack)} chips` : undefined}
+          title={gameSeat ? formatChipsFull(gameSeat.stack) : undefined}
         >
           {gameSeat ? (allin ? 'ALL-IN' : formatChips(gameSeat.stack)) : '—'}
         </div>
@@ -380,7 +381,7 @@ export default function SeatPod(props: SeatPodProps) {
           {roundActions.map((action, index) => (
             <span key={`${index}-${action.action}-${action.amount ?? ''}`}>
               {index > 0 && <span className="action-separator"> · </span>}
-              {actionLabel(action)}
+              {actionLabel(action, formatChips)}
             </span>
           ))}
         </div>

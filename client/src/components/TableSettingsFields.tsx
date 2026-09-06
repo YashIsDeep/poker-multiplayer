@@ -5,11 +5,11 @@ import { formatChips } from '../lib/chips'
 import { playSound } from '../lib/sound'
 
 export const PUBLIC_TABLE_SETTINGS: TableSettings = {
-  bigBlind: 100_000,
+  bigBlind: 10,
   actionTimeoutSeconds: 30,
-  startingStack: 10_000_000,
-  rebuysEnabled: false,
-  rebuyStack: 10_000_000,
+  startingStack: 1_000,
+  rebuysEnabled: true,
+  rebuyStack: 1_000,
   rebuyDelayHands: 5,
 }
 

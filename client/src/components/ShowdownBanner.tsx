@@ -2,11 +2,12 @@
 
 import type { Ref } from 'react'
 import { useGameStore } from '../store/gameStore'
-import { formatChips, formatChipsFull } from '../lib/chips'
+import { useTableChipFormat } from '../hooks/useTableChipFormat'
 import TrophyIcon from './TrophyIcon'
 import WinConfetti from './WinConfetti'
 
 export default function ShowdownBanner({ trophyRef }: { trophyRef?: Ref<HTMLSpanElement> }) {
+  const { formatChips, formatChipsFull } = useTableChipFormat()
   const room = useGameStore((state) => state.room)
   const game = useGameStore((state) => state.game)
   const yourSeat = useGameStore((state) => state.yourSeat)
@@ -31,7 +32,7 @@ export default function ShowdownBanner({ trophyRef }: { trophyRef?: Ref<HTMLSpan
         </span>
         <span>{names.join(' & ').toUpperCase()} WIN</span>
       </div>
-      <div className="sd-amt num" title={`${formatChipsFull(amount)} chips`}>
+      <div className="sd-amt num" title={formatChipsFull(amount)}>
         {formatChips(amount)} AWARDED
       </div>
       <div className="sd-hand">

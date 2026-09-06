@@ -6,10 +6,11 @@ import { useGameStore } from '../store/gameStore'
 import { clampRaise, raisePresets } from '../lib/cards'
 import { formatCountdown, useServerCountdown } from '../hooks/useServerCountdown'
 import type { CSSProperties } from 'react'
-import { formatChips, formatChipsFull } from '../lib/chips'
+import { useTableChipFormat } from '../hooks/useTableChipFormat'
 import { playSound } from '../lib/sound'
 
 export default function ActionBar({ presentationLocked = false }: { presentationLocked?: boolean }) {
+  const { formatChips, formatChipsFull } = useTableChipFormat()
   const connection = useGameStore((s) => s.connection)
   const readOnly = useGameStore((s) => s.readOnly)
   const room = useGameStore((s) => s.room)
@@ -344,6 +345,7 @@ function BustedBar(props: {
   offTable: boolean
   onRebuy: (amount: number) => void
 }) {
+  const { formatChips, formatChipsFull } = useTableChipFormat()
   const offer = useServerCountdown(props.offerDeadline, 5_000)
   const emergencyOffer = props.offerDeadline !== null && offer.secondsRemaining > 0
   const locked = !props.enabled || (!emergencyOffer && props.handsRemaining > 0)
@@ -402,6 +404,7 @@ function BustedBar(props: {
 }
 
 function ShowdownLine() {
+  const { formatChips } = useTableChipFormat()
   const room = useGameStore((s) => s.room)
   const game = useGameStore((s) => s.game)
   if (!game || !room || game.awards.length === 0) {

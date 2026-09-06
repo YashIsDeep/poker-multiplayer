@@ -17,7 +17,7 @@ public record RoomConfig(
     public static final int DEFAULT_REBUY_DELAY_HANDS = 5;
     public static final int MAX_REBUY_DELAY_HANDS = 20;
     public static final RoomConfig PUBLIC_DEFAULT = table(
-            100_000, 10_000_000, false, 10_000_000, DEFAULT_REBUY_DELAY_HANDS);
+            10, 1_000, true, 1_000, DEFAULT_REBUY_DELAY_HANDS);
     public static final RoomConfig DEFAULT = new RoomConfig(5, 10, 200, 2_000,
             DEFAULT_ACTION_TIMEOUT_SECONDS);
 

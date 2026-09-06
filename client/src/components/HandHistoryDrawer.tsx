@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { describeHistoryEvent, fetchHandHistories } from '../lib/handHistory'
-import { formatChips, formatChipsFull } from '../lib/chips'
+import { useTableChipFormat } from '../hooks/useTableChipFormat'
 import { playSound } from '../lib/sound'
 import type { GamePhase, HandHistory } from '../store/types'
 import '../styles/hand-history.css'
 
 const STREET_ORDER: GamePhase[] = ['PREFLOP', 'FLOP', 'TURN', 'RIVER', 'COMPLETE']
 
-function signedChips(value: number) {
+function signedChips(value: number, formatChips: (value: number) => string) {
   if (value === 0) return '—'
   return `${value > 0 ? '+' : '−'}${formatChips(Math.abs(value))}`
 }
@@ -107,6 +107,7 @@ export default function HandHistoryDrawer({
   }, [onClose])
 
   const selected = hands.find((hand) => hand.handId === selectedId) ?? null
+  const { formatChips, formatChipsFull } = useTableChipFormat(selected?.bigBlind)
   const groupedEvents = useMemo(() => {
     if (!selected) return []
     return STREET_ORDER.map((phase) => ({
@@ -237,7 +238,7 @@ export default function HandHistoryDrawer({
                         {formatChips(player.startingStack)} → {formatChips(player.endingStack)}
                       </span>
                       <b className={`num history-net ${player.netChange > 0 ? 'win' : player.netChange < 0 ? 'loss' : ''}`}>
-                        {signedChips(player.netChange)}
+                        {signedChips(player.netChange, formatChips)}
                       </b>
                       <small className="history-rank">
                         {[
@@ -258,7 +259,7 @@ export default function HandHistoryDrawer({
                       <ol>
                         {group.events.map((event) => (
                           <li key={event.sequence}>
-                            <span>{describeHistoryEvent(event, selected)}</span>
+                            <span>{describeHistoryEvent(event, selected, formatChips)}</span>
                             {event.stackAfter !== null && (
                               <small className="num">{formatChips(event.stackAfter)} behind</small>
                             )}

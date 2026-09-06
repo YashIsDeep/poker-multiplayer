@@ -62,11 +62,11 @@ class RoomSettingsTest {
     }
 
     @Test
-    void publicDefaultsMatchProductChipScale() {
-        assertThat(RoomConfig.PUBLIC_DEFAULT.bigBlind()).isEqualTo(100_000);
-        assertThat(RoomConfig.PUBLIC_DEFAULT.startingStack()).isEqualTo(10_000_000);
-        assertThat(RoomConfig.PUBLIC_DEFAULT.rebuyStack()).isEqualTo(10_000_000);
-        assertThat(RoomConfig.PUBLIC_DEFAULT.rebuysEnabled()).isFalse();
+    void publicDefaultsUseSixSeatsAndOneHundredBigBlinds() {
+        assertThat(RoomConfig.PUBLIC_DEFAULT.bigBlind()).isEqualTo(10);
+        assertThat(RoomConfig.PUBLIC_DEFAULT.startingStack()).isEqualTo(1_000);
+        assertThat(RoomConfig.PUBLIC_DEFAULT.rebuyStack()).isEqualTo(1_000);
+        assertThat(RoomConfig.PUBLIC_DEFAULT.rebuysEnabled()).isTrue();
         assertThat(RoomConfig.PUBLIC_DEFAULT.actionTimeoutSeconds()).isEqualTo(30);
         assertThat(RoomConfig.PUBLIC_DEFAULT.rebuyDelayHands()).isEqualTo(5);
         RoomConfig trillionChipTable = RoomConfig.table(

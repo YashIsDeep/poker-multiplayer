@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { Game, LastAction } from '../store/types'
+import { useTableChipFormat } from './useTableChipFormat'
 
 export type AnimatedBet = { seat: number; amount: number }
 
@@ -68,8 +69,9 @@ function animatedAction(
   action: LastAction,
   actionSeq: number,
   allIn: boolean,
+  formatAmount: (value: number) => string,
 ): AnimatedAction {
-  const amount = action.amount !== null && action.amount > 0 ? ` ${action.amount.toLocaleString('en-US')}` : ''
+  const amount = action.amount !== null && action.amount > 0 ? ` ${formatAmount(action.amount)}` : ''
   if (allIn) {
     return { seat, label: `ALL-IN${amount}`, tone: 'allin', key: `${actionSeq}-${seat}-allin-${amount}` }
   }
@@ -97,7 +99,8 @@ export type AnimationDiff = {
   awardsStarted: boolean
 }
 
-export function deriveAnimationDiff(prev: Game | null, game: Game | null): AnimationDiff {
+export function deriveAnimationDiff(prev: Game | null, game: Game | null,
+  formatAmount: (value: number) => string = value => value.toLocaleString('en-US')): AnimationDiff {
   if (!game) {
     return {
       boardDealFrom: null,
@@ -144,6 +147,7 @@ export function deriveAnimationDiff(prev: Game | null, game: Game | null): Anima
           seat.lastAction,
           game.actionSeq,
           seat.seatStatus === 'ALL_IN',
+          formatAmount,
         ))
       }
     }
@@ -289,6 +293,7 @@ function initialEvents(game: Game | null): AnimationEvents {
 }
 
 export function useAnimationQueue(game: Game | null, reducedMotion: boolean): AnimationEvents {
+  const { formatChips } = useTableChipFormat()
   const sourceRef = useRef<Game | null>(null)
   const latestRef = useRef<Game | null>(game)
   const awardBaselineRef = useRef<Game | null>(null)
@@ -324,7 +329,7 @@ export function useAnimationQueue(game: Game | null, reducedMotion: boolean): An
       return
     }
 
-    const diff = deriveAnimationDiff(prev, game)
+    const diff = deriveAnimationDiff(prev, game, formatChips)
     const sameHand = prev !== null && prev.handId === game.handId
     const awardCountIncreased = sameHand && game.awards.length > prev.awards.length
     if (awardCountIncreased && !awardBaselineRef.current) {
@@ -586,7 +591,7 @@ export function useAnimationQueue(game: Game | null, reducedMotion: boolean): An
       diff.awardsStarted ? timelineOffset + AWARD_FLIGHT_MS : 0,
     ))
     timersRef.current.push(clearTimer)
-  }, [game, reducedMotion])
+  }, [game, reducedMotion, formatChips])
 
   return events
 }

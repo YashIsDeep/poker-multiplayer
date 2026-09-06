@@ -15,13 +15,13 @@ export async function fetchHandHistories(
   return body.hands
 }
 
-export function describeHistoryEvent(event: HandHistoryEvent, hand: HandHistory): string {
+export function describeHistoryEvent(event: HandHistoryEvent, hand: HandHistory, formatAmount = formatChips): string {
   const player = (seat: number | null) =>
     seat === null
       ? 'Player'
       : (hand.players.find((candidate) => candidate.seat === seat)?.displayName ??
         `Seat ${seat + 1}`)
-  const chips = (amount: number | null) => formatChips(amount ?? 0)
+  const chips = (amount: number | null) => formatAmount(amount ?? 0)
 
   switch (event.type) {
     case 'BLIND_POSTED':
@@ -37,7 +37,7 @@ export function describeHistoryEvent(event: HandHistoryEvent, hand: HandHistory)
       return `${event.phase.toLowerCase()} dealt · ${event.cards.join(' ')}`
     case 'POT_AWARDED':
       return `${event.potIndex === 0 ? 'Main pot' : `Side pot ${event.potIndex}`} · ${event.winners
-        .map((winner) => `${player(winner.seat)} wins ${formatChips(winner.amount)}`)
+        .map((winner) => `${player(winner.seat)} wins ${formatAmount(winner.amount)}`)
         .join(' · ')}`
     case 'HAND_COMPLETED':
       return event.action === 'SHOWDOWN' ? 'Showdown complete' : 'Hand won by fold'

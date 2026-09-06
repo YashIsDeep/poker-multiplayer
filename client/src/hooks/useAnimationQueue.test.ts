@@ -161,11 +161,13 @@ describe('deriveAnimationDiff', () => {
         lastAction: { action: 'RAISE_TO', amount: 120 },
       }],
     })
-    expect(deriveAnimationDiff(previous, raised).action).toMatchObject({
+      expect(deriveAnimationDiff(previous, raised).action).toMatchObject({
       seat: 0,
       label: 'RAISE TO 120',
-      tone: 'raise',
-    })
+        tone: 'raise',
+      })
+      expect(deriveAnimationDiff(previous, raised, amount => `${amount / 10} BB`).action?.label)
+        .toBe('RAISE TO 12 BB')
   })
 })
 

@@ -385,13 +385,13 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
           <div className="public-table-defaults">
             <span className="label">Public table defaults</span>
             <div>
-              <span>BB <b className="num">{formatChips(PUBLIC_TABLE_SETTINGS.bigBlind)}</b></span>
+              <span>BLINDS <b className="num">0.5 / 1 BB</b></span>
               <span title={`${formatChips(PUBLIC_TABLE_SETTINGS.startingStack)} chips`}>
                 STACK <b className="num">
                   {formatChips(PUBLIC_TABLE_SETTINGS.startingStack / PUBLIC_TABLE_SETTINGS.bigBlind)} BB
                 </b>
               </span>
-              <span>REBUYS <b>OFF</b></span>
+              <span>REBUY <b>100 BB</b></span>
               <span>TURN <b className="num">{PUBLIC_TABLE_SETTINGS.actionTimeoutSeconds}s</b></span>
             </div>
           </div>
