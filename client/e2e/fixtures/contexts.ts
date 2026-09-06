@@ -12,10 +12,15 @@ export const RUN_ID = `${Date.now().toString(36)}`
 export const GAME_ENABLED = process.env.E2E_GAME !== '0'
 export const KILL_SERVER_ENABLED = process.env.E2E_KILL_SERVER === '1'
 
+/** The lobby lives at the app root, so match on the pathname rather than a glob. */
+export async function waitForLobby(page: Page): Promise<void> {
+  await page.waitForURL((url) => url.pathname === '/')
+}
+
 export async function devLogin(context: BrowserContext, name: string): Promise<Page> {
   const page = await context.newPage()
   await page.goto(`/auth/dev?u=${encodeURIComponent(name)}`)
-  await page.waitForURL('**/lobby')
+  await waitForLobby(page)
   return page
 }
 

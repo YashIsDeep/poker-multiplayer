@@ -3,10 +3,7 @@ import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { bindAutoUnlock, bindGlobalClickSound } from './lib/sound'
 import { useExperienceSounds } from './hooks/useExperienceSounds'
-import {
-  rememberPostLoginRedirect,
-  takePostLoginRedirect,
-} from './lib/postLoginRedirect'
+import { rememberPostLoginRedirect } from './lib/postLoginRedirect'
 import Landing from './pages/Landing'
 import Lobby from './pages/Lobby'
 import Room from './pages/Room'
@@ -22,12 +19,10 @@ type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated'
 function RequireAuth({ children }: { children: ReactNode }) {
   const location = useLocation()
   const [status, setStatus] = useState<AuthStatus>('checking')
-  const [resumePath, setResumePath] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     setStatus('checking')
-    setResumePath(null)
 
     fetch('/api/me', { credentials: 'same-origin' })
       .then((response) => {
@@ -39,19 +34,14 @@ function RequireAuth({ children }: { children: ReactNode }) {
         if (cancelled) return
 
         if (!authenticated) {
-          if (location.pathname.startsWith('/room/')) {
-            rememberPostLoginRedirect(
-              `${location.pathname}${location.search}${location.hash}`,
-              window.sessionStorage,
-            )
-          }
+          rememberPostLoginRedirect(
+            `${location.pathname}${location.search}${location.hash}`,
+            window.sessionStorage,
+          )
           setStatus('unauthenticated')
           return
         }
 
-        if (location.pathname === '/lobby') {
-          setResumePath(takePostLoginRedirect(window.sessionStorage))
-        }
         setStatus('authenticated')
       })
       .catch(() => {
@@ -70,10 +60,33 @@ function RequireAuth({ children }: { children: ReactNode }) {
       </main>
     )
   }
-  if (status === 'unauthenticated') return <Navigate to="/" replace />
-  if (resumePath && resumePath !== `${location.pathname}${location.search}${location.hash}`) {
-    return <Navigate to={resumePath} replace />
-  }
+  if (status === 'unauthenticated') return <Navigate to="/login" replace />
+  return children
+}
+
+function RedirectIfAuthenticated({ children }: { children: ReactNode }) {
+  const [authenticated, setAuthenticated] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetch('/api/me', { credentials: 'same-origin' })
+      .then((response) => {
+        if (!cancelled && response.ok) setAuthenticated(true)
+      })
+      .catch(() => {
+        // A failed probe is not a signed-in session: leave the sign-in page up.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Render the sign-in page immediately instead of gating on the probe, so a
+  // signed-out visitor never waits on it. A signed-in one sees the page flash
+  // before the lobby takes over, where any remembered room is resumed.
+  if (authenticated) return <Navigate to="/" replace />
   return children
 }
 
@@ -92,13 +105,15 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Landing />} />
+        {/* The lobby is the front door: signed-out visitors browse it and sign
+            in from the header, the way lichess does. */}
+        <Route path="/" element={<Lobby />} />
         <Route
-          path="/lobby"
+          path="/login"
           element={
-            <RequireAuth>
-              <Lobby />
-            </RequireAuth>
+            <RedirectIfAuthenticated>
+              <Landing />
+            </RedirectIfAuthenticated>
           }
         />
         <Route
@@ -109,6 +124,8 @@ export default function App() {
             </RequireAuth>
           }
         />
+        {/* Anything unrecognised falls back to the lobby rather than a blank page. */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {/* T10 resilience layer: renders above whatever screen is active */}
       <ConnectionBanner />

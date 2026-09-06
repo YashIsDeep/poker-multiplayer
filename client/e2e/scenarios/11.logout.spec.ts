@@ -1,9 +1,10 @@
-import { expect, test } from '../fixtures/contexts'
+import { expect, test, waitForLobby } from '../fixtures/contexts'
 
-test('logout ends the session and returns to the landing page', async ({ alice }) => {
+test('logout ends the session and leaves the signed-out lobby', async ({ alice }) => {
   await alice.getByRole('button', { name: 'Log out' }).click()
 
-  await alice.waitForURL('**/')
+  await waitForLobby(alice)
+  await expect(alice.getByRole('link', { name: 'Sign In', exact: true })).toBeVisible()
   await expect
     .poll(() => alice.evaluate(() => fetch('/api/me').then((response) => response.status)))
     .toBe(401)

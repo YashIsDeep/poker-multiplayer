@@ -24,7 +24,7 @@ export default function RoomGoneModal() {
             data-sound="close"
             onClick={() => {
               acknowledge()
-              navigate('/lobby')
+              navigate('/')
             }}
           >
             Back to lobby

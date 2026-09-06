@@ -62,7 +62,7 @@ public class DevLoginController {
 
             return ResponseEntity.status(HttpStatus.FOUND)
                     .cacheControl(CacheControl.noStore())
-                    .location(URI.create("/lobby"))
+                    .location(URI.create("/"))
                     .build();
         } catch (RuntimeException ex) {
             SecurityContextHolder.clearContext();

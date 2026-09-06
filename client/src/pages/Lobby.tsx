@@ -1,14 +1,18 @@
 // Lobby (functional, Balatro-skinned): live room list from /topic/lobby,
 // create-table modal, private-code join. Room create/join navigates into /room/:id.
+// This is the app's front door at "/": signed-out visitors see the same shell
+// with a Sign In button in the header, and the live list — which rides the
+// session-authenticated STOMP handshake — is replaced by a sign-in prompt.
 
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import SwirlBackground from '../components/SwirlBackground'
 import CrtOverlay from '../components/CrtOverlay'
 import SettingsButton from '../components/SettingsButton'
 import { useGameStore } from '../store/gameStore'
 import { endSession } from '../lib/auth'
+import { takePostLoginRedirect } from '../lib/postLoginRedirect'
 import { generateRandomTableName } from '../lib/tableNames'
 import { formatChips } from '../lib/chips'
 import { playSound } from '../lib/sound'
@@ -28,8 +32,11 @@ type Me = {
   provider: 'GOOGLE' | 'DISCORD' | 'DEV'
 }
 
+type SessionStatus = 'checking' | 'signed-in' | 'signed-out'
+
 export default function Lobby() {
   const [me, setMe] = useState<Me | null>(null)
+  const [session, setSession] = useState<SessionStatus>('checking')
   const [creating, setCreating] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -42,32 +49,43 @@ export default function Lobby() {
   const room = useGameStore((s) => s.room)
   const joinRoom = useGameStore((s) => s.joinRoom)
   const pushToast = useGameStore((s) => s.pushToast)
+  const signedOut = session === 'signed-out'
 
   useEffect(() => {
     let cancelled = false
     fetch('/api/me', { credentials: 'same-origin' })
       .then((response) => {
-        if (response.status === 401) {
-          navigate('/', { replace: true })
-          return null
-        }
+        if (response.status === 401) return null
         if (!response.ok) throw new Error('unable to load the current user')
         return response.json() as Promise<Me>
       })
       .then((currentUser) => {
-        if (!cancelled && currentUser) setMe(currentUser)
+        if (cancelled) return
+        if (!currentUser) {
+          setSession('signed-out')
+          return
+        }
+        setMe(currentUser)
+        setSession('signed-in')
+        // Sign-in lands here, so this is where a room deep link taken before
+        // authenticating gets resumed.
+        const resume = takePostLoginRedirect(window.sessionStorage)
+        if (resume && resume !== '/') navigate(resume, { replace: true })
       })
       .catch(() => {
-        if (!cancelled) navigate('/', { replace: true })
+        // An unreachable server is not a signed-out session: keep the shell up
+        // and let the sign-in prompt stand in for the live list.
+        if (!cancelled) setSession('signed-out')
       })
     return () => {
       cancelled = true
     }
   }, [navigate])
 
+  // The STOMP handshake needs a session, so only connect once we have one.
   useEffect(() => {
-    init()
-  }, [init])
+    if (session === 'signed-in') init()
+  }, [session, init])
 
   // Already in a room (e.g. hard refresh restored membership) → go there.
   useEffect(() => {
@@ -119,35 +137,61 @@ export default function Lobby() {
           <div className="lobby-logo panel">
             H<span className="lt-o">O</span>LD&#39;EM
           </div>
-          <div className="user-chip panel">
-            {me?.avatarUrl ? (
-              <img className="avatar" src={me.avatarUrl} alt="" />
-            ) : (
-              <span className="avatar" aria-hidden="true" />
-            )}
-            <b>{me?.displayName ?? '…'}</b>
-            <SettingsButton />
-            <button
-              className="btn btn-dev logout"
-              type="button"
-              data-sound="exit"
-              disabled={loggingOut}
-              onClick={logout}
-            >
-              {loggingOut ? 'Logging out…' : 'Log out'}
-            </button>
-          </div>
+          {signedOut ? (
+            <div className="user-chip panel guest-chip">
+              <SettingsButton />
+              <Link className="btn btn-green sign-in" data-sound="confirm" to="/login">
+                Sign In
+              </Link>
+            </div>
+          ) : (
+            <div className="user-chip panel">
+              {me?.avatarUrl ? (
+                <img className="avatar" src={me.avatarUrl} alt="" />
+              ) : (
+                <span className="avatar" aria-hidden="true" />
+              )}
+              <b>{me?.displayName ?? '…'}</b>
+              <SettingsButton />
+              <button
+                className="btn btn-dev logout"
+                type="button"
+                data-sound="exit"
+                disabled={loggingOut}
+                onClick={logout}
+              >
+                {loggingOut ? 'Logging out…' : 'Log out'}
+              </button>
+            </div>
+          )}
         </header>
 
+        {signedOut ? (
+          <section className="lobby-signed-out panel" aria-label="Sign in to play">
+            <h2>Multiplayer Texas Hold&#39;em</h2>
+            <p>Sign in to see live tables, join a seat and play ranked.</p>
+            <div className="lobby-signed-out-actions">
+              <Link className="btn btn-green btn-create" data-sound="confirm" to="/login">
+                Sign in to play
+              </Link>
+            </div>
+          </section>
+        ) : null}
         <div className="lobby-main panel">
           <h2>
             Public tables{' '}
-            <span className={`live-dot${connection === 'connected' ? '' : ' off'}`}>
-              {connection === 'connected' ? 'live' : connection}
-            </span>
+            {!signedOut && (
+              <span className={`live-dot${connection === 'connected' ? '' : ' off'}`}>
+                {connection === 'connected' ? 'live' : connection}
+              </span>
+            )}
           </h2>
 
-          {!lobby || lobby.rooms.length === 0 ? (
+          {signedOut ? (
+            <p className="lobby-empty">
+              <Link data-sound="confirm" to="/login">Sign in</Link> to see the live table list.
+            </p>
+          ) : !lobby || lobby.rooms.length === 0 ? (
             <p className="lobby-empty">No tables yet — create the first one.</p>
           ) : (
             lobby.rooms.map((r) => (
@@ -184,7 +228,7 @@ export default function Lobby() {
           )}
         </div>
 
-        <div className="lobby-actions">
+        {!signedOut && <div className="lobby-actions">
           <button
             className="btn btn-orange btn-create"
             data-sound="open"
@@ -212,7 +256,7 @@ export default function Lobby() {
               Join
             </button>
           </form>
-        </div>
+        </div>}
       </div>
 
       {creating && <CreateTableModal onClose={() => setCreating(false)} />}

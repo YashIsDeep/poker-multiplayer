@@ -19,7 +19,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
 }
+.lobby-profile { min-width: 0; color: inherit; text-decoration: none; }
+.lobby-profile b { display: block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lobby-profile:hover { color: var(--gold); }
 
 .lobby-logo {
   font-size: 34px;
@@ -84,6 +89,22 @@
 .live-dot.off { color: var(--orange); }
 
 .lobby-empty { color: var(--text-dim); font-size: 16px; }
+.lobby-empty a { color: var(--gold); text-underline-offset: 4px; }
+
+/* Signed-out front door: the sign-in call to action stands in for ranked entry. */
+.guest-chip { gap: 10px; }
+.user-chip .sign-in { font-size: 15px; padding: 7px 16px 9px; text-decoration: none; }
+
+.lobby-signed-out { width: min(860px, 100%); padding: 26px 28px 30px; }
+.lobby-signed-out h2 { margin: 0 0 10px; font-size: 26px; }
+.lobby-signed-out p { margin: 0 0 20px; color: var(--text-dim); font-size: 17px; }
+.lobby-signed-out-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.lobby-signed-out-actions .btn-create { text-decoration: none; }
 
 .room-row {
   display: grid;
@@ -283,6 +304,12 @@
     justify-content: center;
     row-gap: 6px;
   }
+  .lobby-logo { font-size: 27px; padding: 8px 12px 10px; }
+  .lobby-head .user-chip { margin-left: 0; width: 100%; }
+  /* No name to give the row width, so the guest chip stays button-sized. */
+  .lobby-head .guest-chip { width: auto; justify-content: center; }
+  .lobby-profile { flex: 1; }
+  .user-chip { max-width: 100%; }
   .user-chip b {
     max-width: 38vw;
     overflow: hidden;

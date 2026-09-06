@@ -23,7 +23,7 @@ export default function RoomClosedModal() {
   useEffect(() => {
     if (roomClosed && remaining <= 0) {
       acknowledge()
-      navigate('/lobby')
+      navigate('/')
     }
   }, [roomClosed, remaining, acknowledge, navigate])
 
@@ -43,7 +43,7 @@ export default function RoomClosedModal() {
             data-sound="close"
             onClick={() => {
               acknowledge()
-              navigate('/lobby')
+              navigate('/')
             }}
           >
             Back to lobby now

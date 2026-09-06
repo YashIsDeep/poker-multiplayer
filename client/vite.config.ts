@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// changeOrigin stays false so Spring sees host 5173 and generates
-// OAuth redirect URIs on the proxied origin.
+// changeOrigin must stay false so Spring sees the browser's host (:5173) and
+// generates OAuth redirect URIs on the proxied origin. Vite expands the
+// shorthand string form to `{ target, changeOrigin: true }`, which would send
+// providers back to :8080, so every entry spells the option out.
 const tunnelMode = process.env.TUNNEL_MODE === 'true'
 const tunnelHost = process.env.VITE_TUNNEL_HOST?.trim()
 
@@ -19,13 +21,15 @@ export default defineConfig({
     // Allow only the hostname published by dev:proxy.
     allowedHosts: tunnelHost ? [tunnelHost] : [],
     proxy: {
-      '/api': 'http://127.0.0.1:8080',
-      '/auth': 'http://127.0.0.1:8080',
-      '/oauth2': 'http://127.0.0.1:8080',
-      '/login': 'http://127.0.0.1:8080',
-      '/logout': 'http://127.0.0.1:8080',
+      '/api': { target: 'http://127.0.0.1:8080', changeOrigin: false },
+      '/auth': { target: 'http://127.0.0.1:8080', changeOrigin: false },
+      '/oauth2': { target: 'http://127.0.0.1:8080', changeOrigin: false },
+      // Only the OAuth callback belongs to the server; /login itself is the SPA sign-in route.
+      '/login/oauth2': { target: 'http://127.0.0.1:8080', changeOrigin: false },
+      '/logout': { target: 'http://127.0.0.1:8080', changeOrigin: false },
       '/ws': {
         target: 'http://127.0.0.1:8080',
+        changeOrigin: false,
         ws: true,
         ...(tunnelMode
           ? {

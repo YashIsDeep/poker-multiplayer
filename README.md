@@ -17,7 +17,7 @@ cd client && npm install && cd ..
 npm run dev
 ```
 
-Client: http://127.0.0.1:5173 (proxies `/api`, `/auth`, `/oauth2`, `/login`, `/logout`, `/ws` to the server on :8080).
+Client: http://127.0.0.1:5173 (proxies `/api`, `/auth`, `/oauth2`, `/login/oauth2`, `/logout`, `/ws` to the server on :8080).
 
 To share the development client remotely, run:
 
@@ -127,6 +127,9 @@ Register a Google OAuth client and Discord application with these redirect URIs:
 `http://127.0.0.1:5173/login/oauth2/code/google`
 
 `http://127.0.0.1:5173/login/oauth2/code/discord`
+
+The callback origin mirrors the host in the address bar, so register the
+`localhost:5173` spelling of both paths as well if you browse that way.
 
 For production, register the same two paths on the public HTTPS origin, for
 example `https://poker.example.com/login/oauth2/code/google` and

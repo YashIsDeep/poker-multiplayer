@@ -156,7 +156,7 @@ remote authorization request.
 `DevLoginIntegrationTest` boots with `dev` and uses MockMvc plus the real
 in-memory Spring Session JDBC repository:
 
-- valid `/auth/dev?u=Alice` returns 302 `/lobby`;
+- valid `/auth/dev?u=Alice` returns 302 `/`;
 - the response includes `Cache-Control: no-store`;
 - the effective dev configuration binds `server.address` to `127.0.0.1`;
 - response creates/rotates a `SESSION` cookie;
@@ -234,7 +234,7 @@ Client tests or build-time assertions cover:
 - dev form submission performs a browser navigation with URL-encoded `u`;
 - no `guestName` value is used as authenticated identity;
 - lobby content is sourced from `/api/me`;
-- a 401 returns the user to the landing page;
+- a 401 on a guarded route sends the user to the sign-in page at `/login`, while the lobby at `/` renders its signed-out state;
 - every Vite proxy target points at `http://127.0.0.1:8080`, matching the
   loopback-bound dev server; and
 - production build does not display the Vite-development dev-login control.

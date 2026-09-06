@@ -175,7 +175,7 @@ export default function Room() {
           !current.roomGone &&
           (current.room === null || (roomId && current.room.roomId !== roomId))
         ) {
-          navigate('/lobby', { replace: true })
+          navigate('/', { replace: true })
         }
       }, 1500)
       return () => clearTimeout(timer)
@@ -225,7 +225,7 @@ export default function Room() {
     setLeaving(true)
     try {
       const ack = await leaveRoom()
-      if (ack?.ok) navigate('/lobby')
+      if (ack?.ok) navigate('/')
     } catch {
       pushToast('warn', 'Leave failed', 'could not reach the server')
     } finally {

@@ -96,7 +96,7 @@ public class SecurityConfig {
                     auth
                             .requestMatchers(HttpMethod.GET, "/api/health", "/api/meta").permitAll()
                             .requestMatchers(HttpMethod.GET,
-                                    "/", "/index.html", "/favicon.ico", "/assets/**", "/lobby", "/room/**")
+                                    "/", "/login", "/index.html", "/favicon.ico", "/assets/**", "/room/**")
                             .permitAll()
                             .requestMatchers("/oauth2/authorization/**", "/login/oauth2/code/**").permitAll()
                             .requestMatchers(HttpMethod.GET, "/auth/dev").permitAll();
@@ -126,11 +126,14 @@ public class SecurityConfig {
 
         if (clientRegistrationRepositories.getIfAvailable() != null) {
             http.oauth2Login(oauth -> oauth
+                    // The SPA renders the sign-in screen at /login, so Spring must not
+                    // install its own generated login page on that path.
+                    .loginPage("/login")
                     .userInfoEndpoint(userInfo -> userInfo
                             .oidcUserService(googleOidcUserService)
                             .userService(discordOAuth2UserService))
                     .successHandler(oauthLoginSuccessHandler)
-                    .failureHandler(new SimpleUrlAuthenticationFailureHandler("/?loginError"))
+                    .failureHandler(new SimpleUrlAuthenticationFailureHandler("/login?loginError"))
                     .authorizedClientRepository(authorizedClientRepository));
         }
         return http.build();

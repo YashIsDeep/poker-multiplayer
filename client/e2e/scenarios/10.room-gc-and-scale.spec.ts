@@ -1,15 +1,15 @@
-import { createTable, expect, RUN_ID, test } from '../fixtures/contexts'
+import { createTable, expect, RUN_ID, test, waitForLobby } from '../fixtures/contexts'
 
 test('last-member leave deletes the room and its join code', async ({ alice }) => {
   const table = `GC ${RUN_ID}`
   await createTable(alice, table, 2)
-  const code = (await alice.locator('.room-tag .num').textContent())?.trim() ?? ''
+  const code = (await alice.getByRole('button', { name: /^Copy room code/ }).textContent())?.trim() ?? ''
   await alice.getByRole('button', { name: 'Leave table' }).click()
-  await alice.waitForURL('**/lobby')
+  await waitForLobby(alice)
   await expect(alice.locator(`[data-room-name="${table}"]`)).toHaveCount(0)
   await alice.getByLabel('Join code').fill(code)
   await alice.locator('.join-code').getByRole('button', { name: 'Join', exact: true }).click()
-  await expect(alice.getByTestId('toasts')).toContainText('ROOM_NOT_FOUND')
+  await expect(alice.getByTestId('toasts')).toContainText('Invalid table code')
   await expect(alice.getByTestId('modal-room-gone')).toBeHidden()
 })
 

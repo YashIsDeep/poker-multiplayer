@@ -100,7 +100,7 @@ class DevLoginIntegrationTest {
     private Cookie login(String name) throws Exception {
         MvcResult result = mockMvc.perform(get("/auth/dev").param("u", name))
                 .andExpect(status().isFound())
-                .andExpect(header().string("Location", "/lobby"))
+                .andExpect(header().string("Location", "/"))
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andReturn();
         Cookie cookie = result.getResponse().getCookie("SESSION");

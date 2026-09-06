@@ -241,7 +241,7 @@ Google. Each carries the provisioned `SessionUserPrincipal` beside the protocol
 delegate so Spring can finish validating the login. `OAuthLoginSuccessHandler`
 then replaces the `OAuth2AuthenticationToken` with an authenticated
 `UsernamePasswordAuthenticationToken` whose principal is the session value,
-runs the normal context persistence path, and redirects to `/lobby`.
+runs the normal context persistence path, and redirects to `/`.
 
 The configured `DiscardingAuthorizedClientRepository` accepts Spring's
 post-login save callback but retains nothing; the app has no reason to call a
@@ -386,7 +386,7 @@ T5, which introduces the first client-initiated mutation (STOMP CONNECT). T4
 must not choose a token repository casually here, because T5's WebSocket
 handshake protection depends on it.
 
-OAuth success redirects to `/lobby`; failure redirects to `/?loginError` with
+OAuth success redirects to `/`; failure redirects to `/login?loginError` with
 no provider error detail. Because the browser remains on the Vite origin while
 the callback is proxied, relative redirects preserve the `localhost:5173`
 origin. Vite's existing `changeOrigin: false` setting is therefore retained.
@@ -429,7 +429,7 @@ GET /auth/dev?u=alice
   -> run the session-fixation strategy
   -> explicitly save SecurityContext through SecurityContextRepository
   -> add Cache-Control: no-store
-  -> 302 /lobby
+  -> 302 /
 ```
 
 The normalized lowercase name is the DEV provider subject, while the normalized

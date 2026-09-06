@@ -62,7 +62,7 @@ class OAuthLoginSuccessHandlerTest {
 
         handler.onAuthenticationSuccess(request, response, protocolAuthentication);
 
-        assertEquals("/?loginError", response.getRedirectedUrl());
+        assertEquals("/login?loginError", response.getRedirectedUrl());
         assertNull(request.getSession(false).getAttribute(CONTEXT_KEY));
         assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
@@ -77,7 +77,7 @@ class OAuthLoginSuccessHandlerTest {
 
         handler.onAuthenticationSuccess(request, response, protocolAuthentication);
 
-        assertEquals("/lobby", response.getRedirectedUrl());
+        assertEquals("/", response.getRedirectedUrl());
         SecurityContext stored = (SecurityContext) request.getSession(false)
                 .getAttribute(CONTEXT_KEY);
         Authentication storedAuthentication = stored.getAuthentication();

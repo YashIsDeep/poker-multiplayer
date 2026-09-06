@@ -40,7 +40,7 @@ public final class OAuthLoginSuccessHandler implements AuthenticationSuccessHand
             SecurityContextHolder.clearContext();
             securityContextRepository.saveContext(
                     SecurityContextHolder.createEmptyContext(), request, response);
-            redirectStrategy.sendRedirect(request, response, "/?loginError");
+            redirectStrategy.sendRedirect(request, response, "/login?loginError");
             return;
         }
 
@@ -52,7 +52,7 @@ public final class OAuthLoginSuccessHandler implements AuthenticationSuccessHand
         context.setAuthentication(applicationAuthentication);
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
-        redirectStrategy.sendRedirect(request, response, "/lobby");
+        redirectStrategy.sendRedirect(request, response, "/");
     }
 
     private static SessionUserPrincipal applicationPrincipal(Object principal) {

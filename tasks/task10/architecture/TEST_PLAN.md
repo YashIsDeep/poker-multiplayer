@@ -636,7 +636,7 @@ import { Page } from '@playwright/test'
 
 export async function devLogin(page: Page, username: string) {
   await page.goto(`http://localhost:5173/auth/dev?u=${username}`)
-  await page.waitForURL('**/lobby')
+  await page.waitForURL((url) => url.pathname === '/')
   await page.waitForLoadState('networkidle')
 }
 
