@@ -1,5 +1,7 @@
 package com.poker.ws;
 
+import com.poker.auth.ModeratorPolicy;
+import com.poker.room.RoomError;
 import com.poker.room.RoomException;
 import com.poker.room.RoomConfig;
 import com.poker.room.GameException;
@@ -37,10 +39,18 @@ public class RoomMessageController {
     private static final Logger log = LoggerFactory.getLogger(RoomMessageController.class);
     private final RoomCommandService service;
     private final RoomSnapshotMapper mapper;
+    private final ModeratorPolicy moderators;
 
     public RoomMessageController(RoomCommandService service, RoomSnapshotMapper mapper) {
+        this(service, mapper, ModeratorPolicy.denyAll());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public RoomMessageController(RoomCommandService service, RoomSnapshotMapper mapper,
+            ModeratorPolicy moderators) {
         this.service = Objects.requireNonNull(service, "service");
         this.mapper = Objects.requireNonNull(mapper, "mapper");
+        this.moderators = Objects.requireNonNull(moderators, "moderators");
     }
 
     @MessageMapping("/state.sync")
@@ -68,6 +78,11 @@ public class RoomMessageController {
             Principal principal) {
         return execute(envelope.requestId(), CommandType.ROOM_CREATE, principal, user -> {
             CreateRoomRequest p = envelope.payload();
+            // Public tables are the shared front page of the lobby, so only a
+            // moderator may add one. Anyone can still create a private table.
+            if (!p.privateTable() && !moderators.isModerator(principal)) {
+                throw new RoomException(RoomError.NOT_A_MODERATOR);
+            }
             RoomConfig config;
             if (!p.privateTable()) {
                 config = RoomConfig.PUBLIC_DEFAULT;
@@ -85,7 +100,7 @@ public class RoomMessageController {
                 config = RoomConfig.PUBLIC_DEFAULT;
             }
             RoomCommandResult result = service.create(
-                    user.profile(), p.name(), p.maxSeats(), config, p.privateTable());
+                    user.profile(), p.name(), p.privateTable() ? p.maxSeats() : RoomConfig.PUBLIC_SEATS, config, p.privateTable());
             return ack(envelope.requestId(), CommandType.ROOM_CREATE, result);
         });
     }
@@ -223,6 +238,7 @@ public class RoomMessageController {
             case JOIN_CODE_EXHAUSTED -> ErrorCode.JOIN_CODE_EXHAUSTED;
             case INVALID_BUY_IN -> ErrorCode.INVALID_BUY_IN;
             case NOT_ROOM_ADMIN -> ErrorCode.NOT_ROOM_ADMIN;
+            case NOT_A_MODERATOR -> ErrorCode.NOT_A_MODERATOR;
             case SETTINGS_NOT_EDITABLE -> ErrorCode.SETTINGS_NOT_EDITABLE;
             case HAND_IN_PROGRESS -> ErrorCode.HAND_IN_PROGRESS;
             case INVALID_ROOM_NAME, INVALID_MAX_SEATS, INVALID_JOIN_CODE, INVALID_ROOM_CONFIG -> ErrorCode.INVALID_REQUEST;

@@ -261,6 +261,19 @@
   outline: 3px solid var(--blue);
   outline-offset: 2px;
 }
+.visibility-locked {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+  background: var(--panel-dark);
+  border: 2px solid var(--input-edge);
+  border-radius: 8px;
+}
+.visibility-locked b {
+  color: var(--text);
+  font-size: 15px;
+}
 .create-table-modal {
   width: min(500px, 94vw);
   max-height: 90vh;

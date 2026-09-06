@@ -59,16 +59,24 @@ export const test = base.extend<Fixtures>({
 
 export { expect } from '@playwright/test'
 
+/** These scenarios choose explicit seats; dismiss the normal automatic-seat offer. */
+async function keepManualSeating(page: Page): Promise<void> {
+  await page.getByTestId('room').waitFor()
+  const spectate = page.getByRole('button', { name: 'Spectate Instead', exact: true })
+  // The room snapshot can navigate before the create/join acknowledgment
+  // activates this offer. Wait for that UI transition rather than sampling it.
+  await spectate.waitFor({ state: 'visible', timeout: 1_500 }).catch(() => {})
+  if (await spectate.isVisible()) await spectate.click()
+}
+
 /** Create a table through the lobby UI; resolves once inside the room. */
-export async function createTable(page: Page, name: string, seats = 6): Promise<void> {
+export async function createTable(page: Page, name: string, _seats = 6): Promise<void> {
   await page.getByRole('button', { name: '+ Create table' }).click()
   await page.getByLabel('Table name').fill(name)
-  const current = 6
-  const delta = seats - current
-  const stepper = page.getByRole('button', { name: delta > 0 ? 'more seats' : 'fewer seats' })
-  for (let i = 0; i < Math.abs(delta); i++) await stepper.click()
+  // Public tables have a fixed six-seat capacity, including heads-up games.
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await page.waitForURL('**/room/**')
+  await keepManualSeating(page)
 }
 
 /** Join a table from the lobby list by its displayed name. */
@@ -76,6 +84,7 @@ export async function joinTableByName(page: Page, name: string): Promise<void> {
   const row = page.locator(`[data-room-name="${name}"]`)
   await row.getByRole('button', { name: /Join|Spectate/ }).click()
   await page.waitForURL('**/room/**')
+  await keepManualSeating(page)
 }
 
 /** Take the first free seat pod. */

@@ -18,6 +18,13 @@ spring:
     timeout: 30d
 
 poker:
+  # Mirrors the production shape so the bindings and the startup seeding are
+  # exercised, without depending on the shadowed main application.yml.
+  moderation:
+    # Same placeholder form as production, so the comma-separated env override
+    # binding to List<String> is exercised rather than only the YAML list form.
+    emails: ${POKER_MODERATOR_EMAILS:yashparth.gupta@gmail.com}
+    dev-users-are-moderators: false
   hand-archive:
     # Spring context tests must not write into a real archive directory.
     enabled: false

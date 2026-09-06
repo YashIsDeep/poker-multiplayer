@@ -30,6 +30,8 @@ type Me = {
   displayName: string
   avatarUrl: string | null
   provider: 'GOOGLE' | 'DISCORD' | 'DEV'
+  /** Public tables are moderator-only; everyone else creates private tables. */
+  moderator: boolean
 }
 
 type SessionStatus = 'checking' | 'signed-in' | 'signed-out'
@@ -259,16 +261,26 @@ export default function Lobby() {
         </div>}
       </div>
 
-      {creating && <CreateTableModal onClose={() => setCreating(false)} />}
+      {creating && (
+        <CreateTableModal moderator={me?.moderator ?? false} onClose={() => setCreating(false)} />
+      )}
       <CrtOverlay />
     </div>
   )
 }
 
-function CreateTableModal({ onClose }: { onClose: () => void }) {
+function CreateTableModal({
+  moderator,
+  onClose,
+}: {
+  moderator: boolean
+  onClose: () => void
+}) {
   const [name, setName] = useState(generateRandomTableName)
   const [seats, setSeats] = useState(6)
-  const [privateTable, setPrivateTable] = useState(false)
+  // Only a moderator can add to the public lobby, so everyone else starts —
+  // and stays — on a private table. The server enforces this independently.
+  const [privateTable, setPrivateTable] = useState(!moderator)
   const [settings, setSettings] = useState<TableSettings>(PUBLIC_TABLE_SETTINGS)
   const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
@@ -289,7 +301,7 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
     const trimmed = name.trim()
     if (!trimmed || busy || (privateTable && tableSettingsError(settings))) return
     setBusy(true)
-    createRoom(trimmed, seats, privateTable, privateTable ? settings : undefined)
+    createRoom(trimmed, privateTable ? seats : 6, privateTable, privateTable ? settings : undefined)
       .then((ack) => {
         if (ack.ok && ack.roomId) {
           navigate(`/room/${ack.roomId}`)
@@ -331,7 +343,7 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="field">
           <span className="label">Seats</span>
-          <span className="stepper">
+          {privateTable ? <span className="stepper">
             <button
               aria-label="fewer seats"
               data-sound="tick"
@@ -347,32 +359,38 @@ function CreateTableModal({ onClose }: { onClose: () => void }) {
             >
               +
             </button>
-          </span>
+          </span> : <b data-testid="seat-count">6 · fixed</b>}
         </div>
         <div className="visibility-field">
           <span className="label">Visibility</span>
-          <div className="visibility-options" role="group" aria-label="Table visibility">
-            <button
-              type="button"
-              className={`visibility-option${privateTable ? '' : ' selected'}`}
-              data-sound="toggleOn"
-              aria-pressed={!privateTable}
-              onClick={() => setPrivateTable(false)}
-            >
-              <b>Public</b>
-              <span>Shown in the lobby</span>
-            </button>
-            <button
-              type="button"
-              className={`visibility-option${privateTable ? ' selected' : ''}`}
-              data-sound="toggleOn"
-              aria-pressed={privateTable}
-              onClick={() => setPrivateTable(true)}
-            >
-              <b>Private</b>
-              <span>Join by code only</span>
-            </button>
-          </div>
+          {moderator ? (
+            <div className="visibility-options" role="group" aria-label="Table visibility">
+              <button
+                type="button"
+                className={`visibility-option${privateTable ? '' : ' selected'}`}
+                data-sound="toggleOn"
+                aria-pressed={!privateTable}
+                onClick={() => setPrivateTable(false)}
+              >
+                <b>Public</b>
+                <span>Shown in the lobby</span>
+              </button>
+              <button
+                type="button"
+                className={`visibility-option${privateTable ? ' selected' : ''}`}
+                data-sound="toggleOn"
+                aria-pressed={privateTable}
+                onClick={() => setPrivateTable(true)}
+              >
+                <b>Private</b>
+                <span>Join by code only</span>
+              </button>
+            </div>
+          ) : (
+            <p className="visibility-locked">
+              <b>Private</b> — join by code only. Public tables are created by moderators.
+            </p>
+          )}
         </div>
         {privateTable ? (
           <>

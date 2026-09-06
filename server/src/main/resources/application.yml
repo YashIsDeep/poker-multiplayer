@@ -31,6 +31,13 @@ server:
         secure: ${SESSION_COOKIE_SECURE:false}
 
 poker:
+  moderation:
+    # Public tables are moderator-only. Entries are matched against the
+    # verified provider email captured at sign-in.
+    emails: ${POKER_MODERATOR_EMAILS:yashparth.gupta@gmail.com}
+    # The dev login endpoint issues accounts with no provider email; the dev
+    # profile turns this on so local and end-to-end runs can still create them.
+    dev-users-are-moderators: false
   hand-archive:
     # Compressed local analytics archive; independent of the database so it
     # keeps recording completed hands during a database outage.

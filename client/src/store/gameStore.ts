@@ -242,6 +242,11 @@ function ackErrorCopy(ack: Pick<CommandAck, 'command' | 'error'>): AckErrorCopy 
       return { message: 'Action not available', detail: 'controls were re-synced to the current hand' }
     case 'NOT_ROOM_ADMIN':
       return { message: 'Admin access required', detail: 'only the table admin can do that' }
+    case 'NOT_A_MODERATOR':
+      return {
+        message: 'Moderators only',
+        detail: 'public tables are moderator-created — make a private table instead',
+      }
     case 'SETTINGS_NOT_EDITABLE':
       return { message: 'Settings locked', detail: 'table settings cannot change during a hand' }
     case 'REBUY_NOT_AVAILABLE':

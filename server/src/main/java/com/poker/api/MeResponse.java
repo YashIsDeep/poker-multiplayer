@@ -7,5 +7,6 @@ public record MeResponse(
         UUID id,
         String displayName,
         String avatarUrl,
-        AuthProvider provider) {
+        AuthProvider provider,
+        boolean moderator) {
 }

@@ -173,6 +173,9 @@ class SessionWebSocketIntegrationTest {
         assertTrue(createAck.path("ok").asBoolean());
         assertEquals(createAck.path("roomId"), roomSnapshot.path("roomId"));
         assertEquals(1, lobbySnapshot.path("rooms").size());
+        assertEquals(6, roomSnapshot.path("maxSeats").asInt());
+        assertEquals(10, roomSnapshot.path("config").path("bigBlind").asInt());
+        assertEquals(1000, roomSnapshot.path("config").path("startingStack").asInt());
 
         String settingsRequestId = UUID.randomUUID().toString();
         session.send("/app/room.update-settings", new CommandEnvelope<>(

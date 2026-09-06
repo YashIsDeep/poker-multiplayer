@@ -6,6 +6,10 @@ server:
   address: 127.0.0.1
 
 poker:
+  moderation:
+    # Dev logins carry no provider email, so without this nobody could create a
+    # public table locally or in the end-to-end suite.
+    dev-users-are-moderators: true
   admin:
     live:
       enabled: true
