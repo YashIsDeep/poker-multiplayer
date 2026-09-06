@@ -28,10 +28,11 @@ npm run dev:proxy
 This starts the same local stack and publishes the Vite origin, including the
 API and WebSocket proxy, through a temporary localtunnel URL. The URL is
 printed in the terminal. Set `TUNNEL_PROVIDER=cloudflared` or
-`TUNNEL_PROVIDER=ngrok` to use an installed tunnel client instead. Temporary
-tunnels are for development only; OAuth providers still need the exact public
-callback URL registered, so the local dev login is the simplest way to test a
-shared tunnel.
+`TUNNEL_PROVIDER=ngrok` to use an installed tunnel client instead. With ngrok,
+`TUNNEL_DOMAIN` passes a reserved domain (`ngrok http --domain=<domain>`) so the
+public URL stays the same across restarts. Temporary tunnels are for development
+only; OAuth providers still need the exact public callback URL registered, so
+the local dev login is the simplest way to test a shared tunnel.
 
 Development uses a standalone local H2 server on `127.0.0.1:9092`. `npm run
 dev` starts it automatically. If it is already running, the command asks before

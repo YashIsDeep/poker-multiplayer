@@ -47,8 +47,21 @@ function tunnelCommand() {
     }
     case 'cloudflared':
       return { command: 'cloudflared', args: ['tunnel', '--url', target] }
-    case 'ngrok':
-      return { command: 'ngrok', args: ['http', target] }
+    case 'ngrok': {
+      const args = ['http']
+      const domain = process.env.TUNNEL_DOMAIN?.trim()
+      if (domain) {
+        if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(domain)) {
+          throw new Error('TUNNEL_DOMAIN must be a hostname such as my-table.ngrok-free.dev.')
+        }
+        // Reserved ngrok domains keep the public URL stable across restarts.
+        // `--domain` works on both old and current agents; newer ngrok builds
+        // spell the same option `--url`, which 3.x agents reject outright.
+        args.push(`--domain=${domain}`)
+      }
+      args.push(target)
+      return { command: 'ngrok', args }
+    }
     default:
       throw new Error(
         `Unsupported TUNNEL_PROVIDER "${provider}". Use localtunnel, cloudflared, or ngrok.`,
@@ -64,7 +77,9 @@ function expectedTunnelHost(hostname) {
       return hostname.endsWith('.trycloudflare.com')
     case 'ngrok':
       return hostname.endsWith('.ngrok-free.app')
+        || hostname.endsWith('.ngrok-free.dev')
         || hostname.endsWith('.ngrok.app')
+        || hostname.endsWith('.ngrok.dev')
         || hostname.endsWith('.ngrok.io')
     default:
       return false
