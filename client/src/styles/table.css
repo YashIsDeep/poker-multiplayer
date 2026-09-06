@@ -282,10 +282,29 @@
   position: absolute;
   left: 50%;
   top: 46%;
-  width: min(78vw, 1020px);
+  /* Height, not width, is what a desktop room runs out of: the seat ring stands
+     1.36x the felt's own height (rimY 68 in seatPosition) while the topbar and
+     action bar reserve ~260px, so the full 1020px felt has to be scaled to
+     ~0.77 on a 900px-tall viewport — dragging every fixed-px label, stack and
+     card inside down with it. That is why the room read small on a desktop.
+     Deriving the layout width from the free height instead keeps the fit near
+     1:1, so the table lands at the same physical size with full-size text, and
+     a tall monitor still gets the 1020px felt scaled up past 1. The magic
+     numbers are the seat ring (1.36 / 2 = 0.68, inverted to 1.47) and the pod
+     overhang (76px pod + FIT_PAD's 50px); they only have to be close, since
+     useTableFit still scales away whatever is left over. */
+  width: clamp(620px, calc((100dvh - var(--chrome-top, 64px) - var(--chrome-bottom, 196px) - 126px) * 1.47), min(78vw, 1020px));
   aspect-ratio: 2 / 1;
   transform: translate(-50%, -50%);
   z-index: 10;
+}
+
+/* Pods are a fixed width, so a dense rim needs a wider felt to sit on before
+   neighbours touch — the same 760px floor the narrow-screen block below uses. */
+.table-wrap[data-seat-count='7'],
+.table-wrap[data-seat-count='8'],
+.table-wrap[data-seat-count='9'] {
+  min-width: 760px;
 }
 
 /* stadium / racetrack shape */
@@ -1279,6 +1298,34 @@
 @media (max-width: 360px) {
   .ab-buttons .btn { font-size: 13px; }
 }
+
+/* Desktop. The felt now grows to fill a big screen (useTableFit scales the
+   composition up to MAX_FIT_SCALE), but the chrome around it is fixed px sized
+   for a laptop and would read small beside it. Nudge the topbar and action bar
+   to match; --chrome-bottom grows with the taller bar so the fit still clears
+   it. min-height keeps this clear of the short-viewport block below. */
+@media (min-width: 1500px) and (min-height: 800px) {
+  .room-stage {
+    --chrome-top: 72px;
+    --chrome-bottom: 214px;
+  }
+  .room-tag { font-size: 18px; }
+  .room-tag .label { font-size: 12px; }
+  .table-config-chip { font-size: 12px; }
+  .btn-leave { font-size: 16px; }
+
+  .actionbar { width: min(700px, 94vw); }
+  .ab-head { font-size: 18px; }
+  .ab-buttons .btn { font-size: 23px; max-width: 250px; }
+  .waiting { font-size: 18px; }
+  .pill { font-size: 15px; }
+  .raise-amt { font-size: 24px; min-width: 88px; }
+
+  .showdown .sd-who { font-size: 32px; }
+  .showdown .sd-amt { font-size: 23px; }
+  .showdown .sd-hand { font-size: 13px; }
+}
+
 .idle-warning {
   position: fixed;
   z-index: 45;

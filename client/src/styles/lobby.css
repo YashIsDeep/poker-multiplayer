@@ -289,7 +289,43 @@
 }
 .public-table-defaults b { color: var(--gold); }
 
+/* Desktop. The column is capped at 860px of laptop-sized type, which leaves a
+   1500px+ screen mostly empty swirl with the table rows reading small. Widen the
+   column and scale the type with it. .ranked-entry (ranked.css) is one of the
+   column's cards, so its width tracks the others. */
+@media (min-width: 1500px) {
+  .lobby-scroll { padding: 34px 18px; gap: 22px; }
+  .lobby-head,
+  .lobby-main,
+  .lobby-signed-out,
+  .lobby-actions,
+  .ranked-entry { width: min(1120px, 100%); }
+
+  .lobby-logo { font-size: 40px; padding: 10px 22px 14px; }
+  .user-chip b { font-size: 22px; }
+  .user-chip .logout { font-size: 15px; }
+  .user-chip .sign-in { font-size: 17px; }
+  .avatar { width: 40px; height: 40px; }
+
+  .lobby-main { padding: 26px; gap: 16px; }
+  .lobby-main h2 { font-size: 28px; }
+  .lobby-empty { font-size: 18px; }
+  .room-row { padding: 16px 22px; }
+  .room-name { font-size: 23px; }
+  .room-stat b { font-size: 21px; }
+  .room-stat .label { font-size: 13px; }
+  .btn-join { font-size: 19px; }
+
+  .btn-create { font-size: 24px; }
+  .join-code input { font-size: 22px; }
+  .btn-code-join { font-size: 18px; }
+
+  .lobby-signed-out h2 { font-size: 30px; }
+  .lobby-signed-out p { font-size: 19px; }
+}
+
 @media (max-width: 700px) {
+  .lobby-head .user-chip { margin-left: auto; }
   .room-row { grid-template-columns: 1fr auto auto; }
   .room-stat:nth-of-type(2) { display: none; }
 }

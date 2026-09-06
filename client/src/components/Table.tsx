@@ -56,6 +56,15 @@ export function seatPosition(viewIndex: number, totalSeats: number) {
 // below, status badges to the sides) plus breathing room against hard edges.
 const FIT_PAD = { top: 8, bottom: 42, side: 14 }
 
+// The composition's layout size comes from the CSS width breakpoints, which are
+// laptop-sized; a desktop leaves that box floating in dead space with pod names,
+// stacks and cards reading tiny. The fit below may therefore scale UP as well as
+// down, capped so a 4K screen does not blow the pixel art into slabs. It also
+// keeps browser zoom honest: zooming shrinks the CSS viewport, which can trip a
+// narrower width breakpoint into a smaller layout box, and without headroom
+// above 1 the table would come out smaller than it was at 100%.
+const MAX_FIT_SCALE = 1.6
+
 // T11 fit-to-viewport: the composition (felt + overhanging pods) has a fixed
 // layout size from the CSS width breakpoints; this hook scales and positions
 // .table-wrap so every pod stays inside the box the room chrome leaves free
@@ -106,7 +115,7 @@ function useTableFit(wrapRef: RefObject<HTMLDivElement | null>, totalSeats: numb
       const chromeRight = chrome('--chrome-right', 0)
       const availW = stage.clientWidth - chromeRight - 20
       const availH = stage.clientHeight - chromeTop - chromeBottom
-      const scale = Math.min(1, availW / (box.right - box.left), availH / (box.bottom - box.top))
+      const scale = Math.min(MAX_FIT_SCALE, availW / (box.right - box.left), availH / (box.bottom - box.top))
       // Wrap center such that the pod box lands centered in the free area
       // (scale() is about the wrap center thanks to translate(-50%, -50%)).
       const boxMidX = (box.left + box.right) / 2
