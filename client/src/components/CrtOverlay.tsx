@@ -1,10 +1,6 @@
-// T8: CRT scanlines + animated film grain + vignette (pure CSS, see crt.css).
+// T8: screen vignette (pure CSS, see crt.css). The CRT scanline/film-grain
+// layer that used to sit under this was removed.
 
 export default function CrtOverlay() {
-  return (
-    <>
-      <div className="crt" aria-hidden="true" />
-      <div className="vignette" aria-hidden="true" />
-    </>
-  )
+  return <div className="vignette" aria-hidden="true" />
 }
