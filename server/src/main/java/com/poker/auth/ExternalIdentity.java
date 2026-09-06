@@ -7,10 +7,18 @@ public record ExternalIdentity(
         AuthProvider provider,
         String providerSubject,
         String displayName,
-        String avatarUrl) {
+        String avatarUrl,
+        String email) {
 
     private static final int MAX_SUBJECT_CODE_POINTS = 255;
     private static final int MAX_AVATAR_LENGTH = 1024;
+    private static final int MAX_EMAIL_LENGTH = 320;
+
+    /** Providers that expose no verified email (Discord's identify scope, dev login). */
+    public ExternalIdentity(
+            AuthProvider provider, String providerSubject, String displayName, String avatarUrl) {
+        this(provider, providerSubject, displayName, avatarUrl, null);
+    }
 
     public ExternalIdentity {
         if (provider == null) {
@@ -19,6 +27,28 @@ public record ExternalIdentity(
         validateSubject(providerSubject);
         displayName = DisplayNamePolicy.normalizeDevName(displayName);
         avatarUrl = sanitizeAvatarUrl(avatarUrl);
+        email = normalizeEmail(email);
+    }
+
+    /**
+     * Lower-cases and bounds a provider email so it can be compared against the
+     * moderator allowlist. Anything malformed becomes null rather than throwing:
+     * a missing email costs the user nothing but moderator standing.
+     */
+    public static String normalizeEmail(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim().toLowerCase(java.util.Locale.ROOT);
+        if (trimmed.isEmpty() || trimmed.length() > MAX_EMAIL_LENGTH
+                || DisplayNamePolicy.containsForbiddenCodePoint(trimmed)) {
+            return null;
+        }
+        int at = trimmed.indexOf('@');
+        if (at <= 0 || at != trimmed.lastIndexOf('@') || at == trimmed.length() - 1) {
+            return null;
+        }
+        return trimmed;
     }
 
     public static String sanitizeAvatarUrl(String value) {

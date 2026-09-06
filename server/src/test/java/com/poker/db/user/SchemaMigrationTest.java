@@ -42,6 +42,24 @@ class SchemaMigrationTest {
                 Integer.class));
     }
 
+    @Test
+    void v3AddsTheNullableEmailColumnTheModeratorAllowListIsKeyedOn() {
+        JdbcDataSource dataSource = dataSource();
+        configuredFlyway(dataSource).migrate();
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        jdbc.update("insert into app_user (id, provider, provider_subject, display_name,"
+                + " created_at, last_login_at) values (?, 'DEV', 'subject', 'Alice', ?, ?)",
+                UUID.randomUUID(), java.time.OffsetDateTime.now(), java.time.OffsetDateTime.now());
+
+        assertEquals("YES", jdbc.queryForObject(
+                "select is_nullable from information_schema.columns"
+                        + " where table_name = 'APP_USER' and column_name = 'EMAIL'",
+                String.class));
+        assertEquals(1, jdbc.queryForObject(
+                "select count(*) from app_user where email is null", Integer.class));
+    }
+
     private static Flyway configuredFlyway(DataSource dataSource) {
         return Flyway.configure()
                 .dataSource(dataSource)

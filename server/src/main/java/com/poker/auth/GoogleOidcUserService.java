@@ -51,7 +51,8 @@ public class GoogleOidcUserService implements OAuth2UserService<OidcUserRequest,
                     AuthProvider.GOOGLE,
                     subject,
                     DisplayNamePolicy.normalizeProviderName(name, subject),
-                    picture);
+                    picture,
+                    verifiedEmail(claims));
             return new ProvisionedOidcUser(
                     providerUser,
                     SessionUserPrincipal.from(provisioningService.provision(identity)));
@@ -60,5 +61,17 @@ public class GoogleOidcUserService implements OAuth2UserService<OidcUserRequest,
         } catch (RuntimeException ex) {
             throw OAuthMappingSupport.failure();
         }
+    }
+
+    /**
+     * Only a Google-verified address is worth storing: the moderator allowlist is
+     * keyed on it, and an unverified claim would let anyone assert any address.
+     */
+    private static String verifiedEmail(Map<String, Object> claims) {
+        Object verified = claims.get("email_verified");
+        boolean isVerified = verified instanceof Boolean flag
+                ? flag
+                : verified instanceof String text && Boolean.parseBoolean(text);
+        return isVerified ? OAuthMappingSupport.stringAttribute(claims, "email") : null;
     }
 }

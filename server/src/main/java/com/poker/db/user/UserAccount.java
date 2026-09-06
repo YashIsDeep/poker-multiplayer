@@ -39,6 +39,9 @@ public class UserAccount {
     @Column(name = "avatar_url", length = 1024)
     private String avatarUrl;
 
+    @Column(name = "email", length = 320)
+    private String email;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -53,6 +56,7 @@ public class UserAccount {
         this.providerSubject = identity.providerSubject();
         this.displayName = identity.displayName();
         this.avatarUrl = identity.avatarUrl();
+        this.email = identity.email();
         this.createdAt = now;
         this.lastLoginAt = now;
     }
@@ -60,6 +64,11 @@ public class UserAccount {
     public void refreshFrom(ExternalIdentity identity, Instant now) {
         this.displayName = identity.displayName();
         this.avatarUrl = identity.avatarUrl();
+        // A provider that stops returning the claim must not silently drop a
+        // moderator's identity, so only a present value overwrites the stored one.
+        if (identity.email() != null) {
+            this.email = identity.email();
+        }
         this.lastLoginAt = now;
     }
 
@@ -81,6 +90,10 @@ public class UserAccount {
 
     public String getAvatarUrl() {
         return avatarUrl;
+    }
+
+    public String getEmail() {
+        return email;
     }
 
     public Instant getCreatedAt() {

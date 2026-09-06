@@ -13,6 +13,9 @@ public interface CurrentUserPrincipal extends Principal, Serializable {
 
     String avatarUrl();
 
+    /** Verified provider email, or null when the provider supplied none. */
+    String email();
+
     @Override
     default String getName() {
         return userId().toString();

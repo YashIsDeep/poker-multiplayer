@@ -16,12 +16,21 @@ public final class SessionUserPrincipal implements CurrentUserPrincipal {
     private final AuthProvider provider;
     private final String displayName;
     private final String avatarUrl;
+    // Sessions serialized before this field existed deserialize it as null,
+    // which simply reads as "not a moderator" until the next sign-in.
+    private final String email;
 
     public SessionUserPrincipal(UUID userId, AuthProvider provider, String displayName, String avatarUrl) {
+        this(userId, provider, displayName, avatarUrl, null);
+    }
+
+    public SessionUserPrincipal(
+            UUID userId, AuthProvider provider, String displayName, String avatarUrl, String email) {
         this.userId = Objects.requireNonNull(userId, "userId");
         this.provider = Objects.requireNonNull(provider, "provider");
         this.displayName = Objects.requireNonNull(displayName, "displayName");
         this.avatarUrl = avatarUrl;
+        this.email = email;
     }
 
     public static SessionUserPrincipal from(UserAccount account) {
@@ -29,7 +38,8 @@ public final class SessionUserPrincipal implements CurrentUserPrincipal {
                 account.getId(),
                 account.getProvider(),
                 account.getDisplayName(),
-                account.getAvatarUrl());
+                account.getAvatarUrl(),
+                account.getEmail());
     }
 
     public List<GrantedAuthority> authorities() {
@@ -57,6 +67,11 @@ public final class SessionUserPrincipal implements CurrentUserPrincipal {
     }
 
     @Override
+    public String email() {
+        return email;
+    }
+
+    @Override
     public boolean equals(Object other) {
         if (this == other) {
             return true;
@@ -67,12 +82,13 @@ public final class SessionUserPrincipal implements CurrentUserPrincipal {
         return userId.equals(that.userId)
                 && provider == that.provider
                 && displayName.equals(that.displayName)
-                && Objects.equals(avatarUrl, that.avatarUrl);
+                && Objects.equals(avatarUrl, that.avatarUrl)
+                && Objects.equals(email, that.email);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(userId, provider, displayName, avatarUrl);
+        return Objects.hash(userId, provider, displayName, avatarUrl, email);
     }
 
     @Override
