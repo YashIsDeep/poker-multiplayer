@@ -23,7 +23,8 @@ public record LobbyRoomState(
         Objects.requireNonNull(joinCode, "joinCode");
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(createdAt, "createdAt");
-        if (maxSeats < 2 || maxSeats > 9 || memberCount < 1
+        // memberCount may be zero: a house table stays listed with nobody in it.
+        if (maxSeats < 2 || maxSeats > 9 || memberCount < 0
                 || memberCount > maxSeats + PokerRoom.MAX_SPECTATORS
                 || seatedCount < 0 || seatedCount > memberCount || seatedCount > maxSeats
                 || connectedMemberCount < 0 || connectedMemberCount > memberCount) {

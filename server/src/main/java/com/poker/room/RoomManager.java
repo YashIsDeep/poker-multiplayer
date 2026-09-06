@@ -22,6 +22,8 @@ import java.security.SecureRandom;
  */
 public final class RoomManager {
     private static final int MAX_JOIN_CODE_ATTEMPTS = 32;
+    /** House tables have no owner; the creator slot still has to point somewhere. */
+    private static final UUID HOUSE_CREATOR_ID = new UUID(0L, 0L);
 
     private final Clock clock;
     private final JoinCodeGenerator joinCodeGenerator;
@@ -96,6 +98,33 @@ public final class RoomManager {
 
     public RoomChange create(UUID userId, String displayName, String avatarUrl, String rawName, int maxSeats) {
         return create(new MemberProfile(userId, displayName, avatarUrl), rawName, maxSeats);
+    }
+
+    /**
+     * Seeds a permanent public table with no members. It is exempt from every
+     * close path, so the lobby always offers at least one table to sit at.
+     */
+    public RoomChange createHouseTable(String rawName, int maxSeats, RoomConfig config) {
+        Objects.requireNonNull(config, "config");
+        String name = normalizeName(rawName);
+        validateMaxSeats(maxSeats);
+        registryLock.lock();
+        try {
+            RoomId roomId = uniqueRoomId();
+            JoinCode code = allocateCode();
+            Instant now = clock.instant();
+            PokerRoom room = new PokerRoom(
+                    roomId, code, name, maxSeats, false, true, HOUSE_CREATOR_ID, now,
+                    config, clock, deckFactory);
+            room.assertInvariant();
+            rooms.put(roomId, room);
+            roomsByCode.put(code, roomId);
+            incrementLobbyRevision();
+            updateLobbyEntry(room);
+            return change(RoomChange.Kind.CREATED, room, Set.of(), null, 0, Map.of());
+        } finally {
+            registryLock.unlock();
+        }
     }
 
     public RoomChange join(MemberProfile profile, String rawJoinCode) {
@@ -202,7 +231,7 @@ public final class RoomManager {
                 incrementLobbyRevision();
                 Set<UUID> recipients = memberIds(room);
                 RoomState state = null;
-                if (room.members.isEmpty()) {
+                if (room.members.isEmpty() && !room.permanent) {
                     room.closed = true;
                     rooms.remove(room.id);
                     roomsByCode.remove(room.joinCode);
@@ -779,6 +808,7 @@ public final class RoomManager {
                 }
 
                 if (room.allDisconnectedSince != null) {
+                    if (room.permanent) return CleanupOutcome.retry(now.plus(inactivityTimeout));
                     if (!mayCloseAtBoundary(room, now)) {
                         return CleanupOutcome.retry(now.plusSeconds(5));
                     }
@@ -805,6 +835,9 @@ public final class RoomManager {
                     return CleanupOutcome.changed(evictDisconnectedMemberLocked(room, expired));
                 }
 
+                // A house table has no idle deadline: it exists so the lobby is never
+                // empty. Members are still evicted above; only the close is skipped.
+                if (room.permanent) return CleanupOutcome.retry(now.plus(inactivityTimeout));
                 if (!mayCloseAtBoundary(room, now)) {
                     return CleanupOutcome.retry(now.plusSeconds(5));
                 }
@@ -984,7 +1017,10 @@ public final class RoomManager {
     }
 
     private void recomputeAllDisconnected(PokerRoom room, Instant now) {
-        boolean allDisconnected = room.members.values().stream()
+        // An empty house table is not an abandoned one, and the abandoned-room
+        // deadline is what would otherwise close it.
+        boolean allDisconnected = !(room.permanent && room.members.isEmpty())
+                && room.members.values().stream()
                 .allMatch(member -> member.disconnectedSince != null);
         if (allDisconnected) {
             if (room.allDisconnectedSince == null) room.allDisconnectedSince = now;
@@ -1052,8 +1088,11 @@ public final class RoomManager {
 
     private void updateLobbyEntry(PokerRoom room) {
         LobbyRoomState state = room.lobbyState();
-        if (room.privateTable || state.connectedMemberCount() == 0) lobbyRooms.remove(room.id);
-        else lobbyRooms.put(room.id, state);
+        if (room.privateTable || (state.connectedMemberCount() == 0 && !room.permanent)) {
+            lobbyRooms.remove(room.id);
+        } else {
+            lobbyRooms.put(room.id, state);
+        }
     }
 
     private JoinCode allocateCode() {

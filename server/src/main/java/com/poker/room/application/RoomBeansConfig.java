@@ -14,6 +14,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration
 @EnableScheduling
+@org.springframework.boot.context.properties.EnableConfigurationProperties(
+        com.poker.room.HouseTableProperties.class)
 public class RoomBeansConfig {
     @Bean
     RoomManager roomManager(Clock clock, JoinCodeGenerator joinCodeGenerator, DeckFactory deckFactory) {

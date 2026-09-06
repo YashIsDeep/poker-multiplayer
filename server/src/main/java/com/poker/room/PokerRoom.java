@@ -21,6 +21,8 @@ final class PokerRoom {
     final String name;
     final int maxSeats;
     final boolean privateTable;
+    /** House tables outlive their last member: never closed, always listed. */
+    final boolean permanent;
     final UUID creatorId;
     final Instant createdAt;
     RoomConfig config;
@@ -37,6 +39,13 @@ final class PokerRoom {
 
     PokerRoom(RoomId id, JoinCode joinCode, String name, int maxSeats, boolean privateTable,
               UUID creatorId, Instant createdAt, RoomConfig config, Clock clock, DeckFactory decks) {
+        this(id, joinCode, name, maxSeats, privateTable, false, creatorId, createdAt, config, clock, decks);
+    }
+
+    PokerRoom(RoomId id, JoinCode joinCode, String name, int maxSeats, boolean privateTable,
+              boolean permanent, UUID creatorId, Instant createdAt, RoomConfig config, Clock clock,
+              DeckFactory decks) {
+        this.permanent = permanent;
         this.id = Objects.requireNonNull(id, "id");
         this.joinCode = Objects.requireNonNull(joinCode, "joinCode");
         this.name = Objects.requireNonNull(name, "name");
@@ -92,7 +101,7 @@ final class PokerRoom {
     }
 
     void assertInvariant() {
-        if ((!closed && members.isEmpty()) || members.size() > memberCapacity() || revision <= 0) {
+        if ((!closed && !permanent && members.isEmpty()) || members.size() > memberCapacity() || revision <= 0) {
             throw new IllegalStateException("room invariant violated");
         }
         for (int seat = 0; seat < seats.length; seat++) {

@@ -34,7 +34,15 @@ public record RoomState(
                      long revision, List<MemberState> members, List<UUID> seats, RoomConfig config,
                      GameState game, Instant lastActivityAt) {
         this(id, joinCode, name, maxSeats, createdAt, revision, members, seats, config, game,
-                lastActivityAt, false, members.get(0).userId());
+                lastActivityAt, false, creatorOf(members));
+    }
+
+    /** This overload infers the creator, so it needs at least one member to infer from. */
+    private static UUID creatorOf(List<MemberState> members) {
+        if (members == null || members.isEmpty()) {
+            throw new IllegalArgumentException("invalid room projection");
+        }
+        return members.get(0).userId();
     }
     public RoomState {
         Objects.requireNonNull(id, "id");
@@ -47,7 +55,8 @@ public record RoomState(
         Objects.requireNonNull(game, "game");
         Objects.requireNonNull(lastActivityAt, "lastActivityAt");
         Objects.requireNonNull(creatorId, "creatorId");
-        if (maxSeats < 2 || maxSeats > 9 || revision <= 0 || members.isEmpty()
+        // members may be empty: a house table is a real room with nobody in it.
+        if (maxSeats < 2 || maxSeats > 9 || revision <= 0
                 || members.size() > maxSeats + PokerRoom.MAX_SPECTATORS || seats.size() != maxSeats) {
             throw new IllegalArgumentException("invalid room projection");
         }

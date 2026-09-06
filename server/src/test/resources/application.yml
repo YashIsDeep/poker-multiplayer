@@ -25,6 +25,11 @@ poker:
     # binding to List<String> is exercised rather than only the YAML list form.
     emails: ${POKER_MODERATOR_EMAILS:yashparth.gupta@gmail.com}
     dev-users-are-moderators: false
+  house-table:
+    # Off by default so tests that assert on a clean registry stay meaningful;
+    # HouseTableBootstrapIntegrationTest turns it on for itself.
+    enabled: false
+    name: House Table
   hand-archive:
     # Spring context tests must not write into a real archive directory.
     enabled: false

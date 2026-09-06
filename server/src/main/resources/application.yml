@@ -38,6 +38,11 @@ poker:
     # The dev login endpoint issues accounts with no provider email; the dev
     # profile turns this on so local and end-to-end runs can still create them.
     dev-users-are-moderators: false
+  house-table:
+    # One public table the lobby always shows, seeded at startup and never
+    # garbage collected, so a signed-in player always has somewhere to sit.
+    enabled: ${POKER_HOUSE_TABLE_ENABLED:true}
+    name: ${POKER_HOUSE_TABLE_NAME:House Table}
   hand-archive:
     # Compressed local analytics archive; independent of the database so it
     # keeps recording completed hands during a database outage.
