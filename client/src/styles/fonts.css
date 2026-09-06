@@ -1,6 +1,8 @@
-/* PixelifyClear: a 3-glyph override font (2 / 5 / 8 only), redrawn in clean
-   5x7 pixel forms on Pixelify Sans's grid + metrics. Listed FIRST in
-   --font-pixel so these three digits use it and every other character falls
+/* PixelifyClear: a 5-glyph override font (2 / 3 / 5 / 8 / 9 only), redrawn in
+   clean 5x7 pixel forms on Pixelify Sans's grid + metrics. Three and nine are
+   here because Pixelify Sans draws them as near-copies of eight; their open
+   sides are cut back so the trio stays legible at label sizes. Listed FIRST in
+   --font-pixel so these five digits use it and every other character falls
    through to Pixelify Sans via normal per-glyph font fallback. Separate files
    keep regular labels and bold chip stacks optically balanced. */
 @font-face {

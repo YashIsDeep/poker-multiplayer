@@ -1,4 +1,4 @@
-"""Build the tiny 2/5/8 override font used by the poker UI.
+"""Build the tiny 2/3/5/8/9 override font used by the poker UI.
 
 The cells overlap slightly on every edge. This keeps the approved 5x7
 silhouettes intact while giving the custom numerals the same visual mass as
@@ -26,8 +26,20 @@ WEIGHTS = {
 # stronger one because its long top/middle bars accumulate more apparent mass.
 GLYPH_WEIGHT_SCALE = {
     "two": {"x": 0.76, "y": 0.88},
+    "three": {"x": 1.0, "y": 1.0},
     "five": {"x": 0.72, "y": 0.72},
     "eight": {"x": 1.0, "y": 1.0},
+    "nine": {"x": 1.0, "y": 1.0},
+}
+
+# Three, eight and nine share one double-bowl silhouette, so the only thing
+# telling them apart is where the bowl is left open. Nine's lower-left spur
+# closes that gap almost as tightly as eight's full left column, so shorten it
+# from the top; the trim stops short of a whole cell because the spur's bottom
+# corner is what joins it to the base bar. Trims are font units taken off one
+# cell after the weight expansion, so both weights keep the same silhouette.
+CELL_EDGE_TRIMS: dict[tuple[str, int, int], dict[str, int]] = {
+    ("nine", 5, 0): {"top": 60},
 }
 
 # A partial-cell terminal shift echoes 7's stepped curve without the abrupt
@@ -61,6 +73,17 @@ PATTERNS = {
         "X....",
         "XXXXX",
     ),
+    # Three's middle bar is a cell shorter than eight's on the open side, so
+    # the left gap reads as a gap rather than as a dropped pixel.
+    "three": (
+        ".XXX.",
+        "X...X",
+        "....X",
+        "..XX.",
+        "....X",
+        "X...X",
+        ".XXX.",
+    ),
     "five": (
         "XXXXX",
         "X....",
@@ -76,6 +99,15 @@ PATTERNS = {
         "X...X",
         ".XXX.",
         "X...X",
+        "X...X",
+        ".XXX.",
+    ),
+    "nine": (
+        ".XXX.",
+        "X...X",
+        "X...X",
+        ".XXXX",
+        "....X",
         "X...X",
         ".XXX.",
     ),
@@ -118,6 +150,11 @@ def build_glyph(
                 drawn_y1 = round(row_center + half_height)
             drawn_x0 = x0 - x_bold
             drawn_x1 = x1 + x_bold
+            trims = CELL_EDGE_TRIMS.get((glyph_name, top_row, column), {})
+            drawn_x0 += trims.get("left", 0)
+            drawn_x1 -= trims.get("right", 0)
+            drawn_y0 += trims.get("bottom", 0)
+            drawn_y1 -= trims.get("top", 0)
             terminal = CURVED_TERMINALS.get((glyph_name, top_row, column))
             curve = round((drawn_y1 - drawn_y0) * 0.3)
             corner_cut = round(min(drawn_x1 - drawn_x0, drawn_y1 - drawn_y0) * 0.15)
@@ -183,7 +220,7 @@ def build_glyph(
 
 
 def build_weight(weight: int, settings: dict[str, int]) -> None:
-    glyph_order = [".notdef", "two", "five", "eight"]
+    glyph_order = [".notdef", "two", "three", "five", "eight", "nine"]
     glyphs = {".notdef": TTGlyphPen(None).glyph()}
     glyphs.update(
         {
@@ -203,7 +240,13 @@ def build_weight(weight: int, settings: dict[str, int]) -> None:
 
     font = FontBuilder(1000, isTTF=True)
     font.setupGlyphOrder(glyph_order)
-    font.setupCharacterMap({ord("2"): "two", ord("5"): "five", ord("8"): "eight"})
+    font.setupCharacterMap({
+        ord("2"): "two",
+        ord("3"): "three",
+        ord("5"): "five",
+        ord("8"): "eight",
+        ord("9"): "nine",
+    })
     font.setupGlyf(glyphs)
     left_side_bearing = 60 + settings["x_shift"] - settings["x_bold"]
     font.setupHorizontalMetrics({

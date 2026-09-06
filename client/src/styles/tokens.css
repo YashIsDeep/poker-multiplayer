@@ -24,7 +24,7 @@
   --suit-red: #c01818;
   --suit-dark: #2e3444;
 
-  /* PixelifyClear (fonts.css) overrides only 2/5/8 with clearer glyphs;
+  /* PixelifyClear (fonts.css) overrides only 2/3/5/8/9 with clearer glyphs;
      Pixelify Sans renders everything else, monospace is the last resort. */
   --font-pixel: 'PixelifyClear', 'Pixelify Sans', monospace;
 
