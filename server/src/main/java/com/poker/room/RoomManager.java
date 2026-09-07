@@ -34,6 +34,7 @@ public final class RoomManager {
     private final Map<UUID, RoomId> roomsByUser = new HashMap<>();
     private final Map<RoomId, LobbyRoomState> lobbyRooms = new HashMap<>();
     private final Map<UUID, Long> membershipEpochs = new HashMap<>();
+    private final Map<RoomId, RoomId> rankedMerges = new java.util.LinkedHashMap<>();
     private long lobbyRevision;
 
     public RoomManager() {
@@ -618,12 +619,108 @@ public final class RoomManager {
         finally { registryLock.unlock(); }
     }
 
+    /** Reserve small tables, then transfer only after both have cleared their settled hand displays. */
+    public List<RoomChange> consolidateRanked() {
+        registryLock.lock();
+        List<PokerRoom> tables = List.of();
+        try {
+            tables = rooms.values().stream().filter(r -> r.game.ranked())
+                    .sorted(Comparator.comparing((PokerRoom r) -> r.createdAt).thenComparing(r -> r.id.value())).toList();
+            // The registry serializes membership changes; this stable lock order also
+            // protects balances and hand boundaries against gameplay callbacks.
+            tables.forEach(r -> r.lock.lock());
+            List<RoomChange> changes = new java.util.ArrayList<>();
+            for (var pair : List.copyOf(rankedMerges.entrySet())) {
+                PokerRoom target = rooms.get(pair.getKey()), source = rooms.get(pair.getValue());
+                if (!mergeCompatible(target, source)) {
+                    rankedMerges.remove(pair.getKey());
+                    releaseMergeHold(target, changes);
+                    releaseMergeHold(source, changes);
+                }
+            }
+            Set<RoomId> reserved = new java.util.HashSet<>(rankedMerges.keySet());
+            reserved.addAll(rankedMerges.values());
+            for (PokerRoom target : tables) {
+                if (reserved.contains(target.id) || !smallRankedTable(target)) continue;
+                for (PokerRoom source : tables) {
+                    if (source == target || reserved.contains(source.id) || !mergeCompatible(target, source)) continue;
+                    rankedMerges.put(target.id, source.id);
+                    reserved.add(target.id); reserved.add(source.id);
+                    target.game.holdForConsolidation(true);
+                    source.game.holdForConsolidation(true);
+                    changes.add(mergeChange(target));
+                    changes.add(mergeChange(source));
+                    break;
+                }
+            }
+            for (var pair : List.copyOf(rankedMerges.entrySet())) {
+                PokerRoom target = rooms.get(pair.getKey()), source = rooms.get(pair.getValue());
+                if (!target.game.transferBoundary() || !source.game.transferBoundary()) continue;
+                GameState sourceGame = source.game.snapshot();
+                for (PokerRoom.Member old : source.members.values().stream()
+                        .sorted(Comparator.comparing((PokerRoom.Member m) -> m.joinedAt).thenComparing(m -> m.userId)).toList()) {
+                    TableSeatState oldSeat = sourceGame.seats().stream().filter(s -> s.userId().equals(old.userId)).findFirst().orElse(null);
+                    Integer newSeat = oldSeat == null ? null : firstEmptySeat(target);
+                    incrementEpoch(old.userId);
+                    PokerRoom.Member moved = new PokerRoom.Member(new MemberProfile(old.userId, old.displayName, old.avatarUrl),
+                            old.joinedAt, epoch(old.userId));
+                    moved.disconnectedSince = old.disconnectedSince;
+                    moved.seat = newSeat;
+                    target.members.put(old.userId, moved);
+                    target.game.transferIn(old.userId, sourceGame.players().get(old.userId), oldSeat, newSeat);
+                    if (newSeat != null) target.seats[newSeat] = old.userId;
+                    roomsByUser.put(old.userId, target.id);
+                }
+                source.closed = true;
+                rooms.remove(source.id); roomsByCode.remove(source.joinCode); lobbyRooms.remove(source.id);
+                source.members.clear(); java.util.Arrays.fill(source.seats, null);
+                rankedMerges.remove(target.id);
+                target.game.holdForConsolidation(false);
+                recomputeAllDisconnected(target, clock.instant());
+                touch(target, clock.instant());
+                target.assertInvariant();
+                changes.add(mergeChange(target));
+                changes.add(new RoomChange(RoomChange.Kind.RANKED_TABLE_MERGED, source.id.value(), null,
+                        lobbyStateLocked(), Set.of(), Map.of(), null, 0, 0, lobbyRevision));
+            }
+            return List.copyOf(changes);
+        } finally {
+            for (int i = tables.size() - 1; i >= 0; i--) tables.get(i).lock.unlock();
+            registryLock.unlock();
+        }
+    }
+
+    private boolean smallRankedTable(PokerRoom room) {
+        if (room == null || room.closed || !room.game.ranked()) return false;
+        TableStatus status = room.game.snapshot().tableStatus();
+        return status != TableStatus.FAILED && status != TableStatus.PAUSED && room.game.activeFundedPlayers() <= 3;
+    }
+
+    private boolean mergeCompatible(PokerRoom target, PokerRoom source) {
+        return target != source && smallRankedTable(target) && smallRankedTable(source)
+                && target.members.size() + source.members.size() <= RoomConfig.PUBLIC_SEATS;
+    }
+
+    private void releaseMergeHold(PokerRoom room, List<RoomChange> changes) {
+        if (room == null || !room.game.consolidationHeld()) return;
+        room.game.holdForConsolidation(false);
+        changes.add(mergeChange(room));
+    }
+
+    private RoomChange mergeChange(PokerRoom room) {
+        incrementRoomRevision(room);
+        incrementLobbyRevision();
+        updateLobbyEntry(room);
+        return change(RoomChange.Kind.RANKED_TABLE_MERGED, room, memberIds(room), null, 0, epochsFor(room));
+    }
+
     private boolean rankedVacancy(PokerRoom room) {
         room.lock.lock();
         try {
             TableStatus status = room.game.snapshot().tableStatus();
             // Reserve a returning player's seat during rebuy/sit-out.
             return room.game.ranked() && room.members.size() < 6 && !room.closed
+                    && !room.game.consolidationHeld()
                     && status != TableStatus.FAILED && status != TableStatus.SETTLING
                     && status != TableStatus.PAUSED;
         } finally { room.lock.unlock(); }

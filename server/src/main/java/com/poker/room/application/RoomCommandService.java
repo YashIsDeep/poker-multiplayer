@@ -83,6 +83,12 @@ public final class RoomCommandService {
         return commit(roomManager.assignRanked(profile, settlement));
     }
 
+    public java.util.List<RoomChange> consolidateRanked() {
+        var changes = roomManager.consolidateRanked();
+        changes.forEach(this::commit);
+        return changes;
+    }
+
     public RoomCommandResult stateSync(UUID userId) {
         RoomChange change = roomManager.stateSync(userId);
         return new RoomCommandResult(change, PublicationReport.none());
