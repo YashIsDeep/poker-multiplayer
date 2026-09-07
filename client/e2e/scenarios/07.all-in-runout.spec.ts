@@ -9,7 +9,8 @@ test('all-in and call run the board to showdown without further input', async ({
 
   const raiser = await waitForTurn([alice, bob])
   await raiser.getByRole('button', { name: 'All-in' }).click()
-  await raiser.getByRole('button', { name: /Raise to/ }).click()
+  // The all-in button pulses continuously; exercise its keyboard activation.
+  await raiser.getByRole('button', { name: /^Go all-in to/ }).press('Enter')
   const caller = await waitForTurn(raiser === alice ? [bob] : [alice])
   await caller.getByRole('button', { name: /Call/ }).click()
 
