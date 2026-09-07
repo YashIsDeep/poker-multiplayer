@@ -292,8 +292,9 @@ function initialEvents(game: Game | null): AnimationEvents {
   }
 }
 
-export function useAnimationQueue(game: Game | null, reducedMotion: boolean): AnimationEvents {
+export function useAnimationQueue(game: Game | null, reducedMotion: boolean, roomKey?: string): AnimationEvents {
   const { formatChips } = useTableChipFormat()
+  const roomRef = useRef(roomKey)
   const sourceRef = useRef<Game | null>(null)
   const latestRef = useRef<Game | null>(game)
   const awardBaselineRef = useRef<Game | null>(null)
@@ -318,6 +319,12 @@ export function useAnimationQueue(game: Game | null, reducedMotion: boolean): An
     for (const timer of timersRef.current) window.clearTimeout(timer)
     timersRef.current = []
 
+    if (roomRef.current !== roomKey) {
+      roomRef.current = roomKey
+      awardBaselineRef.current = null
+      setEvents(initialEvents(game))
+      return
+    }
     if (!game || reducedMotion) {
       awardBaselineRef.current = null
       setEvents((current) => ({
@@ -591,7 +598,7 @@ export function useAnimationQueue(game: Game | null, reducedMotion: boolean): An
       diff.awardsStarted ? timelineOffset + AWARD_FLIGHT_MS : 0,
     ))
     timersRef.current.push(clearTimer)
-  }, [game, reducedMotion, formatChips])
+  }, [game, reducedMotion, roomKey, formatChips])
 
-  return events
+  return roomRef.current === roomKey ? events : initialEvents(game)
 }

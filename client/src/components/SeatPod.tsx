@@ -25,6 +25,7 @@ export type SeatPodProps = {
   showdown: boolean
   deadline: number | null
   budgetMs: number
+  automaticSeating?: boolean
   canTakeSeat: boolean
   onTakeSeat: (seat: number) => void
   onStatusChipClick: (message: string) => void
@@ -196,6 +197,14 @@ export default function SeatPod(props: SeatPodProps) {
     chatBubbleBottomRow = false,
   } = props
 
+  if (!member && props.automaticSeating) {
+    return <div className="seat empty" data-seat={seat}>
+      <div className="pod pod-empty">
+        <div className="pname">SEAT {seat + 1}</div>
+        <div className="plast">auto assigned</div>
+      </div>
+    </div>
+  }
   if (!member) {
     return (
       <div className="seat empty" data-seat={seat}>

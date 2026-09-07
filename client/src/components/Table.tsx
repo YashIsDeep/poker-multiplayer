@@ -309,6 +309,7 @@ export default function Table({ room, game, animations }: TableProps) {
                 showdown={Boolean(isShowdown)}
                 deadline={isActor && game ? game.deadline : null}
                 budgetMs={room.config.actionTimeoutSeconds * 1000}
+                automaticSeating={room.mode === 'RANKED'}
                 canTakeSeat={room.viewer.canTakeSeat && !member}
                 onTakeSeat={handleTakeSeat}
                 onStatusChipClick={handleStatusChipClick}

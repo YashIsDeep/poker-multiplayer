@@ -120,6 +120,27 @@ export default function ActionBar({ presentationLocked = false }: { presentation
 
   if (!room) return null
 
+  if (room.rankedStatus === 'SETTLING') {
+    return <div className="actionbar panel wait" role="status">
+      <h3 className="ab-head">Saving ranked result</h3>
+      <p className="waiting">Play is paused while the server retries. Your result will appear once it is saved.</p>
+    </div>
+  }
+
+  if (room.rankedStatus === 'CONSOLIDATING' && (!game || game.phase === null)) {
+    return <div className="actionbar panel wait" role="status">
+      <h3 className="ab-head">Combining ranked tables</h3>
+      <p className="waiting">Waiting for the other table to finish. Your stack and rebuy wait carry over.</p>
+    </div>
+  }
+
+  if (room.rankedStatus === 'CONSOLIDATING' && (!game || game.phase === null)) {
+    return <div className="actionbar panel wait" role="status">
+      <h3 className="ab-head">Combining ranked tables</h3>
+      <p className="waiting">Waiting for the other table to finish. Your stack and rebuy wait carry over.</p>
+    </div>
+  }
+
   if (presentationLocked) {
     return (
       <div className="actionbar panel wait presentation-lock" data-testid="actionbar-cleanup">
@@ -146,6 +167,18 @@ export default function ActionBar({ presentationLocked = false }: { presentation
         onRebuy={rebuy}
       />
     )
+  }
+
+  if (room.mode === 'RANKED' && !viewerSeated && !room.viewer.busted) {
+    return <div className="actionbar panel wait">
+      <p className="waiting">You are sitting out of ranked play.</p>
+      <button className="btn btn-blue" data-sound="seat" onClick={sitBack}>Return to table</button>
+    </div>
+  }
+  if (room.rankedStatus === 'WAITING_FOR_PLAYERS' && viewerSeated && gameSeat?.seatStatus !== 'SITTING_OUT') {
+    return <div className="actionbar panel wait" role="status">
+      <p className="waiting">Waiting for at least 3 active players. Ranked tables seat up to 6.</p>
+    </div>
   }
 
   if (!game || !viewerSeated) {

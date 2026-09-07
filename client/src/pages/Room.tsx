@@ -18,6 +18,7 @@ import HandHistoryDrawer from '../components/HandHistoryDrawer'
 import ChatPanel from '../components/ChatPanel'
 import ShowdownResultsModal from '../components/ShowdownResultsModal'
 import TrophyIcon from '../components/TrophyIcon'
+import RankedTableStats from '../components/RankedTableStats'
 import { formatChips } from '../lib/chips'
 import { isCompletedHandResult } from '../lib/showdownResults'
 import { serverNow, useGameStore } from '../store/gameStore'
@@ -87,7 +88,7 @@ export default function Room() {
   const keepRoomAlive = useGameStore((s) => s.keepRoomAlive)
 
   const reducedMotion = useReducedMotion()
-  const animations = useAnimationQueue(game, reducedMotion)
+  const animations = useAnimationQueue(game, reducedMotion, room?.roomId)
   const tableGame = animations.displayGame
   useGameSounds(game, yourSeat)
 
@@ -109,6 +110,19 @@ export default function Room() {
 
   const handIsOver = isCompletedHandResult(game)
   const handId = game?.handId ?? null
+  useEffect(() => {
+    setLastHandResult(null)
+    setShowdownOpen(false)
+    setHandHistoryOpen(false)
+    trophyFlightHandRef.current = null
+  }, [room?.roomId])
+
+  useEffect(() => {
+    setLastHandResult(null)
+    setShowdownOpen(false)
+    setHandHistoryOpen(false)
+    trophyFlightHandRef.current = null
+  }, [room?.roomId])
 
   useEffect(() => {
     if (!handIsOver || !game) return
@@ -166,6 +180,14 @@ export default function Room() {
   useEffect(() => {
     if (mockState || connection !== 'connected') return
     if (roomClosed || roomGone || takenOver) return
+    if (room?.mode === 'RANKED' && roomId !== room.roomId) {
+      navigate('/room/' + room.roomId, { replace: true })
+      return
+    }
+    if (room?.mode === 'RANKED' && roomId !== room.roomId) {
+      navigate(`/room/${room.roomId}`, { replace: true })
+      return
+    }
     if (room === null || (roomId && room.roomId !== roomId)) {
       const timer = setTimeout(() => {
         const current = useGameStore.getState()
@@ -285,7 +307,8 @@ export default function Room() {
       <div className="room-topbar">
         <div className="room-tag panel">
           <b>{room.name}</b>
-          <span className="label">code</span>
+          {room.mode === 'RANKED' && <RankedTableStats room={room} />}
+          {room.mode !== 'RANKED' && <><span className="label">code</span>
           <button
             type="button"
             className="room-code num"
@@ -419,7 +442,7 @@ export default function Room() {
       )}
       <ActionBar presentationLocked={animations.handCleanup} />
 
-      <AutoSeatPrompt room={room} />
+      {room.mode !== 'RANKED' && <AutoSeatPrompt room={room} />}
 
       {tableSettingsOpen && <TableSettingsModal onClose={() => setTableSettingsOpen(false)} />}
       {settingsOpen && (
