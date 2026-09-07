@@ -52,6 +52,13 @@ public final class ScheduledGameplayCoordinator {
 
     @Scheduled(fixedDelayString = "${poker.gameplay.recovery-sweep-ms:5000}")
     public void recoverPausedTables() {
+        // Also repairs a rejected retry timer without discarding a pending result.
+        rooms.roomIds().stream().map(rooms::room).flatMap(Optional::stream)
+                .filter(state -> state.game().tableStatus() == TableStatus.SETTLING)
+                .limit(100).forEach(state -> {
+                rooms.advancePresentation(state.roomId(), state.game().handId(), state.game().scheduleGeneration())
+                        .ifPresent(this::publishAndReconcile);
+        });
         rooms.pausedRoomIds().stream().limit(100).forEach(roomId -> {
             rooms.room(roomId).ifPresent(state -> rooms.recoverGameplay(
                     roomId, state.game().scheduleGeneration()).ifPresent(this::publishAndReconcile));
@@ -84,6 +91,10 @@ public final class ScheduledGameplayCoordinator {
     }
 
     private ScheduleIntent intent(UUID roomId, GameState game, long generation) {
+        if (game.tableStatus() == TableStatus.SETTLING) {
+            return new ScheduleIntent(clock.instant().plusSeconds(2), () -> runCurrent(
+                    roomId, generation, () -> rooms.advancePresentation(roomId, game.handId(), generation)));
+        }
         if (game.tableStatus() == TableStatus.PAUSED || game.tableStatus() == TableStatus.FAILED) {
             return null;
         }
