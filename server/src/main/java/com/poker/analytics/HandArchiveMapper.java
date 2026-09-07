@@ -91,7 +91,7 @@ final class HandArchiveMapper {
                 potAwarded,
                 players,
                 awards,
-                events);
+                events, room.mode(), players.size());
     }
 
     private static HandArchiveRecord.Event map(HandHistoryEvent history) {

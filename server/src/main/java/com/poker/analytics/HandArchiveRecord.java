@@ -29,9 +29,9 @@ public record HandArchiveRecord(
         long potAwarded,
         List<Player> players,
         List<Award> awards,
-        List<Event> events) {
+        List<Event> events, String mode, int participantCount) {
 
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Player(

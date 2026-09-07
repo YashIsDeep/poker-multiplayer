@@ -95,7 +95,7 @@ class HandArchivePipelineTest {
         assertThat(awaitRecords(1)).hasSize(1);
 
         JsonNode hand = records.getFirst();
-        assertThat(hand.get("schemaVersion").asInt()).isEqualTo(1);
+        assertThat(hand.get("schemaVersion").asInt()).isEqualTo(2);
         assertThat(hand.get("roomId").asText()).isEqualTo(frame.roomId().toString());
         assertThat(hand.get("roomName").asText()).isEqualTo("Archive table");
         assertThat(hand.get("handId").asLong()).isEqualTo(1);
@@ -152,7 +152,7 @@ class HandArchivePipelineTest {
                         false, false, 15)),
                 List.of(new HandArchiveRecord.Award(0, 15,
                         List.of(new HandArchiveRecord.Winner(user, 0, 15)))),
-                List.of());
+                List.of(), "CASUAL", 1);
     }
 
     private List<JsonNode> awaitRecords(int expected) throws Exception {
