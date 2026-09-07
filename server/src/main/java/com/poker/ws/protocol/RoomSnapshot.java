@@ -19,7 +19,9 @@ public record RoomSnapshot(
         List<SeatView> seats,
         RoomConfigView config,
         ViewerRoomState viewer,
-        GameView game) {
+        GameView game,
+        String mode,
+        String rankedStatus) {
     public RoomSnapshot {
         members = List.copyOf(members);
         seats = List.copyOf(seats);

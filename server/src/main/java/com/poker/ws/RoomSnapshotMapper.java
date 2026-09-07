@@ -65,7 +65,7 @@ public final class RoomSnapshotMapper {
                 viewerView,
                 viewer.seated(),
                 viewer.seat(),
-                viewer.seat() == null && !busted,
+                !state.game().ranked() && viewer.seat() == null && !busted,
                 viewer.seat() != null,
                 busted,
                 busted && state.config().rebuysEnabled() ? state.config().rebuyStack() : null,
@@ -96,7 +96,9 @@ public final class RoomSnapshotMapper {
                         state.config().rebuyStack(),
                         state.config().rebuyDelayHands()),
                 viewerState,
-                gameRedactor.redact(state, viewerId));
+                gameRedactor.redact(state, viewerId),
+                state.mode(),
+                state.game().rankedStatus());
     }
 
     public StateSyncView stateSync(LobbyState lobby, RoomState room, UUID viewerId, long membershipEpoch) {
@@ -123,7 +125,7 @@ public final class RoomSnapshotMapper {
                 room.memberCount(),
                 room.seatedCount(),
                 room.connectedMemberCount(),
-                room.createdAt());
+                room.createdAt(), room.mode(), room.rankedStatus());
     }
 
     private RoomMemberView member(MemberState member, UUID creatorId) {
