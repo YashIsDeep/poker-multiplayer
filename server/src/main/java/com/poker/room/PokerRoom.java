@@ -97,7 +97,8 @@ final class PokerRoom {
             }
             if (member.disconnectedSince == null) connected++;
         }
-        return new LobbyRoomState(id, joinCode, name, maxSeats, members.size(), seated, connected, createdAt);
+        return new LobbyRoomState(id, joinCode, name, maxSeats, members.size(), seated, connected, createdAt,
+                game.ranked() ? "RANKED" : "CASUAL", game.rankedStatus());
     }
 
     void assertInvariant() {

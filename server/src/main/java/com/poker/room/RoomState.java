@@ -95,6 +95,8 @@ public record RoomState(
         }
     }
 
+    public String mode() { return game.ranked() ? "RANKED" : "CASUAL"; }
+
     public UUID roomId() {
         return id.value();
     }

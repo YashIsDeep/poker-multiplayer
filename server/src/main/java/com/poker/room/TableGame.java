@@ -39,6 +39,44 @@ final class TableGame {
     private UUID rebuyOfferUserId;
     private Instant rebuyOfferExpiresAt;
     private HandHistory currentHistory;
+    private UUID rankedRoomId;
+    private com.poker.room.application.RankedSettlement settlement;
+
+    void enableRanked(UUID roomId, com.poker.room.application.RankedSettlement settlement) {
+        this.rankedRoomId = Objects.requireNonNull(roomId);
+        this.settlement = Objects.requireNonNull(settlement);
+    }
+    boolean ranked() { return rankedRoomId != null; }
+    private boolean consolidationHold;
+    boolean consolidationHeld() { return consolidationHold; }
+    boolean transferBoundary() { return hand == null && presented == null && presentation.isEmpty(); }
+    int activeFundedPlayers() {
+        return (int) seats.values().stream().filter(s -> s.stack() > 0 && s.status() == TableSeatStatus.ACTIVE
+                && !s.sitOutAfterHand() && !s.standAfterHand()).count();
+    }
+    void holdForConsolidation(boolean hold) {
+        if (consolidationHold == hold) return;
+        consolidationHold = hold;
+        scheduleStartIfReady();
+    }
+    void transferIn(UUID user, TablePlayerState balance, TableSeatState previousSeat, Integer seat) {
+        if (!ranked() || !consolidationHold || !transferBoundary()) throw new IllegalStateException("unsafe table transfer");
+        roomMembers.add(user);
+        if (balance.stack() == 0) balance = new TablePlayerState(0, balance.rebuyHandsRemaining(),
+                balance.rebuyCount(), bustOrder = increment(bustOrder));
+        players.put(user, balance);
+        if (seat != null) seats.put(seat, new TableSeatState(seat, user, 1000, balance.stack(),
+                previousSeat.status(), false, false, null, balance.rebuyHandsRemaining(), balance.rebuyCount()));
+        refreshEmergencyRebuyOffer();
+        lifecycle();
+    }
+    String rankedStatus() {
+        if (!ranked()) return null;
+        if (status == TableStatus.SETTLING) return "SETTLING";
+        if (consolidationHold) return "CONSOLIDATING";
+        return status == TableStatus.WAITING && presented == null ? "WAITING_FOR_PLAYERS" : "PLAYING";
+    }
+    private int minimumPlayers() { return ranked() ? 3 : 2; }
     private long historyEventSeq;
 
     TableGame(RoomConfig config, int maxSeats, Clock clock, DeckFactory decks) {
@@ -126,7 +164,10 @@ final class TableGame {
         if (hand != null && playerInHand(seat)) seats.put(seat, copy(state, state.status(), true, state.standAfterHand(), state.pendingRebuy()));
         else seats.put(seat, copy(state, TableSeatStatus.SITTING_OUT, false, state.standAfterHand(), state.pendingRebuy()));
         lifecycle();
-        if (hand == null) scheduleStartIfReady();
+        if (hand == null) {
+            if (ranked()) refreshEmergencyRebuyOffer();
+            scheduleStartIfReady();
+        }
     }
 
     /** Presence-driven sit-out. Repeated reconciliation is intentionally a no-op. */
@@ -142,7 +183,10 @@ final class TableGame {
                     state.standAfterHand(), state.pendingRebuy()));
         }
         lifecycle();
-        if (hand == null) scheduleStartIfReady();
+        if (hand == null) {
+            if (ranked()) refreshEmergencyRebuyOffer();
+            scheduleStartIfReady();
+        }
         return true;
     }
 
@@ -168,6 +212,7 @@ final class TableGame {
         if (state.status() != TableSeatStatus.SITTING_OUT && !state.sitOutAfterHand()) throw new GameException(GameError.ALREADY_SITTING_IN);
         seats.put(seat, copy(state, state.stack() == 0 ? TableSeatStatus.BUSTED : TableSeatStatus.ACTIVE, false, state.standAfterHand(), state.pendingRebuy()));
         lifecycle();
+        if (ranked() && hand == null) refreshEmergencyRebuyOffer();
         scheduleStartIfReady();
     }
 
@@ -251,12 +296,27 @@ final class TableGame {
 
     private void exposeNextTransition() {
         pausedSince = null;
-        HandTransition step = presentation.removeFirst();
+        HandTransition step = presentation.getFirst();
+        HandHistory previousHistory = currentHistory;
+        long previousSequence = historyEventSeq;
+        appendHistory(step);
+        if (ranked() && step.snapshotAfter().phase() == HandPhase.COMPLETE) {
+            try {
+                settlement.settle(rankedRoomId, currentHistory);
+            } catch (RuntimeException ex) {
+                currentHistory = previousHistory;
+                historyEventSeq = previousSequence;
+                deadline = null;
+                status = TableStatus.SETTLING;
+                scheduleGeneration = increment(scheduleGeneration);
+                return;
+            }
+        }
+        presentation.removeFirst();
         if (step.events().stream().anyMatch(HandEvent.StreetDealt.class::isInstance)) {
             roundActions.clear();
         }
         presented = step.snapshotAfter();
-        appendHistory(step);
         for (HandEvent event : step.events()) {
             if (event instanceof HandEvent.PlayerActed acted) {
                 roundActions.computeIfAbsent(acted.seat(), ignored -> new ArrayList<>()).add(acted);
@@ -402,7 +462,7 @@ final class TableGame {
         List<TableSeatState> eligible = seats.values().stream()
                 .filter(s -> s.stack() > 0 && s.status() == TableSeatStatus.ACTIVE && !s.standAfterHand())
                 .sorted(Comparator.comparingInt(TableSeatState::seat)).toList();
-        if (eligible.size() < 2) {
+        if (eligible.size() < minimumPlayers()) {
             status = TableStatus.WAITING;
             return;
         }
@@ -423,7 +483,7 @@ final class TableGame {
     }
 
     private void scheduleStartIfReady() {
-        if (hand != null || status == TableStatus.FAILED || status == TableStatus.PAUSED
+        if (consolidationHold || hand != null || status == TableStatus.FAILED || status == TableStatus.PAUSED || status == TableStatus.SETTLING
                 || (presented != null && presented.phase() == HandPhase.COMPLETE)) {
             clearPendingStart();
             return;
@@ -432,7 +492,7 @@ final class TableGame {
                 .filter(s -> s.stack() > 0 && s.status() == TableSeatStatus.ACTIVE
                         && !s.standAfterHand())
                 .count();
-        if (eligible < 2) {
+        if (eligible < minimumPlayers()) {
             status = TableStatus.WAITING;
             clearPendingStart();
             return;
@@ -472,7 +532,7 @@ final class TableGame {
                 players, roundActions, lifecycleSeq, scheduleGeneration, pausedSince, nextHandAt,
                 rebuyOfferUserId, rebuyOfferExpiresAt,
                 histories,
-                hand == null && presentation.isEmpty());
+                hand == null && presentation.isEmpty(), ranked(), consolidationHold);
     }
 
     boolean hasSeat(int seat, UUID userId) {
@@ -505,7 +565,8 @@ final class TableGame {
     private void refreshEmergencyRebuyOffer() {
         Set<UUID> seatedUsers = seats.values().stream().map(TableSeatState::userId)
                 .collect(java.util.stream.Collectors.toSet());
-        long fundedSeats = seats.values().stream().filter(seat -> seat.stack() > 0).count();
+        long fundedSeats = seats.values().stream().filter(seat -> seat.stack() > 0
+                && (!ranked() || seat.status() == TableSeatStatus.ACTIVE)).count();
         boolean fundedOffTable = players.entrySet().stream()
                 .anyMatch(entry -> roomMembers.contains(entry.getKey())
                         && entry.getValue().stack() > 0 && !seatedUsers.contains(entry.getKey()));
@@ -514,7 +575,7 @@ final class TableGame {
                         && entry.getValue().stack() == 0)
                 .sorted(Comparator.comparingLong(entry -> entry.getValue().bustedOrder()))
                 .map(Map.Entry::getKey).toList();
-        if (!config.rebuysEnabled() || fundedSeats != 1 || fundedOffTable || eligible.isEmpty()) {
+        if (!config.rebuysEnabled() || (ranked() ? fundedSeats >= 3 : fundedSeats != 1) || (!ranked() && fundedOffTable) || eligible.isEmpty()) {
             clearEmergencyRebuyOffer();
             return;
         }

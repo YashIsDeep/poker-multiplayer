@@ -12,7 +12,20 @@ public record LobbyRoomState(
         int memberCount,
         int seatedCount,
         int connectedMemberCount,
+        Instant createdAt,
+        String mode,
+        String rankedStatus) {
+    public LobbyRoomState(
+        RoomId id,
+        JoinCode joinCode,
+        String name,
+        int maxSeats,
+        int memberCount,
+        int seatedCount,
+        int connectedMemberCount,
         Instant createdAt) {
+        this(id, joinCode, name, maxSeats, memberCount, seatedCount, connectedMemberCount, createdAt, "CASUAL", null);
+    }
     public LobbyRoomState(RoomId id, JoinCode joinCode, String name, int maxSeats,
                           int memberCount, int seatedCount, Instant createdAt) {
         this(id, joinCode, name, maxSeats, memberCount, seatedCount, memberCount, createdAt);

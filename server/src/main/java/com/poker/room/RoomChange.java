@@ -27,6 +27,8 @@ public record RoomChange(
         STOOD,
         SETTINGS_UPDATED,
         GAME_CHANGED,
+        RANKED_STATUS_CHANGED,
+        RANKED_TABLE_MERGED,
         PRESENCE_CHANGED,
         KEEP_ALIVE,
         DISCONNECTED_MEMBER_EVICTED,
