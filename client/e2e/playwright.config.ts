@@ -22,6 +22,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'npm run dev',
+    env: { POKER_RANKED_ENABLED: 'true' },
     cwd: '../..',
     // Wait for the proxied Spring endpoint, not only Vite. Vite becomes ready
     // much earlier and otherwise the first dev-login can race server startup.
