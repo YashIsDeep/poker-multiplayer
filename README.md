@@ -141,3 +141,102 @@ and `start` commands activate the required profiles automatically. Never commit
 the secrets. Local development also enables the loopback-only dev login
 (`/auth/dev?u=name`, `dev` profile) so multiplayer can be tested without real
 accounts; the dev route is intentionally absent outside that profile.
+
+## Ranked beta
+
+Set `POKER_RANKED_ENABLED=true` in `.env`, then run `npm run dev`.
+The feature is disabled by default. Open three separate browser profiles,
+sign in, and choose **Play Ranked**. Local development identities are supported
+under the `dev` profile; production ranked play requires Google or Discord.
+The production `local-auth` guest mode cannot enter ranked play.
+
+A new ranked table waits for three queued players. Later arrivals fill existing
+tables, preferring the most occupied and then the oldest. Six members is the
+maximum, including players temporarily standing or waiting to rebuy; their
+places are reserved until they leave. Seats and opponents are assigned by the
+server. Queue cancellation applies before assignment; after assignment use the
+table's normal leave controls. Disconnected queue entries retain their place
+for up to 30 seconds but are not assigned while offline.
+
+Ranked rules are fixed: 5/10 blinds, 1,000-chip (100 BB) initial stacks,
+30-second turns, and manual 100 BB rebuys after busting. Stacks carry forward.
+Rebuys normally unlock after five completed hands. When fewer than three
+active funded players remain, sequential five-second priority offers bypass
+the wait. A hand starts only with 3–6 active funded players. Current hands
+finish before departures take effect.
+
+### Public table display and consolidation
+
+Public casual tables have six seats, a fixed 100 BB initial buy-in and manual
+100 BB rebuys. Stacks, bets, pots, payouts, and hand histories display big
+blinds. The server keeps integer chips (5/10 blinds, 1,000-chip buy-in) so odd
+chips and side pots remain exact. Public casual hands can start with two
+players; ranked hands require three. Private tables retain configurable
+settings and chip displays.
+
+The ranked matcher also combines small tables. Each table must have at most
+three active funded players, and their **entire membership** must fit within
+six places, including players sitting out or waiting to rebuy. The older table
+remains; players receive server-assigned seats. Current hands finish and
+settle, then their result displays clear before anyone moves. The first table
+to finish waits for the other, and queue assignments skip these reserved tables.
+
+Stacks, rebuy counts, remaining rebuy waits, standing/sit-out state, and
+connection state carry across. Moving adds no hands or earnings. A browser
+moves to the destination and reconnect restores that assignment. A pair is
+cancelled if it no longer fits; ordinary seating resumes. Consolidation can
+repeat across more than two small tables. If fewer than three active players
+remain overall, the consolidated ranked table still waits. Casual and private
+tables are not automatically combined.
+
+### Scores and public pages
+
+- `/leaderboard`: all-time observed net BB/100, qualifying at 1,000 hands.
+- `/players/{userId}`: public identity, net BB, BB/100, hand count, provisional
+  status, and rank. Scores refresh every 15 seconds while visible.
+- `GET /api/leaderboard?page=0&pageSize=50`: zero-based pages; page size 1–100.
+- `GET /api/players/{userId}`: public profile; unknown users return 404.
+- Authenticated STOMP `/app/ranked.join` and `/app/ranked.cancel` use the existing
+  `{requestId, payload: {}}` envelope. Private `/user/queue/ranked` updates and
+  `STATE_SYNC.state.rankedQueue` describe queue position and assignment.
+- Room and lobby snapshots include `mode`. Ranked snapshots also expose
+  `rankedStatus` (PLAYING, WAITING_FOR_PLAYERS, CONSOLIDATING, SETTLING).
+
+BB/100 is 100 times average net big blinds earned per completed ranked hand.
+Every dealt participant counts, including folds, timeouts, and departures.
+Buy-ins/rebuys never count as earnings. Casual hands are excluded and historical
+archives are not backfilled. Sorting uses exact rates before rounding; ties
+use more hands, then user ID. Player profiles show no rate before the first hand.
+
+This is observed performance, not Elo or GTO accuracy. Opponent strength,
+table size, stack depth, and luck affect results, including after qualification.
+Private games remain casual. Collusion/bot detection and public release
+preparation are follow-up work; treat this release as a beta.
+
+### Persistence and operations
+
+Flyway V2 adds `ranked_hand`, `ranked_result`, and `ranked_player_total`.
+All participants and totals commit in one transaction, keyed by room UUID and
+hand number. A failed settlement pauses the table before publishing the
+completed result; retries are idempotent. Monitor logs for
+`Ranked settlement pending`, `Ranked assignment failed`, and queue publication
+failures. The scheduler retries pending results and periodically repairs retry
+timers.
+
+Run one game-server instance per database. Live rooms and queues remain in
+memory. A restart preserves committed statistics, closes live tables, and
+voids any hand without a committed settlement; players join fresh tables.
+Archive schema V2 adds `mode` and `participantCount`, preserving the existing
+archive fields and private-card handling. Public statistics contain no cards
+or authentication identifiers. Do not publish the private analytics archive.
+
+The beta sorts qualifying player totals in application memory before
+pagination. Move this to an indexed read model before operating a large pool.
+
+### Validation
+
+Run `npm test`, `npm --prefix client run test`, and `npm run build`.
+Run `npm --prefix client exec -- playwright install chromium` once, then
+`npm --prefix client run e2e`. The E2E launcher enables ranked play when it
+starts the dev stack. If reusing an existing stack, enable ranked there first;
+the ranked browser scenario explicitly skips servers where it is disabled.
