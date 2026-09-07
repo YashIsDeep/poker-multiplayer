@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import LeaderboardLink from '../components/LeaderboardLink'
 import type { FormEvent } from 'react'
 
 type AuthMode = 'oauth' | 'dev' | 'both' | 'none'
@@ -86,6 +87,7 @@ export default function Landing() {
           )}
         </div>
       )}
+      <LeaderboardLink compact />
       <p className="server-status">
         server: {meta ? 'online' : 'connecting…'}
       </p>

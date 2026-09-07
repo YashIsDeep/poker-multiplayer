@@ -6,6 +6,8 @@ import { useExperienceSounds } from './hooks/useExperienceSounds'
 import { rememberPostLoginRedirect } from './lib/postLoginRedirect'
 import Landing from './pages/Landing'
 import Lobby from './pages/Lobby'
+import Leaderboard from './pages/Leaderboard'
+import PlayerProfile from './pages/PlayerProfile'
 import Room from './pages/Room'
 import ConnectionBanner from './components/resilience/ConnectionBanner'
 import ToastHost from './components/resilience/ToastHost'
@@ -116,6 +118,8 @@ export default function App() {
             </RedirectIfAuthenticated>
           }
         />
+        <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/players/:userId" element={<PlayerProfile />} />
         <Route
           path="/room/:roomId"
           element={
