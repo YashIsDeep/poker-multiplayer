@@ -15,6 +15,8 @@ import org.springframework.messaging.simp.annotation.SendToUser;
 class CommandAdmissionArchitectureTest {
     private static final Map<String, CommandType> COMMANDS = Map.ofEntries(
             Map.entry("/state.sync", CommandType.STATE_SYNC),
+            Map.entry("/ranked.join", CommandType.RANKED_JOIN),
+            Map.entry("/ranked.cancel", CommandType.RANKED_CANCEL),
             Map.entry("/room.create", CommandType.ROOM_CREATE),
             Map.entry("/room.join", CommandType.ROOM_JOIN),
             Map.entry("/room.leave", CommandType.ROOM_LEAVE),
@@ -32,6 +34,7 @@ class CommandAdmissionArchitectureTest {
     @Test
     void everyMessageMappingHasExactlyOneMatchingAdmissionDeclaration() {
         assertController(RoomMessageController.class);
+        assertController(com.poker.ws.RankedMessageController.class);
         assertController(ChatMessageController.class);
         assertController(GameplayMessageController.class);
     }

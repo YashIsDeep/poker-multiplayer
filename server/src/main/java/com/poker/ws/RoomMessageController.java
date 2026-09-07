@@ -39,15 +39,22 @@ public class RoomMessageController {
     private static final Logger log = LoggerFactory.getLogger(RoomMessageController.class);
     private final RoomCommandService service;
     private final RoomSnapshotMapper mapper;
+    private final com.poker.ranked.RankedQueue ranked;
     private final ModeratorPolicy moderators;
 
     public RoomMessageController(RoomCommandService service, RoomSnapshotMapper mapper) {
-        this(service, mapper, ModeratorPolicy.denyAll());
+        this(service, mapper, null, ModeratorPolicy.denyAll());
+    }
+
+    public RoomMessageController(RoomCommandService service, RoomSnapshotMapper mapper,
+            com.poker.ranked.RankedQueue ranked) {
+        this(service, mapper, ranked, ModeratorPolicy.denyAll());
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public RoomMessageController(RoomCommandService service, RoomSnapshotMapper mapper,
-            ModeratorPolicy moderators) {
+            com.poker.ranked.RankedQueue ranked, ModeratorPolicy moderators) {
+        this.ranked = ranked;
         this.service = Objects.requireNonNull(service, "service");
         this.mapper = Objects.requireNonNull(mapper, "mapper");
         this.moderators = Objects.requireNonNull(moderators, "moderators");
@@ -66,7 +73,8 @@ public class RoomMessageController {
                     result.change().room(),
                     user.userId(),
                     result.change().membershipEpochs().getOrDefault(user.userId(), 0L));
-            return CommandAck.stateSuccess(envelope.requestId(), state);
+            return CommandAck.stateSuccess(envelope.requestId(), new StateSyncView(
+                    state.lobby(), state.membershipEpoch(), state.room(), ranked == null ? null : ranked.state(user.userId())));
         });
     }
 

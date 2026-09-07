@@ -23,6 +23,8 @@ public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBro
                         SimpMessageType.HEARTBEAT).authenticated()
                 .simpMessageDestMatchers(
                         "/app/state.sync",
+                        "/app/ranked.join",
+                        "/app/ranked.cancel",
                         "/app/room.create",
                         "/app/room.join",
                         "/app/room.leave",
@@ -41,7 +43,8 @@ public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBro
                         "/user/queue/acks",
                         "/user/queue/room",
                         "/user/queue/room-events",
-                        "/user/queue/chat").authenticated()
+                        "/user/queue/chat",
+                        "/user/queue/ranked").authenticated()
                 .anyMessage().denyAll();
     }
 }

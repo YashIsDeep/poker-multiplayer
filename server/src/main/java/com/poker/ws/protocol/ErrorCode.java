@@ -2,6 +2,7 @@ package com.poker.ws.protocol;
 
 public enum ErrorCode {
     INVALID_REQUEST,
+    RANKED_UNAVAILABLE,
     UNAUTHENTICATED,
     ROOM_NOT_FOUND,
     ROOM_FULL,

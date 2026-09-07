@@ -70,6 +70,7 @@ class PublicTableModerationTest {
         return new RoomMessageController(
                 new RoomCommandService(rooms, change -> PublicationReport.none()),
                 new RoomSnapshotMapper(),
+                null,
                 ModeratorPolicy.of(List.of(MODERATOR_EMAIL), false));
     }
 

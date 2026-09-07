@@ -2,6 +2,8 @@ package com.poker.ws.protocol;
 
 public enum CommandType {
     STATE_SYNC,
+    RANKED_JOIN,
+    RANKED_CANCEL,
     ROOM_CREATE,
     ROOM_JOIN,
     ROOM_LEAVE,

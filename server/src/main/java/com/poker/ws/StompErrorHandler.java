@@ -52,6 +52,8 @@ public class StompErrorHandler {
             return CommandType.STATE_SYNC;
         }
         return switch (value) {
+            case "/app/ranked.join" -> CommandType.RANKED_JOIN;
+            case "/app/ranked.cancel" -> CommandType.RANKED_CANCEL;
             case "/app/room.create" -> CommandType.ROOM_CREATE;
             case "/app/room.join" -> CommandType.ROOM_JOIN;
             case "/app/room.leave" -> CommandType.ROOM_LEAVE;
