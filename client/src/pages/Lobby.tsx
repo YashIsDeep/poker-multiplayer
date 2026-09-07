@@ -8,8 +8,10 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import SwirlBackground from '../components/SwirlBackground'
+import RankedEntry from '../components/RankedEntry'
 import CrtOverlay from '../components/CrtOverlay'
 import SettingsButton from '../components/SettingsButton'
+import LeaderboardLink from '../components/LeaderboardLink'
 import { useGameStore } from '../store/gameStore'
 import { endSession } from '../lib/auth'
 import { takePostLoginRedirect } from '../lib/postLoginRedirect'
@@ -49,6 +51,9 @@ export default function Lobby() {
   const connection = useGameStore((s) => s.connection)
   const lobby = useGameStore((s) => s.lobby)
   const room = useGameStore((s) => s.room)
+  const rankedQueue = useGameStore((s) => s.rankedQueue)
+  const queued = rankedQueue?.status === 'QUEUED'
+  const casualRooms = lobby?.rooms.filter(r => r.mode !== 'RANKED') ?? []
   const joinRoom = useGameStore((s) => s.joinRoom)
   const pushToast = useGameStore((s) => s.pushToast)
   const signedOut = session === 'signed-out'
@@ -153,7 +158,8 @@ export default function Lobby() {
               ) : (
                 <span className="avatar" aria-hidden="true" />
               )}
-              <b>{me?.displayName ?? '…'}</b>
+              {me ? <Link className="lobby-profile" data-sound="confirm" to={`/players/${me.id}`}
+                title="Your ranked profile"><b>{me.displayName}</b></Link> : <b>…</b>}
               <SettingsButton />
               <button
                 className="btn btn-dev logout"
@@ -176,9 +182,12 @@ export default function Lobby() {
               <Link className="btn btn-green btn-create" data-sound="confirm" to="/login">
                 Sign in to play
               </Link>
+              <LeaderboardLink compact />
             </div>
           </section>
-        ) : null}
+        ) : (
+          <RankedEntry />
+        )}
         <div className="lobby-main panel">
           <h2>
             Public tables{' '}
@@ -193,10 +202,10 @@ export default function Lobby() {
             <p className="lobby-empty">
               <Link data-sound="confirm" to="/login">Sign in</Link> to see the live table list.
             </p>
-          ) : !lobby || lobby.rooms.length === 0 ? (
+          ) : !lobby || casualRooms.length === 0 ? (
             <p className="lobby-empty">No tables yet — create the first one.</p>
           ) : (
-            lobby.rooms.map((r) => (
+            casualRooms.map((r) => (
               <div className="room-row" key={r.roomId} data-testid="room-row" data-room-name={r.name}>
                 <span className="room-name">{r.name}</span>
                 <span className="room-stat">
@@ -220,7 +229,7 @@ export default function Lobby() {
                 <button
                   className="btn btn-blue btn-join"
                   data-sound="confirm"
-                  disabled={busy || connection !== 'connected'}
+                  disabled={busy || queued || connection !== 'connected'}
                   onClick={() => join(r.joinCode)}
                 >
                   {r.seatedCount >= r.maxSeats ? 'Spectate' : 'Join'}
@@ -234,7 +243,7 @@ export default function Lobby() {
           <button
             className="btn btn-orange btn-create"
             data-sound="open"
-            disabled={connection !== 'connected'}
+            disabled={queued || connection !== 'connected'}
             onClick={() => setCreating(true)}
           >
             + Create table
