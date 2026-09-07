@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { RANKED_SETTLED_EVENT } from '../lib/ranked'
 import { isSnapshotNewer } from './types'
 import type { Game, RoomSnapshot } from './types'
 import { useGameStore } from './gameStore'
@@ -321,5 +322,49 @@ describe('gameStore snapshot acceptance', () => {
     useGameStore.setState({ pendingAction: null })
     store.act('check')
     expect(useGameStore.getState().pendingAction).toBeNull()
+  })
+
+  it('does not restore a cancelled queue from a delayed state sync', () => {
+    const store = useGameStore.getState()
+    const idle = { enabled: true, revision: 12, status: 'IDLE' as const, position: 0, waitingPlayers: 0, roomId: null }
+    useGameStore.setState({ rankedQueue: idle })
+    store.__applyStateSync({
+      membershipEpoch: 100, room: null,
+      lobby: { revision: 100, serverNow: new Date().toISOString(), rooms: [] },
+      rankedQueue: { ...idle, revision: 11, status: 'QUEUED', position: 1, waitingPlayers: 1 },
+    })
+    expect(useGameStore.getState().rankedQueue).toEqual(idle)
+  })
+
+  it('rejects stale source-room snapshots after a ranked transfer', () => {
+    const store = useGameStore.getState()
+    store.__applyRoomSnapshot(snapshot({ membershipEpoch: 105, revision: 50, mode: 'RANKED', roomId: 'old' }))
+    useGameStore.setState({ pendingAction: { type: 'call', actionSeq: 20, requestId: 'old-action', sentAt: Date.now() }, toasts: [] })
+    store.__applyRoomSnapshot(snapshot({ membershipEpoch: 106, revision: 1, mode: 'RANKED', roomId: 'merged' }))
+    store.__applyRoomSnapshot(snapshot({ membershipEpoch: 105, revision: 99, mode: 'RANKED', roomId: 'old' }))
+    expect(useGameStore.getState().room?.roomId).toBe('merged')
+    expect(useGameStore.getState().pendingAction).toBeNull()
+    expect(useGameStore.getState().toasts.at(-1)?.message).toBe('Ranked tables combined')
+  })
+
+  it('refreshes statistics once per newly exposed ranked completion', () => {
+    const events = new EventTarget()
+    const refresh = vi.fn()
+    events.addEventListener(RANKED_SETTLED_EVENT, refresh)
+    vi.stubGlobal('window', events)
+    try {
+      const store = useGameStore.getState()
+      const complete = { ...makeGame(20), phase: 'COMPLETE' as const }
+      store.__applyRoomSnapshot(snapshot({ membershipEpoch: 110, revision: 1, mode: 'CASUAL', game: complete }))
+      expect(refresh).not.toHaveBeenCalled()
+      store.__applyRoomSnapshot(snapshot({ membershipEpoch: 111, revision: 1, mode: 'RANKED', game: makeGame(21) }))
+      store.__applyRoomSnapshot(snapshot({ membershipEpoch: 111, revision: 2, mode: 'RANKED', game: complete }))
+      store.__applyRoomSnapshot(snapshot({ membershipEpoch: 111, revision: 2, mode: 'RANKED', game: complete }))
+      expect(refresh).toHaveBeenCalledTimes(1)
+      store.__applyRoomSnapshot(snapshot({ membershipEpoch: 111, revision: 3, mode: 'RANKED', game: { ...complete, handId: 2 } }))
+      expect(refresh).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
