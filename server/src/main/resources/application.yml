@@ -43,6 +43,8 @@ poker:
     # garbage collected, so a signed-in player always has somewhere to sit.
     enabled: ${POKER_HOUSE_TABLE_ENABLED:true}
     name: ${POKER_HOUSE_TABLE_NAME:House Table}
+  ranked:
+    enabled: ${POKER_RANKED_ENABLED:false}
   hand-archive:
     # Compressed local analytics archive; independent of the database so it
     # keeps recording completed hands during a database outage.

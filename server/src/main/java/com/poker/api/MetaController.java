@@ -19,7 +19,8 @@ public class MetaController {
         return Map.of(
                 "title", "HOLD'EM",
                 "tagline", "multiplayer texas hold'em",
-                "authMode", authMode());
+                "authMode", authMode(),
+                "rankedEnabled", environment.getProperty("poker.ranked.enabled", "false"));
     }
 
     private String authMode() {
