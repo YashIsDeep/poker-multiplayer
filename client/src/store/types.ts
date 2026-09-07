@@ -5,6 +5,8 @@
 // ---------- T5 room/lobby protocol ----------
 
 export type CommandType =
+  | 'RANKED_JOIN'
+  | 'RANKED_CANCEL'
   | 'STATE_SYNC'
   | 'ROOM_CREATE'
   | 'ROOM_JOIN'
@@ -22,6 +24,7 @@ export type CommandType =
   | 'GAME_SIT_IN'
 
 export type ErrorCode =
+  | 'RANKED_UNAVAILABLE'
   | 'INVALID_REQUEST'
   | 'UNAUTHENTICATED'
   | 'ROOM_NOT_FOUND'
@@ -96,6 +99,8 @@ export type TableSettings = Pick<
 >
 
 export type RoomSnapshot = {
+  mode?: 'CASUAL' | 'RANKED'
+  rankedStatus?: 'SETTLING' | 'CONSOLIDATING' | 'WAITING_FOR_PLAYERS' | 'PLAYING' | null
   roomId: string
   joinCode: string
   name: string
@@ -114,6 +119,8 @@ export type RoomSnapshot = {
 }
 
 export type LobbyRoomView = {
+  mode?: 'CASUAL' | 'RANKED'
+  rankedStatus?: 'SETTLING' | 'CONSOLIDATING' | 'WAITING_FOR_PLAYERS' | 'PLAYING' | null
   roomId: string
   joinCode: string
   name: string
@@ -130,7 +137,17 @@ export type LobbySnapshot = {
   rooms: LobbyRoomView[]
 }
 
+export type RankedQueueState = {
+  enabled: boolean
+  revision: number
+  status: 'IDLE' | 'QUEUED' | 'ASSIGNED'
+  position: number
+  waitingPlayers: number
+  roomId: string | null
+}
+
 export type StateSyncView = {
+  rankedQueue?: RankedQueueState | null
   lobby: LobbySnapshot
   membershipEpoch: number
   room: RoomSnapshot | null
@@ -213,7 +230,7 @@ export type LegalActions = {
 }
 
 export type Game = {
-  tableStatus: 'WAITING' | 'RUNNING' | 'PAUSED' | 'FAILED'
+  tableStatus: 'WAITING' | 'RUNNING' | 'PAUSED' | 'SETTLING' | 'FAILED'
   handId: number
   phase: GamePhase | null
   completionReason: 'FOLD_WIN' | 'SHOWDOWN' | null

@@ -14,9 +14,11 @@ export type StompHandlers = {
   onRoom: (body: unknown) => void
   onRoomEvent: (body: unknown) => void
   onChat: (body: unknown) => void
+  onRanked?: (body: unknown) => void
 }
 
 const SUBSCRIPTIONS: Array<{ destination: string; handler: keyof StompHandlers }> = [
+  { destination: '/user/queue/ranked', handler: 'onRanked' },
   { destination: '/topic/lobby', handler: 'onLobby' },
   { destination: '/user/queue/acks', handler: 'onAck' },
   { destination: '/user/queue/room', handler: 'onRoom' },
@@ -88,7 +90,7 @@ export class PokerStompClient {
             } catch {
               return // malformed frame: ignore rather than crash
             }
-            ;(this.handlers[handler] as (body: unknown) => void)(body)
+            ;(this.handlers[handler] as ((body: unknown) => void) | undefined)?.(body)
           }),
         )
         this.handlers.onConnected()

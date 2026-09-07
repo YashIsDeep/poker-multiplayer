@@ -4,6 +4,7 @@
 // the reconnect/backoff/multi-tab machinery live here.
 
 import { create } from 'zustand'
+import { RANKED_SETTLED_EVENT } from '../lib/ranked'
 import { PokerStompClient } from '../lib/stompClient'
 import { createTabArbiter } from '../lib/tabArbiter'
 import type { TabArbiter } from '../lib/tabArbiter'
@@ -11,6 +12,7 @@ import { createBackoff, MAX_ATTEMPTS } from '../lib/backoff'
 import { createEMA, getServerNow, updateEMA } from '../lib/clockOffsetEMA'
 import type {
   CommandAck,
+  RankedQueueState,
   ChatMessage,
   ConnectionState,
   ErrorCode,
@@ -34,6 +36,9 @@ const TOAST_TTL: Record<ToastType, number> = { warn: 5000, error: 5000, info: 80
 // ---------- store shape ----------
 
 export type GameStore = {
+  rankedQueue: RankedQueueState | null
+  joinRanked: () => Promise<CommandAck>
+  cancelRanked: () => Promise<CommandAck>
   connection: ConnectionState
   reconnectAttempt: number
   readOnly: boolean
@@ -196,6 +201,8 @@ function ackErrorCopy(ack: Pick<CommandAck, 'command' | 'error'>): AckErrorCopy 
   }
 
   switch (error) {
+    case 'RANKED_UNAVAILABLE':
+      return { message: 'Ranked play unavailable', detail: 'Ranked must be enabled and requires an eligible account.' }
     case 'ROOM_NOT_FOUND':
       return {
         message: 'Table no longer available',
@@ -315,6 +322,10 @@ export const useGameStore = create<GameStore>()((set, get) => {
     if (!current || current.roomId !== snapshot.roomId || snapshot.membershipEpoch !== currentEpoch) {
       clearChatExpiryTimers()
       next.chatMessages = []
+      next.pendingAction = null
+      if (current?.mode === 'RANKED' && snapshot.mode === 'RANKED' && current.roomId !== snapshot.roomId) {
+        pushToast('info', 'Ranked tables combined', 'Your stack and rebuy wait moved with you.')
+      }
     }
 
     if (
@@ -335,6 +346,10 @@ export const useGameStore = create<GameStore>()((set, get) => {
       next.pendingAction = null
     }
     set(next)
+    if (typeof window !== 'undefined' && snapshot.mode === 'RANKED' && snapshot.game?.phase === 'COMPLETE'
+      && (current?.roomId !== snapshot.roomId || current.game?.handId !== snapshot.game.handId || current.game?.phase !== 'COMPLETE')) {
+      window.dispatchEvent(new Event(RANKED_SETTLED_EVENT))
+    }
   }
 
   function applyLobby(lobby: LobbySnapshot) {
@@ -346,6 +361,9 @@ export const useGameStore = create<GameStore>()((set, get) => {
 
   function applyStateSync(view: StateSyncView) {
     if (view.membershipEpoch < get().membershipEpoch) return
+    if (view.rankedQueue && (!get().rankedQueue || view.rankedQueue.revision >= get().rankedQueue!.revision)) {
+      set({ rankedQueue: view.rankedQueue })
+    }
     applyLobby(view.lobby)
     const epoch = view.membershipEpoch
     if (view.room) {
@@ -442,6 +460,8 @@ export const useGameStore = create<GameStore>()((set, get) => {
     if (client) return client
     client = new PokerStompClient({
       onConnected: () => {
+        // Queue revisions are ephemeral and restart from zero with the server.
+        set({ rankedQueue: null })
         void recoverAfterConnect()
       },
       onClosed: () => {
@@ -455,6 +475,14 @@ export const useGameStore = create<GameStore>()((set, get) => {
       onRoom: (body) => applyRoomSnapshot(body as RoomSnapshot),
       onRoomEvent: (body) => handleRoomEvent(body as RoomExitNotice),
       onChat: (body) => handleChat(body as ChatMessage),
+      onRanked: (body) => {
+        const queue = body as RankedQueueState
+        if (get().rankedQueue && queue.revision < get().rankedQueue!.revision) return
+        set({ rankedQueue: queue })
+        if (queue.status === 'ASSIGNED' && queue.roomId !== get().room?.roomId) {
+          void get().stateSync().catch(() => {})
+        }
+      },
     })
     return client
   }
@@ -541,6 +569,9 @@ export const useGameStore = create<GameStore>()((set, get) => {
   }
 
   return {
+    rankedQueue: null,
+    joinRanked: () => sendCommand('/app/ranked.join', {}),
+    cancelRanked: () => sendCommand('/app/ranked.cancel', {}),
     connection: 'connecting',
     reconnectAttempt: 0,
     readOnly: false,
