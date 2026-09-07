@@ -94,9 +94,9 @@ public class SecurityConfig {
                         .sessionAuthenticationStrategy(sessionAuthenticationStrategy))
                 .authorizeHttpRequests(auth -> {
                     auth
-                            .requestMatchers(HttpMethod.GET, "/api/health", "/api/meta").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/health", "/api/meta", "/api/leaderboard", "/api/players/*").permitAll()
                             .requestMatchers(HttpMethod.GET,
-                                    "/", "/login", "/index.html", "/favicon.ico", "/assets/**", "/room/**")
+                                    "/", "/login", "/index.html", "/favicon.ico", "/assets/**", "/room/**", "/leaderboard", "/players/*")
                             .permitAll()
                             .requestMatchers("/oauth2/authorization/**", "/login/oauth2/code/**").permitAll()
                             .requestMatchers(HttpMethod.GET, "/auth/dev").permitAll();
