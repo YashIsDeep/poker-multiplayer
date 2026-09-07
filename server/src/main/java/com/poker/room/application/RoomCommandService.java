@@ -79,6 +79,10 @@ public final class RoomCommandService {
         return commit(roomManager.updateSettings(userId, roomId, config));
     }
 
+    public RoomCommandResult assignRanked(MemberProfile profile, RankedSettlement settlement) {
+        return commit(roomManager.assignRanked(profile, settlement));
+    }
+
     public RoomCommandResult stateSync(UUID userId) {
         RoomChange change = roomManager.stateSync(userId);
         return new RoomCommandResult(change, PublicationReport.none());

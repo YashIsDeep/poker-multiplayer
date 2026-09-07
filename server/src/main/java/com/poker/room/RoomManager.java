@@ -128,6 +128,10 @@ public final class RoomManager {
     }
 
     public RoomChange join(MemberProfile profile, String rawJoinCode) {
+        return join(profile, rawJoinCode, false);
+    }
+
+    private RoomChange join(MemberProfile profile, String rawJoinCode, boolean rankedAssignment) {
         Objects.requireNonNull(profile, "profile");
         JoinCode code = parseJoinCode(rawJoinCode);
         registryLock.lock();
@@ -146,6 +150,7 @@ public final class RoomManager {
             }
             room.lock.lock();
             try {
+                if (room.game.ranked() && !rankedAssignment) throw new RoomException(RoomError.SETTINGS_NOT_EDITABLE);
                 if (room.members.containsKey(profile.userId())) {
                     return change(
                             RoomChange.Kind.JOINED,
@@ -424,11 +429,17 @@ public final class RoomManager {
     }
 
     public RoomChange sitIn(UUID userId, UUID roomId) {
-        return gameplay(roomId, userId, room -> room.game.sitIn(requiredSeat(room, userId)));
+        return gameplay(roomId, userId, room -> {
+            if (room.game.ranked() && room.member(userId).seat == null) autoSeatRanked(room, userId);
+            else room.game.sitIn(requiredSeat(room, userId));
+        });
     }
 
     public RoomChange rebuy(UUID userId, UUID roomId, long amount) {
-        return gameplay(roomId, userId, room -> room.game.rebuy(userId, amount));
+        return gameplay(roomId, userId, room -> {
+            room.game.rebuy(userId, amount);
+            if (room.game.ranked()) autoSeatRanked(room, userId);
+        });
     }
 
     public Optional<RoomChange> timeout(UUID roomId, long handId, long actionSeq, UUID actor) {
@@ -503,6 +514,7 @@ public final class RoomManager {
         Objects.requireNonNull(rawRoomId, "roomId"); Objects.requireNonNull(userId, "userId");
         RoomLease lease = gameplayLease(rawRoomId);
         PokerRoom room = lease.room();
+        RoomChange committed;
         room.lock.lock();
         try {
             if (room.closed) throw new RoomException(RoomError.ROOM_NOT_FOUND);
@@ -511,20 +523,46 @@ public final class RoomManager {
             touch(room, clock.instant());
             incrementRoomRevision(room);
             room.assertInvariant();
-            return gameplayChange(room, lease.lobby());
+            committed = gameplayChange(room, lease.lobby());
         } finally { room.lock.unlock(); }
+        return refreshRankedLobby(committed);
     }
 
     private Optional<RoomChange> gameplayCallback(UUID rawRoomId, java.util.function.Predicate<PokerRoom> mutation) {
         RoomLease lease;
         try { lease = gameplayLease(rawRoomId); } catch (RoomException ex) { return Optional.empty(); }
         PokerRoom room = lease.room();
+        RoomChange committed;
         room.lock.lock();
         try {
             if (room.closed || !mutation.test(room)) return Optional.empty();
             incrementRoomRevision(room);
-            return Optional.of(gameplayChange(room, lease.lobby()));
+            committed = gameplayChange(room, lease.lobby());
         } finally { room.lock.unlock(); }
+        return Optional.of(refreshRankedLobby(committed));
+    }
+
+    /** Update the public projection after releasing the gameplay lock, preserving lock order. */
+    private RoomChange refreshRankedLobby(RoomChange committed) {
+        if (!committed.room().game().ranked()) return committed;
+        registryLock.lock();
+        try {
+            PokerRoom room = rooms.get(new RoomId(committed.roomId()));
+            if (room != null) {
+                room.lock.lock();
+                try {
+                    LobbyRoomState previous = lobbyRooms.get(room.id);
+                    updateLobbyEntry(room);
+                    if (!Objects.equals(previous, lobbyRooms.get(room.id))) incrementLobbyRevision();
+                } finally { room.lock.unlock(); }
+            }
+            LobbyState lobby = lobbyStateLocked();
+            RoomChange.Kind kind = lobby.revision() > committed.lobbyRevision()
+                    ? RoomChange.Kind.RANKED_STATUS_CHANGED : committed.kind();
+            return new RoomChange(kind, committed.roomId(), committed.room(), lobby,
+                    committed.roomRecipients(), committed.membershipEpochs(), committed.exitedUserId(),
+                    committed.exitedMembershipEpoch(), committed.roomRevision(), lobby.revision());
+        } finally { registryLock.unlock(); }
     }
 
     private RoomLease gameplayLease(UUID rawRoomId) {
@@ -542,6 +580,65 @@ public final class RoomManager {
         for (PokerRoom.Member member : room.members.values()) epochs.put(member.userId, member.membershipEpoch);
         return new RoomChange(RoomChange.Kind.GAME_CHANGED, room.id.value(), room.snapshot(), lobby,
                 recipients, epochs, null, 0, room.revision, lobby.revision());
+    }
+
+    /** Called only by the ranked application service, under its FIFO queue lock. */
+    public RoomChange assignRanked(MemberProfile profile, com.poker.room.application.RankedSettlement settlement) {
+        registryLock.lock();
+        try {
+            RoomId current = roomsByUser.get(profile.userId());
+            if (current != null) {
+                PokerRoom existing = rooms.get(current);
+                if (!existing.game.ranked()) throw new RoomException(RoomError.ALREADY_IN_ANOTHER_ROOM);
+                return roomSync(profile.userId(), current.value());
+            }
+            PokerRoom candidate = rooms.values().stream().filter(this::rankedVacancy)
+                    .sorted(Comparator.<PokerRoom>comparingInt(r -> r.members.size()).reversed()
+                            .thenComparing(r -> r.createdAt).thenComparing(r -> r.id.value()))
+                    .findFirst().orElse(null);
+            if (candidate == null) {
+                RoomChange created = create(profile, "Ranked Hold'em", 6,
+                        RoomConfig.table(10, 1000, true, 1000, 30, 5), false);
+                candidate = rooms.get(new RoomId(created.roomId()));
+                candidate.game.enableRanked(candidate.id.value(), settlement);
+            }
+            candidate.lock.lock();
+            try {
+                if (candidate.member(profile.userId()) == null) join(profile, candidate.joinCode.value(), true);
+                return seatMutation(profile.userId(), candidate.id.value(), firstEmptySeat(candidate), 1000, true);
+            } finally { candidate.lock.unlock(); }
+        } finally {
+            registryLock.unlock();
+        }
+    }
+
+    public boolean hasRankedVacancy() {
+        registryLock.lock();
+        try { return rooms.values().stream().anyMatch(this::rankedVacancy); }
+        finally { registryLock.unlock(); }
+    }
+
+    private boolean rankedVacancy(PokerRoom room) {
+        room.lock.lock();
+        try {
+            TableStatus status = room.game.snapshot().tableStatus();
+            // Reserve a returning player's seat during rebuy/sit-out.
+            return room.game.ranked() && room.members.size() < 6 && !room.closed
+                    && status != TableStatus.FAILED && status != TableStatus.SETTLING
+                    && status != TableStatus.PAUSED;
+        } finally { room.lock.unlock(); }
+    }
+
+    private static int firstEmptySeat(PokerRoom room) {
+        for (int seat = 0; seat < room.maxSeats; seat++) if (room.seats[seat] == null) return seat;
+        throw new RoomException(RoomError.ROOM_FULL);
+    }
+
+    private static void autoSeatRanked(PokerRoom room, UUID userId) {
+        int seat = firstEmptySeat(room);
+        room.game.seat(seat, userId, 1000);
+        room.seats[seat] = userId;
+        room.member(userId).seat = seat;
     }
 
     private record RoomLease(PokerRoom room, LobbyState lobby) {}
@@ -859,11 +956,16 @@ public final class RoomManager {
     }
 
     private RoomChange seatMutation(UUID userId, UUID roomId, int seat, long requestedBuyIn) {
+        return seatMutation(userId, roomId, seat, requestedBuyIn, false);
+    }
+
+    private RoomChange seatMutation(UUID userId, UUID roomId, int seat, long requestedBuyIn, boolean rankedAssignment) {
         Objects.requireNonNull(userId, "userId");
         Objects.requireNonNull(roomId, "roomId");
         registryLock.lock();
         try {
             PokerRoom room = requiredMemberRoom(userId, roomId);
+            if (room.game.ranked() && !rankedAssignment) throw new RoomException(RoomError.SETTINGS_NOT_EDITABLE);
             long buyIn = requestedBuyIn == 0 ? room.config.startingStack() : requestedBuyIn;
             room.config.validateBuyIn(buyIn);
             if (seat < 0 || seat >= room.maxSeats) {
