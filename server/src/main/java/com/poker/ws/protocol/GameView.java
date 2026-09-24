@@ -24,7 +24,17 @@ public record GameView(
                                List<String> holeCards, LastActionView lastAction,
                                List<LastActionView> actions, String position, String finalHandRank,
                                List<String> bestHandCards, int rebuyHandsRemaining,
-                               boolean rebought, int rebuyCount) {
+                               boolean rebought, int rebuyCount, Long netChange) {
+        /** Keeps the pre-net-change constructor usable for older protocol fixtures. */
+        public GameSeatView(int seat, UUID userId, long stack, String seatStatus, long committed,
+                            List<String> holeCards, LastActionView lastAction,
+                            List<LastActionView> actions, String position, String finalHandRank,
+                            List<String> bestHandCards, int rebuyHandsRemaining,
+                            boolean rebought, int rebuyCount) {
+            this(seat, userId, stack, seatStatus, committed, holeCards, lastAction, actions,
+                    position, finalHandRank, bestHandCards, rebuyHandsRemaining, rebought, rebuyCount, null);
+        }
+
         /** Keeps the pre-best-five constructor usable for older protocol fixtures. */
         public GameSeatView(int seat, UUID userId, long stack, String seatStatus, long committed,
                             List<String> holeCards, LastActionView lastAction,

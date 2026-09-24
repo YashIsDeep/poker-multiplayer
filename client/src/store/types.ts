@@ -216,6 +216,8 @@ export type GameSeat = {
   rebought: boolean
   /** Number of accepted rebuys applied to this seat during the table session. */
   rebuyCount: number
+  /** endingStack - startingStack for the presented hand; null unless that hand is complete. */
+  netChange: number | null
 }
 
 export type LegalActions = {

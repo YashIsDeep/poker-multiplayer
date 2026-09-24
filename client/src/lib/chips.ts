@@ -22,17 +22,29 @@ export function formatChipsFull(value: number | null | undefined): string {
   return FULL_CHIPS.format(value)
 }
 
+/** Result deltas read as gains and losses, so keep the direction explicit. */
+function signedFormat(format: (value: number | null | undefined) => string) {
+  return (value: number | null | undefined): string =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? `+${format(value)}` : format(value)
+}
+
+export const formatSignedChips = signedFormat(formatChips)
+
 const BB_NUMBER = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
 const BB_FULL = new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 })
 
 /** Presentation only: actions and accounting always retain integer chip amounts. */
 export function tableChipFormat(bigBlind: number | null) {
-  if (bigBlind === null || !Number.isFinite(bigBlind) || bigBlind <= 0) return { formatChips, formatChipsFull }
+  if (bigBlind === null || !Number.isFinite(bigBlind) || bigBlind <= 0) {
+    return { formatChips, formatChipsFull, formatSignedChips }
+  }
   const format = (value: number | null | undefined, full: boolean) =>
     typeof value === 'number' && Number.isFinite(value)
       ? `${(full ? BB_FULL : BB_NUMBER).format(value / bigBlind)} BB` : '—'
+  const bbFormatChips = (value: number | null | undefined) => format(value, false)
   return {
-    formatChips: (value: number | null | undefined) => format(value, false),
+    formatChips: bbFormatChips,
     formatChipsFull: (value: number | null | undefined) => format(value, true),
+    formatSignedChips: signedFormat(bbFormatChips),
   }
 }

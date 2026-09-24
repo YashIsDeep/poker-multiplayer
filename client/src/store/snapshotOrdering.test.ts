@@ -108,6 +108,7 @@ function makeGame(actionSeq: number): Game {
       rebuyHandsRemaining: 0,
       rebought: false,
       rebuyCount: 0,
+      netChange: null,
     }],
     viewer: {
       seated: true,

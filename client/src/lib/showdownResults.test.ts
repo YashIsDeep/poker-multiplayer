@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Game } from '../store/types'
 import {
   isCompletedHandResult,
+  netChangeClass,
   showdownCardFrame,
   visibleResultHoleCards,
 } from './showdownResults'
@@ -73,5 +74,23 @@ describe('showdownCardFrame', () => {
 
   it('prefers the player frame when card sets overlap', () => {
     expect(showdownCardFrame('Qc', ['Qc'], ['Qc'])).toBe('silver')
+  })
+})
+
+describe('netChangeClass', () => {
+  it('colors a gain green', () => {
+    expect(netChangeClass(1_200)).toBe('showdown-results__delta showdown-results__delta--positive')
+  })
+
+  it('colors a loss red', () => {
+    expect(netChangeClass(-350)).toBe('showdown-results__delta showdown-results__delta--negative')
+  })
+
+  it('treats an exact-zero net as neutral, not a win or a loss', () => {
+    expect(netChangeClass(0)).toBe('showdown-results__delta')
+  })
+
+  it('treats a missing net (hand not complete) as neutral', () => {
+    expect(netChangeClass(null)).toBe('showdown-results__delta')
   })
 })

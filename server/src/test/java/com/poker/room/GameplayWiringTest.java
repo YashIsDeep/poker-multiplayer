@@ -409,6 +409,31 @@ class GameplayWiringTest {
                 .allMatch(seat->seat.holeCards()==null);
     }
 
+    @Test void netChangeReflectsThisHandsStackMovementOnlyAfterItCompletes() {
+        UUID a=UUID.randomUUID(),b=UUID.randomUUID();
+        RoomChange created=rooms.create(profile(a,"A"),"T",2,RoomConfig.DEFAULT);
+        rooms.join(profile(b,"B"),created.room().joinCodeValue());
+        rooms.takeSeat(a,created.roomId(),0,500);
+        RoomChange started=startScheduled(rooms.takeSeat(b,created.roomId(),1,500));
+
+        assertThat(new GameSnapshotRedactor().redact(started.room(),a).seats())
+                .allMatch(seat->seat.netChange()==null);
+
+        GameState game=started.room().game();
+        UUID folder=actor(game);
+        UUID winner=folder.equals(a)?b:a;
+        RoomChange frame=rooms.act(folder,created.roomId(),game.actionSeq(),GameAction.FOLD,null);
+        frame=advanceToComplete(rooms,frame);
+
+        GameView completedView=new GameSnapshotRedactor().redact(frame.room(),null);
+        long folderNet=completedView.seats().stream()
+                .filter(seat->seat.userId().equals(folder)).findFirst().orElseThrow().netChange();
+        long winnerNet=completedView.seats().stream()
+                .filter(seat->seat.userId().equals(winner)).findFirst().orElseThrow().netChange();
+        assertThat(folderNet).isNegative();
+        assertThat(winnerNet).isEqualTo(-folderNet);
+    }
+
     private static UUID actor(GameState game){
         int seat=game.presentedHand().actingSeat().orElseThrow();
         return game.seats().stream().filter(s->s.seat()==seat).findFirst().orElseThrow().userId();

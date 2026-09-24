@@ -96,6 +96,7 @@ function gameSeats(seatCount: number, buttonSeat: number, specs: SeatSpec[]): Ga
       rebuyHandsRemaining: 0,
       rebought: false,
       rebuyCount: 0,
+      netChange: null,
       ...spec,
     } as GameSeat
     if (spec?.actions === undefined && spec?.lastAction) seat.actions = [spec.lastAction]

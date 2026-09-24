@@ -17,6 +17,7 @@ function seat(overrides: Partial<GameSeat> = {}): GameSeat {
     rebuyHandsRemaining: 0,
     rebought: false,
     rebuyCount: 0,
+    netChange: null,
     ...overrides,
   }
 }

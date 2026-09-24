@@ -6,6 +6,7 @@ import com.poker.engine.game.*;
 import com.poker.room.*;
 import com.poker.ws.protocol.GameView;
 import java.util.*;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /** The sole allow-list boundary from trusted game state to viewer-safe JSON. */
@@ -20,6 +21,8 @@ public final class GameSnapshotRedactor {
                 && hand.completionReason().orElse(null) == CompletionReason.SHOWDOWN;
         Map<Integer, PlayerSnapshot> players = new HashMap<>();
         if (hand != null) for (PlayerSnapshot p : hand.players()) players.put(p.seat(), p);
+        boolean handComplete = hand != null && hand.phase() == HandPhase.COMPLETE;
+        Map<Integer, Long> handStartingStacks = handComplete ? startingStacksFor(game) : Map.of();
         Map<Integer, String> positions = pokerPositions(hand);
         List<GameView.GameSeatView> seatViews = new ArrayList<>();
         for (TableSeatState tableSeat : game.seats()) {
@@ -43,9 +46,13 @@ public final class GameSnapshotRedactor {
                     .getOrDefault(tableSeat.seat(), List.of()).stream()
                     .map(GameSnapshotRedactor::actionView).toList();
             GameView.LastActionView last = actions.isEmpty() ? null : actions.get(actions.size() - 1);
+            Long startingStack = handStartingStacks.get(tableSeat.seat());
+            Long netChange = handComplete && p != null && startingStack != null
+                    ? Math.subtractExact(p.stack(), startingStack) : null;
             seatViews.add(new GameView.GameSeatView(tableSeat.seat(), tableSeat.userId(), stack, status,
                     committed, cards, last, actions, positions.get(tableSeat.seat()), rank,
-                    bestHandCards, tableSeat.rebuyHandsRemaining(), tableSeat.rebought(), tableSeat.rebuyCount()));
+                    bestHandCards, tableSeat.rebuyHandsRemaining(), tableSeat.rebought(), tableSeat.rebuyCount(),
+                    netChange));
         }
 
         LegalActions legal = game.legalActions();
@@ -76,6 +83,16 @@ public final class GameSnapshotRedactor {
                 new GameView.ViewerGameView(viewerSeat != null, viewerSeat, viewerCanAct,
                         rebuyAmount, rebuyHandsRemaining, legalView),
                 minRaise, maxRaise, toCall);
+    }
+
+    /** Mirrors HandHistoryMapper's netChange math for the hand currently on screen. */
+    private static Map<Integer, Long> startingStacksFor(GameState game) {
+        return game.handHistories().stream()
+                .filter(history -> history.handId() == game.handId())
+                .findFirst()
+                .map(history -> history.players().stream()
+                        .collect(Collectors.toMap(HandHistory.Player::seat, HandHistory.Player::startingStack)))
+                .orElse(Map.of());
     }
 
     private static Integer seatOf(Map<Integer, PlayerSnapshot> players, PlayerId id) {

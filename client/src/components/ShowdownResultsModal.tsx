@@ -4,6 +4,7 @@ import TrophyIcon from './TrophyIcon'
 import { useTableChipFormat } from '../hooks/useTableChipFormat'
 import { playSound } from '../lib/sound'
 import {
+  netChangeClass,
   showdownCardFrame,
   visibleResultHoleCards,
   type ShowdownCardFrame,
@@ -56,7 +57,7 @@ function participating(gameSeat: GameSeat): boolean {
 }
 
 export default function ShowdownResultsModal({ room, game, onClose }: ShowdownResultsModalProps) {
-  const { formatChips } = useTableChipFormat()
+  const { formatChips, formatChipsFull, formatSignedChips } = useTableChipFormat()
   const closeRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -192,11 +193,21 @@ export default function ShowdownResultsModal({ room, game, onClose }: ShowdownRe
                           }
                         />
                       </div>
-                    </div>
-
-                    <div className="showdown-results__final">
-                      <span className="label">Final</span>
-                      <b>{final}</b>
+                      <div className="showdown-results__field showdown-results__final">
+                        <span className="label">Final</span>
+                        <b>{final}</b>
+                      </div>
+                      <div className="showdown-results__field showdown-results__net">
+                        <span className="label">Net</span>
+                        {player.netChange !== null && (
+                          <b
+                            className={netChangeClass(player.netChange)}
+                            title={formatChipsFull(player.netChange)}
+                          >
+                            {formatSignedChips(player.netChange)}
+                          </b>
+                        )}
+                      </div>
                     </div>
                   </article>
                 )

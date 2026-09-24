@@ -34,3 +34,11 @@ export function showdownCardFrame(
   if (boardCards.includes(card)) return 'gold'
   return undefined
 }
+
+/** A net delta of exactly zero reads as neutral, not as a win or a loss. */
+export function netChangeClass(netChange: number | null): string {
+  if (netChange === null || netChange === 0) return 'showdown-results__delta'
+  return netChange > 0
+    ? 'showdown-results__delta showdown-results__delta--positive'
+    : 'showdown-results__delta showdown-results__delta--negative'
+}
