@@ -8,6 +8,7 @@ import { formatCountdown, useServerCountdown } from '../hooks/useServerCountdown
 import type { CSSProperties } from 'react'
 import { useTableChipFormat } from '../hooks/useTableChipFormat'
 import { playSound } from '../lib/sound'
+import { resolveShortcut } from '../lib/keyboardShortcuts'
 
 export default function ActionBar({ presentationLocked = false }: { presentationLocked?: boolean }) {
   const { formatChips, formatChipsFull } = useTableChipFormat()
@@ -103,6 +104,51 @@ export default function ActionBar({ presentationLocked = false }: { presentation
       }),
     [potTotal, legalActions?.toCall, minRaiseTo, maxRaiseTo, raiseIncrement],
   )
+
+  // Keyboard shortcuts: F/C/R/A act, 1-4 jump the raise-to value to a preset.
+  // Suppressed while chat/inputs are focused or a modal is open (see
+  // keyboardShortcuts.ts for the pure matching/guard logic).
+  useEffect(() => {
+    if (!isYourTurn || pendingAction !== null) return
+    const handler = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement
+      const context = {
+        activeElementTag: activeEl ? activeEl.tagName : null,
+        activeElementEditable: activeEl instanceof HTMLElement && activeEl.isContentEditable,
+        modalOpen: document.querySelector('.modalback, [role="dialog"]') !== null,
+      }
+      const currentRaiseValue = clampRaise(raiseTo, minRaiseTo, maxRaiseTo, raiseIncrement)
+      const action = resolveShortcut(e, context, legalActions, presets, currentRaiseValue)
+      if (!action) return
+      e.preventDefault()
+      switch (action.type) {
+        case 'fold':
+          act('fold')
+          break
+        case 'check':
+          act('check')
+          break
+        case 'call':
+          act('call')
+          break
+        case 'raiseTo':
+          if (action.amount === maxRaiseTo) triggerAllInBurst()
+          act('raiseTo', action.amount)
+          break
+        case 'allin':
+          triggerAllInBurst()
+          setRaiseTo(action.amount)
+          act('raiseTo', action.amount)
+          break
+        case 'selectPreset':
+          setRaiseTo(action.amount)
+          break
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isYourTurn, pendingAction, legalActions, presets, raiseTo, minRaiseTo, maxRaiseTo, raiseIncrement])
 
   // ----- state selection -----
 
@@ -272,7 +318,7 @@ export default function ActionBar({ presentationLocked = false }: { presentation
             disabled={locked}
             onClick={() => act('fold')}
           >
-            Fold
+            Fold <kbd className="shortcut-badge">F</kbd>
           </button>
         )}
         {legal.canCall ? (
@@ -282,7 +328,8 @@ export default function ActionBar({ presentationLocked = false }: { presentation
             disabled={locked}
             onClick={() => act('call')}
           >
-            Call <span className="num" title={formatChipsFull(callAmount)}>{formatChips(callAmount)}</span>
+            Call <span className="num" title={formatChipsFull(callAmount)}>{formatChips(callAmount)}</span>{' '}
+            <kbd className="shortcut-badge">C</kbd>
           </button>
         ) : legal.canCheck ? (
           <button
@@ -291,7 +338,7 @@ export default function ActionBar({ presentationLocked = false }: { presentation
             disabled={locked}
             onClick={() => act('check')}
           >
-            Check
+            Check <kbd className="shortcut-badge">C</kbd>
           </button>
         ) : null}
         {canRaise && (
@@ -314,6 +361,7 @@ export default function ActionBar({ presentationLocked = false }: { presentation
                 <span className="allin-amount num" title={formatChipsFull(raiseValue)}>
                   {formatChips(raiseValue)}
                 </span>
+                <kbd className="shortcut-badge">A</kbd>
                 {allInBurst && (
                   <span className="allin-sparks" aria-hidden="true">
                     {Array.from({ length: 10 }, (_, index) => (
@@ -324,7 +372,8 @@ export default function ActionBar({ presentationLocked = false }: { presentation
               </>
             ) : (
               <>
-                Raise to <span className="num" title={formatChipsFull(raiseValue)}>{formatChips(raiseValue)}</span>
+                Raise to <span className="num" title={formatChipsFull(raiseValue)}>{formatChips(raiseValue)}</span>{' '}
+                <kbd className="shortcut-badge">R</kbd>
               </>
             )}
           </button>
@@ -333,7 +382,7 @@ export default function ActionBar({ presentationLocked = false }: { presentation
       {canRaise && (
         <div className="raise-row">
           <div className="raise-pills">
-            {(['min', 'half', 'pot', 'allin'] as const).map((key) => (
+            {(['min', 'half', 'pot', 'allin'] as const).map((key, index) => (
               <button
                 key={key}
                 className={`pill${key === 'allin' ? ' pill-allin' : ''}${key === 'allin' && isAllIn ? ' is-selected' : ''}`}
@@ -342,7 +391,8 @@ export default function ActionBar({ presentationLocked = false }: { presentation
                 aria-pressed={key === 'allin' ? isAllIn : undefined}
                 onClick={() => setRaiseTo(presets[key])}
               >
-                {key === 'min' ? 'Min' : key === 'half' ? '½ Pot' : key === 'pot' ? 'Pot' : 'All-in'}
+                {key === 'min' ? 'Min' : key === 'half' ? '½ Pot' : key === 'pot' ? 'Pot' : 'All-in'}{' '}
+                <kbd className="shortcut-badge">{index + 1}</kbd>
               </button>
             ))}
           </div>

@@ -100,6 +100,20 @@ export default function SettingsModal({
           </div>
         </section>
 
+        <section className="settings-section">
+          <div className="settings-section-head label">Shortcuts</div>
+          <p className="waiting settings-shortcuts-hint">
+            Active on your turn (ignored while typing or a menu is open).
+          </p>
+          <ul className="settings-shortcuts-list">
+            <li><kbd>F</kbd><span>Fold</span></li>
+            <li><kbd>C</kbd><span>Check / Call</span></li>
+            <li><kbd>R</kbd><span>Raise to the current amount</span></li>
+            <li><kbd>A</kbd><span>All-in</span></li>
+            <li><kbd>1</kbd>–<kbd>4</kbd><span>Set raise amount: Min / ½ Pot / Pot / All-in</span></li>
+          </ul>
+        </section>
+
         {onHandHistory && (
           <section className="settings-section">
             <div className="settings-section-head label">Table</div>

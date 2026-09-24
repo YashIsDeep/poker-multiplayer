@@ -238,6 +238,41 @@ main {
   text-transform: none;
 }
 
+.settings-shortcuts-hint {
+  font-size: 13px;
+  margin: 0;
+}
+
+.settings-shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings-shortcuts-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+.settings-shortcuts-list kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 3px 7px;
+  font: inherit;
+  font-weight: 700;
+  border-radius: 6px;
+  background: var(--panel-dark);
+  border: 2px solid #3d4a59;
+}
+.settings-shortcuts-list span:last-child {
+  color: var(--text-dim);
+}
+
 /* ----- reusable table settings controls ----- */
 .table-settings-fields {
   display: flex;
