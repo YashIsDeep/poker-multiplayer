@@ -1,5 +1,6 @@
 package com.poker.admin;
 
+import com.poker.auth.LoopbackRequestGuard;
 import com.poker.presence.UserSocketRegistry;
 import com.poker.room.GameState;
 import com.poker.room.MemberState;
@@ -8,8 +9,6 @@ import com.poker.room.RoomManager;
 import com.poker.room.RoomState;
 import com.poker.room.TablePlayerState;
 import jakarta.servlet.http.HttpServletRequest;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -226,28 +225,18 @@ public class AdminLiveController {
 
     /**
      * The endpoint is unauthenticated in the web session sense, so it accepts
-     * only loopback peers and, when configured, a shared token header.
+     * only direct loopback peers and a mandatory shared token header. The
+     * transport evidence survives Spring's forwarded-header request wrapper.
      */
     private void requireLocalAdmin(HttpServletRequest request) {
-        if (!isLoopback(request.getRemoteAddr())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "loopback clients only");
+        if (!LoopbackRequestGuard.strictlyLocal(request)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "direct loopback clients only");
         }
-        if (properties.tokenRequired()) {
-            String provided = request.getHeader(TOKEN_HEADER);
-            if (provided == null || !MessageDigest.isEqual(
-                    properties.token().getBytes(StandardCharsets.UTF_8),
-                    provided.getBytes(StandardCharsets.UTF_8))) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "missing or invalid admin token");
-            }
-        }
-    }
-
-    private static boolean isLoopback(String remoteAddress) {
-        if (remoteAddress == null) return false;
-        try {
-            return InetAddress.getByName(remoteAddress).isLoopbackAddress();
-        } catch (UnknownHostException ignored) {
-            return false;
+        String provided = request.getHeader(TOKEN_HEADER);
+        if (provided == null || !MessageDigest.isEqual(
+                properties.token().getBytes(StandardCharsets.UTF_8),
+                provided.getBytes(StandardCharsets.UTF_8))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "missing or invalid admin token");
         }
     }
 

@@ -4,6 +4,7 @@
 // them. Depends only on Node built-ins so it runs even when the database and
 // the game server are down.
 import { createServer } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +15,39 @@ const archiveDir = process.env.HAND_ARCHIVE_DIR
   ?? path.join(here, '..', 'data', 'hand-archive');
 const port = Number(process.env.ANALYTICS_PORT ?? 8090);
 const host = process.env.ANALYTICS_HOST ?? '127.0.0.1';
+
+function normalizedHostname(value) {
+  const text = value.trim().toLowerCase();
+  const candidate = text.includes(':') && !text.startsWith('[') ? `[${text}]` : text;
+  const parsed = new URL(`http://${candidate}`);
+  if (parsed.username || parsed.password || parsed.port || parsed.pathname !== '/'
+      || parsed.search || parsed.hash || parsed.host.toLowerCase() !== candidate.toLowerCase()) {
+    throw new Error(`Invalid analytics hostname: ${value}`);
+  }
+  return parsed.hostname.replace(/^\[|\]$/g, '');
+}
+
+function isLoopbackHostname(value) {
+  const hostname = normalizedHostname(value);
+  if (hostname === 'localhost' || hostname === '::1') return true;
+  const octets = hostname.split('.').map(Number);
+  return octets.length === 4 && octets.every(Number.isInteger) && octets[0] === 127;
+}
+
+const configuredAllowedHosts = (process.env.ANALYTICS_ALLOWED_HOSTS ?? '')
+  .split(',').map(value => value.trim()).filter(Boolean);
+const loopbackOnly = isLoopbackHostname(host);
+if (!loopbackOnly && configuredAllowedHosts.length === 0) {
+  throw new Error('ANALYTICS_ALLOWED_HOSTS is required when ANALYTICS_HOST is not loopback');
+}
+const allowedHostnames = new Set((configuredAllowedHosts.length > 0
+  ? configuredAllowedHosts
+  : [host, 'localhost', '127.0.0.1', '::1']).map(normalizedHostname));
+const authUsername = process.env.ANALYTICS_USERNAME ?? '';
+const authPassword = process.env.ANALYTICS_PASSWORD ?? '';
+if (!loopbackOnly && (!authUsername || !authPassword)) {
+  throw new Error('ANALYTICS_USERNAME and ANALYTICS_PASSWORD are required for shared analytics access');
+}
 
 // ---------------------------------------------------------------------------
 // Archive loading. Each file is a sequence of independent gzip members, one
@@ -195,14 +229,104 @@ function sendJson(res, status, body) {
   res.end(payload);
 }
 
-const indexHtml = () => readFileSync(path.join(here, 'public', 'index.html'));
+const publicFiles = new Map([
+  ['/', ['index.html', 'text/html; charset=utf-8']],
+  ['/index.html', ['index.html', 'text/html; charset=utf-8']],
+  ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
+  ['/styles.css', ['styles.css', 'text/css; charset=utf-8']],
+]);
+
+const contentSecurityPolicy = [
+  "default-src 'none'",
+  "script-src 'self'",
+  "script-src-attr 'none'",
+  "style-src 'self'",
+  "connect-src 'self'",
+  "img-src 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+].join('; ');
+
+function requestAuthority(req) {
+  const raw = req.headers.host;
+  if (typeof raw !== 'string' || !raw || raw.includes(',') || /[\s\\/]/.test(raw)) return null;
+  try {
+    const parsed = new URL(`http://${raw}`);
+    if (parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash
+        || !parsed.port || parsed.host.toLowerCase() !== raw.toLowerCase()) return null;
+    const address = server.address();
+    if (!address || typeof address === 'string' || Number(parsed.port) !== address.port) return null;
+    const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return allowedHostnames.has(hostname) ? { raw, hostname } : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeEqual(actual, expected) {
+  const left = Buffer.from(actual);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function authenticated(req) {
+  if (loopbackOnly) return true;
+  const authorization = req.headers.authorization;
+  if (typeof authorization !== 'string' || !authorization.startsWith('Basic ')) return false;
+  try {
+    const decoded = Buffer.from(authorization.slice(6), 'base64').toString('utf8');
+    const separator = decoded.indexOf(':');
+    return separator >= 0
+      && safeEqual(decoded.slice(0, separator), authUsername)
+      && safeEqual(decoded.slice(separator + 1), authPassword);
+  } catch {
+    return false;
+  }
+}
+
+function apiRequestAllowed(req, authority) {
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      const parsed = new URL(origin);
+      if (parsed.protocol !== 'http:' || parsed.host.toLowerCase() !== authority.raw.toLowerCase()) return false;
+    } catch {
+      return false;
+    }
+  }
+  const fetchSite = req.headers['sec-fetch-site'];
+  return fetchSite === undefined || fetchSite === 'same-origin' || fetchSite === 'none';
+}
 
 const server = createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+  res.setHeader('Content-Security-Policy', contentSecurityPolicy);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
   try {
-    if (url.pathname === '/' || url.pathname === '/index.html') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-      res.end(indexHtml());
+    const authority = requestAuthority(req);
+    if (!authority) {
+      sendJson(res, req.headers.host ? 421 : 400, { error: 'invalid host' });
+      return;
+    }
+    if (!authenticated(req)) {
+      res.setHeader('WWW-Authenticate', 'Basic realm="Poker analytics", charset="UTF-8"');
+      sendJson(res, 401, { error: 'authentication required' });
+      return;
+    }
+    const url = new URL(req.url, 'http://localhost');
+    const publicFile = publicFiles.get(url.pathname);
+    if (publicFile) {
+      const [filename, contentType] = publicFile;
+      const body = readFileSync(path.join(here, 'public', filename));
+      res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' });
+      res.end(body);
+      return;
+    }
+    if (url.pathname.startsWith('/api/') && !apiRequestAllowed(req, authority)) {
+      sendJson(res, 403, { error: 'cross-origin request rejected' });
       return;
     }
     if (url.pathname === '/api/hands') {
@@ -233,5 +357,5 @@ const server = createServer((req, res) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`poker analytics on http://${host}:${port} (archive: ${archiveDir})`);
+  console.log(`poker analytics on http://${host}:${server.address().port} (archive: ${archiveDir})`);
 });

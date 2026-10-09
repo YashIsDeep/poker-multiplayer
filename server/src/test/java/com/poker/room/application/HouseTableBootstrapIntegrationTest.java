@@ -16,7 +16,7 @@ import org.springframework.test.context.TestPropertySource;
 
 /** The booted application seeds exactly one public table and binds the allowlist. */
 @SpringBootTest
-@TestPropertySource(properties = "poker.house-table.enabled=true")
+@TestPropertySource(properties = {"poker.house-table.enabled=true", "POKER_MODERATOR_EMAILS=moderator@example.com"})
 class HouseTableBootstrapIntegrationTest {
 
     @Autowired
@@ -39,7 +39,8 @@ class HouseTableBootstrapIntegrationTest {
 
     @Test
     void theConfiguredAllowListIsTheOnlyRouteToModeratorStanding() {
-        assertThat(moderators.isModerator(google("yashparth.gupta@gmail.com"))).isTrue();
+        assertThat(moderators.isModerator(google("moderator@example.com"))).isTrue();
+        assertThat(moderators.isModerator(google("yashparth.gupta@gmail.com"))).isFalse();
         assertThat(moderators.isModerator(google("someone.else@gmail.com"))).isFalse();
         assertThat(moderators.isModerator(
                 new SessionUserPrincipal(UUID.randomUUID(), AuthProvider.DEV, "Alice", null))).isFalse();

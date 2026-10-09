@@ -15,6 +15,17 @@ public final class UserSocketRegistry {
     private final Map<String, UUID> bySession = new HashMap<>();
     private final Map<String, String> httpSessionBySocket = new HashMap<>();
     private final Map<String, Set<String>> byHttpSession = new HashMap<>();
+    private final int maxPerUser;
+    private final int maxPerHttpSession;
+    private final int maxTotal;
+
+    public UserSocketRegistry() { this(new com.poker.hardening.HardeningProperties()); }
+
+    public UserSocketRegistry(com.poker.hardening.HardeningProperties properties) {
+        maxPerUser = properties.getMaxSocketsPerUser();
+        maxPerHttpSession = properties.getMaxSocketsPerHttpSession();
+        maxTotal = properties.getRegistryCap();
+    }
 
     public synchronized Transition register(UUID userId, String sessionId) {
         return register(userId, sessionId, null);
@@ -30,6 +41,11 @@ public final class UserSocketRegistry {
             throw new IllegalStateException("session identity changed");
         }
         if (existingUser != null) return Transition.UNCHANGED;
+
+        if (bySession.size() >= maxTotal || count(userId) >= maxPerUser
+                || (httpSessionId != null && byHttpSession.getOrDefault(httpSessionId, Set.of()).size() >= maxPerHttpSession)) {
+            throw new IllegalStateException("concurrent WebSocket limit exceeded");
+        }
 
         Set<String> sessions = byUser.computeIfAbsent(userId, ignored -> new HashSet<>());
         boolean first = sessions.isEmpty();
@@ -72,6 +88,8 @@ public final class UserSocketRegistry {
     public synchronized int total() {
         return bySession.size();
     }
+
+    synchronized int trackedHttpSessionCount() { return byHttpSession.size(); }
 
     /** Immutable per-user socket counts for read-only diagnostics. */
     public synchronized Map<UUID, Integer> socketCountsByUser() {

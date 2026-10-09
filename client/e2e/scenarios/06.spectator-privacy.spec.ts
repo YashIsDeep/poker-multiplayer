@@ -1,4 +1,4 @@
-import { createTable, expect, joinTableByName, RUN_ID, takeSeat, test, waitForLobby } from '../fixtures/contexts'
+import { createTable, expect, joinTableByName, loginGuestPage, RUN_ID, takeSeat, test } from '../fixtures/contexts'
 
 test('spectator DOM and received STOMP frames never expose seated hole cards', async ({ alice, bob, browser }) => {
   const table = `Private ${RUN_ID}`
@@ -16,8 +16,7 @@ test('spectator DOM and received STOMP frames never expose seated hole cards', a
   watched.on('websocket', (socket) => {
     socket.on('framereceived', (event) => frames.push(String(event.payload)))
   })
-  await watched.goto(`/auth/dev?u=watch-${RUN_ID.slice(-8)}`)
-  await waitForLobby(watched)
+  await loginGuestPage(watched, `watch-${RUN_ID.slice(-8)}`)
   await joinTableByName(watched, table)
   await expect(watched.locator('.seat .card[data-card]')).toHaveCount(0)
   await watched.waitForTimeout(500)

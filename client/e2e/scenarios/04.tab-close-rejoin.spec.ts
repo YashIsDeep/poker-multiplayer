@@ -1,6 +1,6 @@
-import { createTable, devLogin, expect, joinTableByName, RUN_ID, takeSeat, test } from '../fixtures/contexts'
+import { createTable, expect, joinTableByName, RUN_ID, takeSeat, test } from '../fixtures/contexts'
 
-test('closing a tab and logging in again restores the same seat', async ({ alice, bob, browser }) => {
+test('closing a tab and reopening the saved session restores the same seat', async ({ alice, bob, browser }) => {
   const table = `Rejoin ${RUN_ID}`
   await createTable(alice, table, 2)
   await joinTableByName(bob, table)
@@ -9,10 +9,12 @@ test('closing a tab and logging in again restores the same seat', async ({ alice
 
   const meResponse = await bob.request.get('/api/me')
   const me = (await meResponse.json()) as { displayName: string }
+  const storageState = await bob.context().storageState()
   await bob.context().close()
 
-  const rejoinContext = await browser.newContext()
-  const rejoined = await devLogin(rejoinContext, me.displayName)
+  const rejoinContext = await browser.newContext({ storageState })
+  const rejoined = await rejoinContext.newPage()
+  await rejoined.goto('/')
   await expect(rejoined.getByTestId('room')).toBeVisible({ timeout: 15_000 })
   await expect(rejoined.locator('.seat.you .pname')).toContainText(me.displayName, { ignoreCase: true })
   await expect(rejoined.locator('[data-seat="0"] .pname')).toBeVisible()

@@ -1,38 +1,15 @@
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import { prepareDatabaseForDev } from './database.mjs'
+import { assertLocalAuthentication, developmentProfiles } from './auth-mode.mjs'
 
-const oauthVariables = [
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'DISCORD_CLIENT_ID',
-  'DISCORD_CLIENT_SECRET',
-]
-
-const oauthDisabled = ['false', '0', 'off', 'no'].includes(
-  process.env.OAUTH_ENABLED?.trim().toLowerCase(),
-)
-const configuredVariables = oauthDisabled
-  ? []
-  : oauthVariables.filter((name) => process.env[name]?.trim())
-const missingVariables = oauthDisabled
-  ? oauthVariables
-  : oauthVariables.filter((name) => !process.env[name]?.trim())
-
-if (configuredVariables.length > 0 && missingVariables.length > 0) {
-  console.error(
-    `OAuth configuration is incomplete. Set ${missingVariables.join(', ')} in .env, `
-      + 'or leave all four OAuth values blank to use the local dev login only.',
-  )
+let profiles
+try {
+  profiles = developmentProfiles(process.env)
+  assertLocalAuthentication(process.env, profiles)
+} catch (error) {
+  console.error(error.message)
   process.exit(1)
-}
-
-const profiles = !oauthDisabled && missingVariables.length === 0 ? 'dev,oauth' : 'dev'
-
-if (oauthDisabled) {
-  console.log('OAuth is disabled; starting with the local dev login only.')
-} else if (profiles === 'dev') {
-  console.log('OAuth credentials are not configured; starting with the local dev login only.')
 }
 
 await prepareDatabaseForDev()
@@ -47,7 +24,13 @@ const colors = serverOnly ? 'blue' : 'blue,green'
 const child = spawn(
   process.execPath,
   [concurrently, '-k', '-n', names, '-c', colors, ...commands],
-  { stdio: 'inherit', env: process.env },
+  { stdio: 'inherit', env: {
+    ...process.env,
+    // OAuth-only tunnel runs retain the development database and loopback listener.
+    SERVER_ADDRESS: process.env.SERVER_ADDRESS || '127.0.0.1',
+    SPRING_DATASOURCE_URL: process.env.SPRING_DATASOURCE_URL
+      || `jdbc:h2:tcp://${process.env.DB_HOST || '127.0.0.1'}:${process.env.DB_PORT || 9092}/./data/poker`,
+  } },
 )
 
 for (const signal of ['SIGINT', 'SIGTERM']) {

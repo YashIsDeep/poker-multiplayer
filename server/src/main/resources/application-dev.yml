@@ -4,6 +4,10 @@ spring:
 
 server:
   address: 127.0.0.1
+  servlet:
+    session:
+      cookie:
+        secure: ${SESSION_COOKIE_SECURE:false}
 
 poker:
   moderation:
@@ -12,7 +16,8 @@ poker:
     dev-users-are-moderators: true
   admin:
     live:
-      enabled: true
+      enabled: ${POKER_ADMIN_LIVE_ENABLED:false}
+      token: ${POKER_ADMIN_LIVE_TOKEN:}
   hand-archive:
     # `npm run dev` starts the server with cwd=server/, so point the archive
     # at the same repo-root data directory the analytics app reads.

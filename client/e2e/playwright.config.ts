@@ -1,12 +1,19 @@
-// T10 E2E config. Runs against the local dev stack (Vite on 5173 proxying the
-// Spring Boot server on 8080). Reuses an already-running `npm run dev`; when
-// none is running it boots one from the repo root.
+// Run Vite against an isolated packaged loopback server and in-memory database.
+// Build the server before starting this suite.
 //
 // Scenario gating:
-//   E2E_GAME=1        enables gameplay assertions (requires the T6 server work)
-//   E2E_KILL_SERVER=1 enables the kill-server recovery scenario
+//   E2E_GAME=0       disables gameplay assertions for transport-only debugging
+//   E2E_REUSE=1      opts in to an existing local server at E2E_BASE_URL
 
 import { defineConfig } from '@playwright/test'
+
+const reuse = process.env.E2E_REUSE === '1'
+const origin = new URL(process.env.E2E_BASE_URL || 'http://127.0.0.1:15173')
+if (origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1'
+    || origin.pathname !== '/' || origin.search || origin.hash || origin.username || origin.password) {
+  throw new Error('E2E_BASE_URL must be an HTTP origin on 127.0.0.1.')
+}
+const baseURL = origin.origin
 
 export default defineConfig({
   testDir: './scenarios',
@@ -16,18 +23,16 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   retries: 0,
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL,
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run dev',
-    env: { POKER_RANKED_ENABLED: 'true' },
+    command: 'node scripts/e2e-server.mjs',
+    env: { E2E_BASE_URL: baseURL },
     cwd: '../..',
-    // Wait for the proxied Spring endpoint, not only Vite. Vite becomes ready
-    // much earlier and otherwise the first dev-login can race server startup.
-    url: 'http://127.0.0.1:5173/api/meta',
-    reuseExistingServer: true,
+    url: `${baseURL}/api/meta`,
+    reuseExistingServer: reuse,
     timeout: 180_000,
   },
 })

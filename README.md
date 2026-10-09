@@ -31,8 +31,8 @@ printed in the terminal. Set `TUNNEL_PROVIDER=cloudflared` or
 `TUNNEL_PROVIDER=ngrok` to use an installed tunnel client instead. With ngrok,
 `TUNNEL_DOMAIN` passes a reserved domain (`ngrok http --domain=<domain>`) so the
 public URL stays the same across restarts. Temporary tunnels are for development
-only; OAuth providers still need the exact public callback URL registered, so
-the local dev login is the simplest way to test a shared tunnel.
+only; OAuth providers need the exact public callback URL registered. Tunnels
+require OAuth credentials and disable guest login.
 
 Development uses a standalone local H2 server on `127.0.0.1:9092`. `npm run
 dev` starts it automatically. If it is already running, the command asks before
@@ -79,12 +79,12 @@ npm run prod:proxy
 This targets the Spring application on port `8080` and adds the public tunnel
 origin to the production WebSocket allow-list. Configure the tunnel provider
 with the same `TUNNEL_PROVIDER` settings used by `dev:proxy`.
-With `OAUTH_ENABLED=false`, the packaged server uses the local guest login
-instead of OAuth. Do not expose that mode to untrusted users.
+With `OAUTH_ENABLED=false`, the packaged server uses loopback-only guest login.
+Public listeners and tunnels are rejected in that mode.
 
 The production build packages the React app inside the Spring Boot jar and
-serves the complete application from port `8080` by default. Set
-`SESSION_COOKIE_SECURE=true` when serving it over HTTPS. A production reverse
+serves the complete application from port `8080` by default.
+`SESSION_COOKIE_SECURE=true` is the production default. A production reverse
 proxy must forward the original host and protocol so Spring generates the
 public HTTPS OAuth callback URL.
 
@@ -108,6 +108,9 @@ npm run analytics
 It serves http://127.0.0.1:8090 with per-player stats (VPIP, PFR, showdowns,
 net chips), cumulative winnings and hands-per-day charts, and a full replay
 of any hand. Set `ANALYTICS_PORT` / `HAND_ARCHIVE_DIR` to override defaults.
+Requests must use an allowlisted hostname and the listening port. To bind beyond
+loopback, also set `ANALYTICS_ALLOWED_HOSTS`, `ANALYTICS_USERNAME`, and a strong
+`ANALYTICS_PASSWORD`; startup fails closed if any shared-access setting is absent.
 The files decompress with standard tools too: `gzip -dc hands-*.jsonl.gz`.
 
 ## Layout
@@ -138,9 +141,14 @@ example `https://poker.example.com/login/oauth2/code/google` and
 The `oauth` profile reads `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
 `DISCORD_CLIENT_ID`, and `DISCORD_CLIENT_SECRET` from `.env`. The root `dev`
 and `start` commands activate the required profiles automatically. Never commit
-the secrets. Local development also enables the loopback-only dev login
-(`/auth/dev?u=name`, `dev` profile) so multiplayer can be tested without real
-accounts; the dev route is intentionally absent outside that profile.
+the secrets. Local development enables a loopback-only guest sign-in form
+(`dev` or `local-auth` profile) so multiplayer can be tested without real
+accounts. The form submits a CSRF-protected POST to `/auth/dev`. Each login
+creates a random identity; identical display names do not share an account.
+Retain the existing browser session to reconnect as the same guest.
+
+Read [SECURITY_DEPLOYMENT.md](SECURITY_DEPLOYMENT.md) before sharing a deployment
+for the HTTPS, proxy, moderator, admin-token, and private-archive requirements.
 
 ## Ranked beta
 
@@ -230,13 +238,23 @@ Archive schema V2 adds `mode` and `participantCount`, preserving the existing
 archive fields and private-card handling. Public statistics contain no cards
 or authentication identifiers. Do not publish the private analytics archive.
 
-The beta sorts qualifying player totals in application memory before
-pagination. Move this to an indexed read model before operating a large pool.
+Leaderboard sorting and pagination execute in the database using the ranked
+read index introduced by Flyway V4. Public statistics requests have bounded
+page sizes, short-lived caches, and request limits.
 
 ### Validation
 
 Run `npm test`, `npm --prefix client run test`, and `npm run build`.
 Run `npm --prefix client exec -- playwright install chromium` once, then
-`npm --prefix client run e2e`. The E2E launcher enables ranked play when it
-starts the dev stack. If reusing an existing stack, enable ranked there first;
-the ranked browser scenario explicitly skips servers where it is disabled.
+`npm --prefix client run e2e`. The browser suite runs Vite at
+`http://127.0.0.1:15173` against the packaged server on `127.0.0.1:18080`, with
+guest login, ranked play, an isolated in-memory database, and hand archiving
+disabled. It does not load the root `.env`, start the shared
+H2 process, or reuse an existing server by default. Rebuild after source changes.
+Set `E2E_BASE_URL` to another HTTP origin on `127.0.0.1` to change the client
+port, and `E2E_SERVER_PORT` to change the backend port.
+To explicitly reuse an existing local stack, set `E2E_REUSE=1` and
+`E2E_BASE_URL` to its origin; enable guest login and ranked play there first.
+The ranked browser scenarios explicitly skip servers where ranked is disabled.
+Run `node --test analytics/security.test.mjs scripts/auth-mode.test.mjs` for
+the hostile-archive rendering and local/public launch-mode regressions.

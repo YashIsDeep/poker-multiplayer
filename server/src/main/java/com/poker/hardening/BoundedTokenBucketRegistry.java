@@ -1,7 +1,7 @@
 package com.poker.hardening;
 
 import java.time.Duration;
-import java.util.ArrayDeque;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,7 +16,7 @@ public final class BoundedTokenBucketRegistry<K> {
     private static final long CAP_RETRY_AFTER_MS = 1_000;
 
     private final Map<K, Entry> entries = new ConcurrentHashMap<>();
-    private final ArrayDeque<K> rotation = new ArrayDeque<>();
+    private final LinkedHashSet<K> rotation = new LinkedHashSet<>();
     private final Object registryLock = new Object();
     private final int capacity;
     private final long ttlNanos;
@@ -70,6 +70,13 @@ public final class BoundedTokenBucketRegistry<K> {
         return entries.size();
     }
 
+    public void remove(K key) {
+        synchronized (registryLock) {
+            entries.remove(key);
+            rotation.remove(key);
+        }
+    }
+
     public void sweep(int maximumEntries) {
         if (maximumEntries < 0) {
             throw new IllegalArgumentException("maximumEntries cannot be negative");
@@ -91,14 +98,15 @@ public final class BoundedTokenBucketRegistry<K> {
             }
             Entry created = new Entry(new TokenBucket(refillPerSecond, burstCapacity, now), now);
             entries.put(key, created);
-            rotation.addLast(key);
+            rotation.add(key);
             return created;
         }
     }
 
     private void sweepLocked(long now, int maximumEntries) {
         for (int inspected = 0; inspected < maximumEntries && !rotation.isEmpty(); inspected++) {
-            K key = rotation.removeFirst();
+            K key = rotation.iterator().next();
+            rotation.remove(key);
             Entry entry = entries.get(key);
             if (entry == null) {
                 continue;
@@ -110,7 +118,7 @@ public final class BoundedTokenBucketRegistry<K> {
                 if (isExpired(now, entry.lastAccessNanos)) {
                     entries.remove(key, entry);
                 } else {
-                    rotation.addLast(key);
+                    rotation.add(key);
                 }
             }
         }

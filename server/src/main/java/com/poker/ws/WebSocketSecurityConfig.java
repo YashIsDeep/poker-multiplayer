@@ -8,9 +8,19 @@ import org.springframework.security.config.annotation.web.socket.AbstractSecurit
 
 @Configuration
 public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBrokerConfigurer {
+    private final SubscriptionOwnershipInterceptor subscriptions;
+    private final com.poker.hardening.InboundFrameBudgetInterceptor frameBudget;
+
+    public WebSocketSecurityConfig(SubscriptionOwnershipInterceptor subscriptions,
+            com.poker.hardening.InboundFrameBudgetInterceptor frameBudget) {
+        this.subscriptions = subscriptions;
+        this.frameBudget = frameBudget;
+    }
     @Override
     protected void customizeClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(new SubscriptionOwnershipInterceptor());
+        // Count every authenticated lifecycle frame before ownership validation
+        // can discard unknown unsubscribe IDs.
+        registration.interceptors(frameBudget, subscriptions);
     }
 
     @Override

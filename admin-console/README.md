@@ -51,17 +51,20 @@ dealt card, including live hole cards — they exist for debugging, so avoid
 running them during a real game you are playing in.
 
 The API is served at `/internal/admin/live/*`, exists only when
-`poker.admin.live.enabled=true` (enabled by the server's `dev` profile,
-disabled otherwise), and answers loopback clients only. Optional overrides:
+`poker.admin.live.enabled=true` (disabled by default in every profile), and
+answers direct loopback clients only. Enable it with
+`POKER_ADMIN_LIVE_ENABLED=true` and set `POKER_ADMIN_LIVE_TOKEN` on the server.
+Console settings:
 
 ```text
 ADMIN_LIVE_URL      Base URL of the game server (default http://127.0.0.1:8080)
-ADMIN_LIVE_TOKEN    Shared secret sent as X-Admin-Token; required only when the
-                    server sets poker.admin.live.token
+ADMIN_LIVE_TOKEN    Required shared secret sent as X-Admin-Token; must match
+                    the server's POKER_ADMIN_LIVE_TOKEN
 ```
 
-If you enable the API outside the dev profile, set `poker.admin.live.token`
-and do not forward `/internal/**` through any reverse proxy.
+Every enabled instance requires a token, including local development. Do not
+forward `/internal/**` through a reverse proxy. Requests carrying forwarding
+headers are rejected; use a direct local connection or SSH port forwarding.
 
 You can also run one command without entering the interactive prompt:
 

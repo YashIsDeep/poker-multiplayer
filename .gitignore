@@ -8,3 +8,4 @@ data/
 .env
 *.log
 .DS_Store
+artifacts/security/

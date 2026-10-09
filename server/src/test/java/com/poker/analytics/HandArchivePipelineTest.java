@@ -26,11 +26,14 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import java.util.zip.GZIPInputStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.io.CleanupMode;
 import org.junit.jupiter.api.io.TempDir;
 
 class HandArchivePipelineTest {
@@ -45,8 +48,32 @@ class HandArchivePipelineTest {
             new JoinCodeGenerator(new java.util.Random(41)),
             () -> Deck.of(IntStream.range(0, 52).mapToObj(Card::new).toList()));
 
-    @TempDir
+    @TempDir(cleanup = CleanupMode.NEVER)
     Path tempDir;
+
+    @AfterEach
+    void cleanupTempDir() throws Exception {
+        if (tempDir == null || !Files.exists(tempDir)) return;
+        for (int attempt = 0; attempt < 10; attempt++) {
+            try (var paths = Files.walk(tempDir)) {
+                paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException ex) {
+                        throw new CleanupFailure(ex);
+                    }
+                });
+                return;
+            } catch (CleanupFailure | IOException ex) {
+                if (attempt == 9) throw ex;
+                Thread.sleep(100);
+            }
+        }
+    }
+
+    private static final class CleanupFailure extends RuntimeException {
+        private CleanupFailure(IOException cause) { super(cause); }
+    }
 
     @Test
     void archivesEachCompletedHandExactlyOnceWithFullDetail() throws Exception {

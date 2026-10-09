@@ -11,6 +11,17 @@ public class HardeningProperties {
     private int controlBurst = 5;
     private double frameRate = 100;
     private int frameBurst = 200;
+    private double oauthInitiationRate = 1;
+    private int oauthInitiationBurst = 5;
+    private int oauthInitiationRegistryCap = 10_000;
+    private Duration oauthInitiationRegistryTtl = Duration.ofMinutes(10);
+    private double lifecycleFrameRate = 10;
+    private int lifecycleFrameBurst = 20;
+    private double heartbeatFrameRate = 2;
+    private int heartbeatFrameBurst = 20;
+    private int maxSubscriptionsPerSocket = 8;
+    private int maxSocketsPerUser = 4;
+    private int maxSocketsPerHttpSession = 4;
     private int coarseViolationThreshold = 3;
     private Duration coarseViolationWindow = Duration.ofSeconds(10);
     private int registryCap = 100_000;
@@ -28,6 +39,36 @@ public class HardeningProperties {
     public void setFrameRate(double value) { frameRate = positiveRate(value, "frameRate"); }
     public int getFrameBurst() { return frameBurst; }
     public void setFrameBurst(int value) { frameBurst = positive(value, "frameBurst"); }
+    public double getOauthInitiationRate() { return oauthInitiationRate; }
+    public void setOauthInitiationRate(double value) {
+        oauthInitiationRate = positiveRate(value, "oauthInitiationRate");
+    }
+    public int getOauthInitiationBurst() { return oauthInitiationBurst; }
+    public void setOauthInitiationBurst(int value) {
+        oauthInitiationBurst = positive(value, "oauthInitiationBurst");
+    }
+    public int getOauthInitiationRegistryCap() { return oauthInitiationRegistryCap; }
+    public void setOauthInitiationRegistryCap(int value) {
+        oauthInitiationRegistryCap = positive(value, "oauthInitiationRegistryCap");
+    }
+    public Duration getOauthInitiationRegistryTtl() { return oauthInitiationRegistryTtl; }
+    public void setOauthInitiationRegistryTtl(Duration value) {
+        oauthInitiationRegistryTtl = positiveDuration(value, "oauthInitiationRegistryTtl");
+    }
+    public double getLifecycleFrameRate() { return lifecycleFrameRate; }
+    public void setLifecycleFrameRate(double value) { lifecycleFrameRate = positiveRate(value, "lifecycleFrameRate"); }
+    public int getLifecycleFrameBurst() { return lifecycleFrameBurst; }
+    public void setLifecycleFrameBurst(int value) { lifecycleFrameBurst = positive(value, "lifecycleFrameBurst"); }
+    public double getHeartbeatFrameRate() { return heartbeatFrameRate; }
+    public void setHeartbeatFrameRate(double value) { heartbeatFrameRate = positiveRate(value, "heartbeatFrameRate"); }
+    public int getHeartbeatFrameBurst() { return heartbeatFrameBurst; }
+    public void setHeartbeatFrameBurst(int value) { heartbeatFrameBurst = positive(value, "heartbeatFrameBurst"); }
+    public int getMaxSubscriptionsPerSocket() { return maxSubscriptionsPerSocket; }
+    public void setMaxSubscriptionsPerSocket(int value) { maxSubscriptionsPerSocket = positive(value, "maxSubscriptionsPerSocket"); }
+    public int getMaxSocketsPerUser() { return maxSocketsPerUser; }
+    public void setMaxSocketsPerUser(int value) { maxSocketsPerUser = positive(value, "maxSocketsPerUser"); }
+    public int getMaxSocketsPerHttpSession() { return maxSocketsPerHttpSession; }
+    public void setMaxSocketsPerHttpSession(int value) { maxSocketsPerHttpSession = positive(value, "maxSocketsPerHttpSession"); }
     public int getCoarseViolationThreshold() { return coarseViolationThreshold; }
     public void setCoarseViolationThreshold(int value) {
         coarseViolationThreshold = positive(value, "coarseViolationThreshold");

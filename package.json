@@ -17,9 +17,16 @@
     "start": "node --env-file=.env scripts/start.mjs",
     "prod:proxy": "node --env-file=.env scripts/prod-proxy.mjs",
     "reset:db": "node scripts/reset-db.mjs",
-    "test": "cd server && .\\mvnw.cmd -B -ntp test"
+    "test": "cd server && .\\mvnw.cmd -B -ntp test",
+    "security:scan": "pwsh -NoProfile -File scripts/security-scan.ps1"
+  },
+  "dependencies": {
+    "localtunnel": "2.0.2"
   },
   "devDependencies": {
     "concurrently": "^10.0.3"
+  },
+  "overrides": {
+    "axios": "1.20.0"
   }
 }

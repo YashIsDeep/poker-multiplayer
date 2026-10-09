@@ -1,8 +1,15 @@
 import { spawn } from 'node:child_process'
+import { assertTunnelAuthentication } from './auth-mode.mjs'
 import { resolve } from 'node:path'
 
 const root = resolve('.')
 const productionMode = process.env.PROXY_MODE === 'production'
+try {
+  assertTunnelAuthentication(process.env, productionMode, process.argv.slice(2))
+} catch (error) {
+  console.error(error.message)
+  process.exit(1)
+}
 const provider = (process.env.TUNNEL_PROVIDER || 'localtunnel').trim().toLowerCase()
 const port = Number(
   process.env.TUNNEL_PORT
@@ -27,12 +34,10 @@ try {
 }
 
 function tunnelCommand() {
-  const isWindows = process.platform === 'win32'
-  const npx = isWindows ? 'npx.cmd' : 'npx'
-
   switch (provider) {
     case 'localtunnel': {
-      const args = ['--yes', 'localtunnel', '--port', String(port), '--local-host', '127.0.0.1']
+      const executable = resolve(root, 'node_modules', 'localtunnel', 'bin', 'lt.js')
+      const args = [executable, '--port', String(port), '--local-host', '127.0.0.1']
       const subdomain = process.env.TUNNEL_SUBDOMAIN?.trim()
       if (subdomain) {
         if (!/^[a-z0-9-]+$/i.test(subdomain)) {
@@ -40,10 +45,7 @@ function tunnelCommand() {
         }
         args.push('--subdomain', subdomain)
       }
-      // Windows cannot spawn .cmd shims directly with Node's default shell
-      // mode. Running the npm shim through cmd.exe avoids EINVAL while the
-      // subdomain validation above keeps shell arguments constrained.
-      return { command: npx, args, shell: isWindows }
+      return { command: process.execPath, args }
     }
     case 'cloudflared':
       return { command: 'cloudflared', args: ['tunnel', '--url', target] }
@@ -69,6 +71,17 @@ function tunnelCommand() {
   }
 }
 
+function tunnelEnvironment() {
+  const allowed = [
+    'PATH', 'Path', 'PATHEXT', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP',
+    'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
+  ]
+  if (provider === 'ngrok') allowed.push('NGROK_AUTHTOKEN')
+  return Object.fromEntries(allowed
+    .filter(key => process.env[key] !== undefined)
+    .map(key => [key, process.env[key]]))
+}
+
 function expectedTunnelHost(hostname) {
   switch (provider) {
     case 'localtunnel':
@@ -88,8 +101,8 @@ function expectedTunnelHost(hostname) {
 
 function normalizePublicUrl(value) {
   const url = new URL(value)
-  if (!['http:', 'https:'].includes(url.protocol)) {
-    throw new Error('the public URL must use http:// or https://')
+  if (url.protocol !== 'https:') {
+    throw new Error('the public OAuth URL must use https://')
   }
   return url.origin
 }
@@ -99,7 +112,7 @@ function isRecord(value) {
 }
 
 function productionEnvironment(publicUrl) {
-  const environment = { ...process.env }
+  const environment = { ...process.env, TUNNEL_MODE: 'true' }
   let applicationJson = {}
   const configuredJson = environment.SPRING_APPLICATION_JSON?.trim()
 
@@ -117,9 +130,14 @@ function productionEnvironment(publicUrl) {
   const poker = isRecord(applicationJson.poker) ? applicationJson.poker : {}
   const websocket = isRecord(poker.websocket) ? poker.websocket : {}
   const configuredOrigins = websocket['allowed-origins']
+  // In development the browser also reaches the Vite dev server directly, so
+  // those origins stay. A production tunnel serves the SPA from the public
+  // origin alone: seeding the allowlist with localhost there would leave two
+  // origins trusted for the STOMP handshake that nothing ever uses.
+  const defaultOrigins = productionMode ? [] : ['http://127.0.0.1:5173', 'http://localhost:5173']
   const origins = Array.isArray(configuredOrigins)
     ? configuredOrigins.filter((origin) => typeof origin === 'string' && origin.trim())
-    : ['http://127.0.0.1:5173', 'http://localhost:5173']
+    : defaultOrigins
 
   applicationJson.poker = {
     ...poker,
@@ -137,7 +155,7 @@ function findPublicUrl(output) {
   for (const candidate of candidates.reverse()) {
     try {
       const url = new URL(candidate)
-      if (expectedTunnelHost(url.hostname)) return url.origin
+      if (url.protocol === 'https:' && expectedTunnelHost(url.hostname)) return url.origin
     } catch {
       // Ignore non-URL output from the tunnel client.
     }
@@ -225,7 +243,8 @@ const appLabel = productionMode ? 'production server' : 'development stack'
 console.log(`Starting ${provider} tunnel for ${target}...`)
 const tunnel = spawn(spec.command, spec.args, {
   cwd: root,
-  env: process.env,
+  // Do not expose application OAuth/database credentials to the tunnel tool.
+  env: tunnelEnvironment(),
   shell: spec.shell,
   windowsHide: true,
   stdio: ['inherit', 'pipe', 'pipe'],
@@ -246,13 +265,8 @@ console.log(`Starting the local ${appLabel}...`)
 
 let appEnvironment
 try {
-  appEnvironment = productionMode
-    ? productionEnvironment(publicUrl)
-    : {
-        ...process.env,
-        TUNNEL_MODE: 'true',
-        VITE_TUNNEL_HOST: publicHost,
-      }
+  appEnvironment = productionEnvironment(publicUrl)
+  if (!productionMode) appEnvironment.VITE_TUNNEL_HOST = publicHost
 } catch (error) {
   stopChild(tunnel)
   console.error(error.message)

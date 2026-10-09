@@ -98,11 +98,7 @@ class ChatStompIntegrationTest {
 
     private Peer connect(String user) throws Exception {
         HttpClient http = HttpClient.newHttpClient();
-        HttpResponse<Void> login = http.send(
-                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/auth/dev?u=" + user))
-                        .GET().build(),
-                HttpResponse.BodyHandlers.discarding());
-        String cookie = login.headers().firstValue("set-cookie").orElseThrow().split(";", 2)[0];
+        String cookie = com.poker.auth.DevLoginTestClient.login(http, port, user);
         HttpResponse<String> csrf = http.send(
                 HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/csrf"))
                         .header("Cookie", cookie).GET().build(),

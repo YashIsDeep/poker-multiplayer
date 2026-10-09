@@ -1,11 +1,17 @@
 import { spawn } from 'node:child_process'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { assertLocalAuthentication, productionProfiles } from './auth-mode.mjs'
 
 const targetDirectory = resolve('server', 'target')
 
-function isDisabled(value) {
-  return ['false', '0', 'off', 'no'].includes(value?.trim().toLowerCase())
+let profiles
+try {
+  profiles = productionProfiles(process.env, process.argv.slice(2))
+  assertLocalAuthentication(process.env, profiles, process.argv.slice(2))
+} catch (error) {
+  console.error(error.message)
+  process.exit(1)
 }
 
 if (!existsSync(targetDirectory)) {
@@ -21,19 +27,6 @@ const jars = readdirSync(targetDirectory)
 if (jars.length === 0) {
   console.error('Production build not found. Run `npm run build` first.')
   process.exit(1)
-}
-
-const oauthEnabled = !isDisabled(process.env.OAUTH_ENABLED)
-const configuredProfiles = process.env.SPRING_PROFILES_ACTIVE?.trim()
-const profiles = configuredProfiles || (oauthEnabled ? 'oauth' : 'local-auth')
-
-if (!oauthEnabled && profiles.split(',').some((profile) => profile.trim() === 'oauth')) {
-  console.error('OAUTH_ENABLED=false cannot be used with SPRING_PROFILES_ACTIVE=oauth.')
-  process.exit(1)
-}
-
-if (!oauthEnabled) {
-  console.log('OAuth is disabled; using the local guest-login profile.')
 }
 
 const child = spawn(

@@ -85,15 +85,7 @@ class SessionWebSocketIntegrationTest {
     void authenticatedSessionConnectsWithCsrfAndRecoversState() throws Exception {
         assertArrayEquals(new long[] {1_000, 1_000}, broker.getHeartbeatValue());
         HttpClient http = HttpClient.newHttpClient();
-        HttpResponse<Void> login = http.send(
-                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/auth/dev?u=ws-user"))
-                        .timeout(Duration.ofSeconds(5))
-                        .GET()
-                        .build(),
-                HttpResponse.BodyHandlers.discarding());
-        assertEquals(302, login.statusCode());
-        String setCookie = login.headers().firstValue("set-cookie").orElseThrow();
-        String sessionCookie = setCookie.substring(0, setCookie.indexOf(';'));
+        String sessionCookie = com.poker.auth.DevLoginTestClient.login(http, port, "ws-user");
 
         HttpResponse<String> csrf = http.send(
                 HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/csrf"))

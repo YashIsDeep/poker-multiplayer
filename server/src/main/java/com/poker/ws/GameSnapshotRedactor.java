@@ -24,11 +24,15 @@ public final class GameSnapshotRedactor {
         List<GameView.GameSeatView> seatViews = new ArrayList<>();
         for (TableSeatState tableSeat : game.seats()) {
             PlayerSnapshot p = players.get(tableSeat.seat());
+            // A completed hand retains its original owners while seats can already
+            // change hands. Never attach historical state to a new occupant.
+            if (p != null && !p.id().value().equals(tableSeat.userId().toString())) p = null;
             long stack = p == null ? tableSeat.stack() : p.stack();
             long committed = p == null ? 0 : p.streetCommitted();
             String status = tableSeat.status().name();
             if (p != null) status = p.folded() ? "FOLDED" : p.allIn() ? "ALL_IN" : status;
-            boolean reveal = p != null && (Objects.equals(viewerSeat, p.seat()) || (showdown && !p.folded()));
+            boolean reveal = p != null && ((tableSeat.userId().equals(viewerId)
+                    && p.id().value().equals(viewerId.toString())) || (showdown && !p.folded()));
             List<String> cards = reveal ? p.holeCards().stream().map(Card::toString).toList() : null;
             String rank = null;
             List<String> bestHandCards = List.of();
@@ -39,12 +43,12 @@ public final class GameSnapshotRedactor {
                 rank = HandEvaluator.evaluate7(seven).describe();
                 bestHandCards = HandEvaluator.bestFive(seven).stream().map(Card::toString).toList();
             }
-            List<GameView.LastActionView> actions = game.roundActions()
+            List<GameView.LastActionView> actions = p == null ? List.of() : game.roundActions()
                     .getOrDefault(tableSeat.seat(), List.of()).stream()
                     .map(GameSnapshotRedactor::actionView).toList();
             GameView.LastActionView last = actions.isEmpty() ? null : actions.get(actions.size() - 1);
             seatViews.add(new GameView.GameSeatView(tableSeat.seat(), tableSeat.userId(), stack, status,
-                    committed, cards, last, actions, positions.get(tableSeat.seat()), rank,
+                    committed, cards, last, actions, p == null ? null : positions.get(tableSeat.seat()), rank,
                     bestHandCards, tableSeat.rebuyHandsRemaining(), tableSeat.rebought(), tableSeat.rebuyCount()));
         }
 

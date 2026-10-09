@@ -2,6 +2,8 @@ spring:
   datasource:
     # Allow local app restarts and database tools to share the file through
     # H2's automatic mixed mode instead of competing for an exclusive lock.
+    # Mixed mode listens for those tools over TCP: PokerApplication confines that
+    # listener to loopback, since H2 otherwise binds every interface.
     url: jdbc:h2:file:./data/poker;AUTO_SERVER=TRUE
     driver-class-name: org.h2.Driver
     username: sa
@@ -16,7 +18,7 @@ spring:
   session:
     jdbc:
       initialize-schema: always
-    timeout: 30d
+    timeout: 12h
 
 server:
   port: 8080
@@ -28,13 +30,17 @@ server:
       cookie:
         http-only: true
         same-site: lax
-        secure: ${SESSION_COOKIE_SECURE:false}
+        secure: ${SESSION_COOKIE_SECURE:true}
 
 poker:
+  admin:
+    live:
+      enabled: ${POKER_ADMIN_LIVE_ENABLED:false}
+      token: ${POKER_ADMIN_LIVE_TOKEN:}
   moderation:
     # Public tables are moderator-only. Entries are matched against the
     # verified provider email captured at sign-in.
-    emails: ${POKER_MODERATOR_EMAILS:yashparth.gupta@gmail.com}
+    emails: ${POKER_MODERATOR_EMAILS:}
     # The dev login endpoint issues accounts with no provider email; the dev
     # profile turns this on so local and end-to-end runs can still create them.
     dev-users-are-moderators: false
@@ -66,6 +72,21 @@ poker:
     control-burst: 5
     frame-rate: 100
     frame-burst: 200
+    # OAuth initiation intentionally creates an authorization-state session,
+    # so bound it per transport peer before Spring stores that state.
+    oauth-initiation-rate: 1
+    oauth-initiation-burst: 5
+    oauth-initiation-registry-cap: 10000
+    oauth-initiation-registry-ttl: 10m
+    lifecycle-frame-rate: 10
+    lifecycle-frame-burst: 20
+    # STOMP heartbeats are cheap but still traverse the inbound channel. This
+    # allows normal clients ample jitter while bounding one-byte frame floods.
+    heartbeat-frame-rate: 2
+    heartbeat-frame-burst: 20
+    max-subscriptions-per-socket: 8
+    max-sockets-per-user: 4
+    max-sockets-per-http-session: 4
     coarse-violation-threshold: 3
     coarse-violation-window: 10s
     cleanup-interval-ms: 60000

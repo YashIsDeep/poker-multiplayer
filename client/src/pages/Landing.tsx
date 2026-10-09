@@ -9,14 +9,32 @@ export default function Landing() {
   const [meta, setMeta] = useState<Meta | null>(null)
   const [guestMode, setGuestMode] = useState(false)
   const [guestName, setGuestName] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [signingIn, setSigningIn] = useState(false)
   const oauthEnabled = meta?.authMode === 'oauth' || meta?.authMode === 'both'
   const guestLoginEnabled = meta?.authMode === 'dev' || meta?.authMode === 'both'
 
-  const signInAsGuest = (e: FormEvent) => {
+  const signInAsGuest = async (e: FormEvent) => {
     e.preventDefault()
     const name = guestName.trim()
     if (!name) return
-    window.location.assign(`/auth/dev?u=${encodeURIComponent(name)}`)
+    setSigningIn(true)
+    setLoginError('')
+    try {
+      const csrfResponse = await fetch('/auth/dev/csrf', { credentials: 'same-origin', cache: 'no-store' })
+      if (!csrfResponse.ok) throw new Error('Guest sign-in is available only from this computer.')
+      const csrf = await csrfResponse.json() as { headerName: string; token: string }
+      const response = await fetch('/auth/dev', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { [csrf.headerName]: csrf.token, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ u: name }),
+      })
+      if (!response.ok) throw new Error('Unable to sign in. Please try again.')
+      window.location.assign('/')
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Unable to sign in. Please try again.')
+      setSigningIn(false)
+    }
   }
 
   useEffect(() => {
@@ -52,7 +70,7 @@ export default function Landing() {
             className="btn btn-green"
             type="submit"
             data-sound="confirm"
-            disabled={!guestName.trim()}
+            disabled={!guestName.trim() || signingIn}
           >
             Play
           </button>
@@ -87,6 +105,7 @@ export default function Landing() {
           )}
         </div>
       )}
+      {loginError && <p role="alert">{loginError}</p>}
       <LeaderboardLink compact />
       <p className="server-status">
         server: {meta ? 'online' : 'connecting…'}

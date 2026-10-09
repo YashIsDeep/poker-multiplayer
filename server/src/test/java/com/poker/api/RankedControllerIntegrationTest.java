@@ -29,7 +29,7 @@ class RankedControllerIntegrationTest {
         jdbc.update("INSERT INTO app_user (id, provider, provider_subject, display_name, avatar_url,"
                         + " created_at, last_login_at) VALUES"
                         + " (?, 'GOOGLE', 'private-subject', 'Public Name', NULL, ?, ?)", id, OffsetDateTime.now(), OffsetDateTime.now());
-        jdbc.update("INSERT INTO ranked_player_total VALUES (?, -1250, 1000)", id);
+        jdbc.update("INSERT INTO ranked_player_total (user_id, net_chips, hand_count) VALUES (?, -1250, 1000)", id);
         mvc.perform(get("/api/players/" + id)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Public Name"))
                 .andExpect(jsonPath("$.bbPer100").value(-12.5))

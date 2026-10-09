@@ -1,6 +1,7 @@
 package com.poker.presence;
 
 import com.poker.auth.CurrentUserPrincipal;
+import com.poker.ws.WebSocketTransportRegistry;
 import java.util.Map;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -38,7 +39,16 @@ public final class StompPresenceListener {
 
     @EventListener
     public void disconnected(SessionDisconnectEvent event) {
-        UserSocketRegistry.Removed removed = sockets.remove(event.getSessionId());
+        disconnected(event.getSessionId());
+    }
+
+    @EventListener
+    public void closed(WebSocketTransportRegistry.SocketClosed event) {
+        disconnected(event.socketId());
+    }
+
+    private void disconnected(String socketId) {
+        UserSocketRegistry.Removed removed = sockets.remove(socketId);
         if (removed.userId() != null
                 && removed.transition() == UserSocketRegistry.Transition.ONE_TO_ZERO) {
             idle.disconnected(removed.userId());

@@ -1,5 +1,5 @@
 // Shared fixtures: three isolated browser contexts (alice, bob, spectator),
-// each dev-logged-in via /auth/dev?u=<name> (T4 dev-only endpoint).
+// each dev-logged-in through the CSRF-protected POST endpoint.
 // User names are unique per run so parallel/local re-runs don't collide.
 
 import { test as base } from '@playwright/test'
@@ -19,9 +19,22 @@ export async function waitForLobby(page: Page): Promise<void> {
 
 export async function devLogin(context: BrowserContext, name: string): Promise<Page> {
   const page = await context.newPage()
-  await page.goto(`/auth/dev?u=${encodeURIComponent(name)}`)
-  await waitForLobby(page)
+  await loginGuestPage(page, name)
   return page
+}
+
+export async function loginGuestPage(page: Page, name: string): Promise<void> {
+  const csrfResponse = await page.request.get('/auth/dev/csrf')
+  if (!csrfResponse.ok()) throw new Error(`Guest CSRF bootstrap failed: ${csrfResponse.status()}`)
+  const csrf = await csrfResponse.json() as { headerName: string; token: string }
+  const loginResponse = await page.request.post('/auth/dev', {
+    headers: { [csrf.headerName]: csrf.token },
+    form: { u: name },
+    maxRedirects: 0,
+  })
+  if (loginResponse.status() !== 302) throw new Error(`Guest login failed: ${loginResponse.status()}`)
+  await page.goto('/')
+  await waitForLobby(page)
 }
 
 function userName(prefix: string, testInfo: TestInfo): string {

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,7 +39,7 @@ class CsrfControllerIntegrationTest {
     @Test
     void csrfIsAuthenticatedJsonOnlyAndNotCached() throws Exception {
         mockMvc.perform(get("/api/csrf")).andExpect(status().isUnauthorized());
-        MvcResult login = mockMvc.perform(get("/auth/dev").param("u", "csrf-user")).andReturn();
+        MvcResult login = mockMvc.perform(post("/auth/dev").with(csrf()).param("u", "csrf-user")).andReturn();
         Cookie session = login.getResponse().getCookie("SESSION");
         assertNotNull(session);
 

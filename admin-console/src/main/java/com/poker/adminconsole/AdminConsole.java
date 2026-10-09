@@ -38,7 +38,22 @@ public final class AdminConsole {
     private AdminConsole() {
     }
 
+    /**
+     * The file-mode URL uses {@code AUTO_SERVER=TRUE} so this console can attach
+     * to a database a running server already holds open. Whichever process opens
+     * the file first hosts that helper, and H2 starts it with
+     * {@code -tcpAllowOthers} on every interface unless a bind address is set.
+     * Confine it to loopback; H2 reads the property from a static initializer, so
+     * this must run before the driver class loads.
+     */
+    static void bindH2AutoServerToLoopback() {
+        if (System.getProperty("h2.bindAddress") == null) {
+            System.setProperty("h2.bindAddress", "127.0.0.1");
+        }
+    }
+
     public static void main(String[] args) {
+        bindH2AutoServerToLoopback();
         AdminConfig config = AdminConfig.fromEnvironment();
         LiveCommands live = new LiveCommands(LiveServerClient.fromEnvironment());
 

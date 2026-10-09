@@ -12,6 +12,13 @@ class ModeratorPolicyTest {
     private static final String ALLOWED = "yashparth.gupta@gmail.com";
 
     @Test
+    void absentAllowlistGrantsNoPrivileges() {
+        ModeratorPolicy policy = new ModeratorPolicy(new ModerationProperties(null, false));
+        assertFalse(policy.isModerator(google(ALLOWED)));
+        assertFalse(policy.isModerator(new SessionUserPrincipal(UUID.randomUUID(), AuthProvider.DEV, "Guest", null)));
+    }
+
+    @Test
     void grantsStandingOnlyToAnAllowListedEmailRegardlessOfCasingOrPadding() {
         ModeratorPolicy policy = ModeratorPolicy.of(List.of("  YashParth.Gupta@Gmail.com "), false);
 

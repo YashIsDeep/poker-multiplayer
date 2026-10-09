@@ -12,6 +12,8 @@ import com.poker.room.RoomManager;
 import com.poker.room.RoomState;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,7 +23,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
         "poker.admin.live.enabled=true",
-        "poker.admin.live.token=test-admin-token"
+        "poker.admin.live.token=test-admin-token",
+        "server.forward-headers-strategy=framework"
 })
 @AutoConfigureMockMvc
 class AdminLiveControllerIntegrationTest {
@@ -163,6 +166,37 @@ class AdminLiveControllerIntegrationTest {
                         .header(TOKEN_HEADER, "test-admin-token")
                         .with(request -> {
                             request.setRemoteAddr("203.0.113.10");
+                            return request;
+                        }))
+                .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "Forwarded, for=127.0.0.1;host=localhost;proto=http, 203.0.113.10",
+            "X-Forwarded-For, 127.0.0.1, 203.0.113.10",
+            "Forwarded, for=127.0.0.1;host=localhost;proto=http, 127.0.0.1",
+            "X-Forwarded-For, 127.0.0.1, 127.0.0.1",
+            "X-Forwarded-Host, localhost, 127.0.0.1",
+            "X-Forwarded-Proto, https, 127.0.0.1"
+    })
+    void forwardingCannotGrantAccessEvenWithTheToken(String header, String value, String peer) throws Exception {
+        mockMvc.perform(get("/internal/admin/live/overview")
+                        .header(TOKEN_HEADER, "test-admin-token")
+                        .header(header, value)
+                        .with(request -> {
+                            request.setRemoteAddr(peer);
+                            return request;
+                        }))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void publicHostCannotAccessAdminThroughLoopbackProxy() throws Exception {
+        mockMvc.perform(get("/internal/admin/live/overview")
+                        .header(TOKEN_HEADER, "test-admin-token")
+                        .with(request -> {
+                            request.setServerName("poker.example.test");
                             return request;
                         }))
                 .andExpect(status().isForbidden());

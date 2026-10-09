@@ -124,8 +124,8 @@ final class LiveServerClient {
 
     private String disabledMessage(int status) {
         return "The live admin API refused the request (HTTP " + status
-                + "). Run the server with the dev profile (poker.admin.live.enabled=true)"
-                + " and make sure ADMIN_LIVE_TOKEN matches the server's token, if one is set.";
+                + "). Enable POKER_ADMIN_LIVE_ENABLED=true on the server"
+                + " and set ADMIN_LIVE_TOKEN to match its required POKER_ADMIN_LIVE_TOKEN.";
     }
 
     private JsonNode parse(String body) {

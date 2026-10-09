@@ -3,6 +3,7 @@ package com.poker.auth;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -53,12 +54,13 @@ class DevLoginIntegrationTest {
     }
 
     @Test
-    void devLoginCreatesAStableSessionIdentityAndIsLoopbackOnly() throws Exception {
+    void duplicateNamesCreateIndependentGuestIdentities() throws Exception {
         assertEquals("127.0.0.1", environment.getProperty("server.address"));
 
         Cookie firstCookie = login("Alice");
-        UserAccount first = repository.findByProviderAndProviderSubject(AuthProvider.DEV, "alice")
-                .orElseThrow();
+        UserAccount first = repository.findAll().getFirst();
+        assertNotEquals("alice", first.getProviderSubject());
+        UUID.fromString(first.getProviderSubject());
         mockMvc.perform(get("/api/me").cookie(firstCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(first.getId().toString()))
@@ -66,23 +68,65 @@ class DevLoginIntegrationTest {
                 .andExpect(jsonPath("$.provider").value("DEV"));
 
         Cookie secondCookie = login("alice");
-        UserAccount second = repository.findByProviderAndProviderSubject(AuthProvider.DEV, "alice")
-                .orElseThrow();
-        assertEquals(first.getId(), second.getId());
-        assertNotNull(secondCookie);
-        assertEquals(1, repository.count());
+        mockMvc.perform(get("/api/me").cookie(secondCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(org.hamcrest.Matchers.not(first.getId().toString())))
+                .andExpect(jsonPath("$.displayName").value("alice"));
+        assertEquals(2, repository.count());
     }
 
     @Test
     void invalidNamesDoNotCreateUsersOrSessions() throws Exception {
-        MvcResult missing = mockMvc.perform(get("/auth/dev"))
+        MvcResult missing = mockMvc.perform(post("/auth/dev").with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andReturn();
         assertNull(missing.getResponse().getCookie("SESSION"));
 
-        mockMvc.perform(get("/auth/dev").param("u", "a".repeat(21)))
+        mockMvc.perform(post("/auth/dev").with(csrf()).param("u", "a".repeat(21)))
                 .andExpect(status().isBadRequest());
+        assertEquals(0, repository.count());
+    }
+
+    @Test
+    void loginRejectsMissingInvalidAndCrossSessionCsrfTokens() throws Exception {
+        mockMvc.perform(get("/auth/dev").param("u", "Alice"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/auth/dev").param("u", "Alice"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/auth/dev").with(csrf().useInvalidToken()).param("u", "Alice"))
+                .andExpect(status().isForbidden());
+        MvcResult bootstrap = mockMvc.perform(get("/auth/dev/csrf"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andReturn();
+        var csrf = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(bootstrap.getResponse().getContentAsString());
+        String headerName = csrf.path("headerName").asText();
+        String token = csrf.path("token").asText();
+        mockMvc.perform(post("/auth/dev").param("u", "Alice").header(headerName, token))
+                .andExpect(status().isForbidden());
+        assertEquals(0, repository.count());
+        mockMvc.perform(post("/auth/dev").param("u", "Alice").header(headerName, token)
+                        .cookie(bootstrap.getResponse().getCookie("SESSION")))
+                .andExpect(status().isFound());
+        assertEquals(1, repository.count());
+    }
+
+    @Test
+    void guestServerRejectsNonLoopbackPeersPublicHostsAndForwardingHeaders() throws Exception {
+        mockMvc.perform(post("/auth/dev").with(csrf()).param("u", "Alice").with(request -> {
+            request.setRemoteAddr("203.0.113.10");
+            return request;
+        })).andExpect(status().isForbidden());
+        mockMvc.perform(get("/auth/dev/csrf").header("Host", "table.example.com").with(request -> {
+            request.setServerName("table.example.com");
+            return request;
+        })).andExpect(status().isForbidden());
+        for (String header : java.util.List.of("Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto")) {
+            mockMvc.perform(post("/auth/dev").with(csrf()).param("u", "Alice").header(header, "127.0.0.1"))
+                    .andExpect(status().isForbidden());
+        }
         assertEquals(0, repository.count());
     }
 
@@ -98,7 +142,7 @@ class DevLoginIntegrationTest {
     }
 
     private Cookie login(String name) throws Exception {
-        MvcResult result = mockMvc.perform(get("/auth/dev").param("u", name))
+        MvcResult result = mockMvc.perform(post("/auth/dev").with(csrf()).param("u", name))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", "/"))
                 .andExpect(header().string("Cache-Control", "no-store"))

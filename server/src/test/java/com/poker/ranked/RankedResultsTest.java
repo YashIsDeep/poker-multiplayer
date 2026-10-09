@@ -1,13 +1,19 @@
 package com.poker.ranked;
 
 import static org.assertj.core.api.Assertions.*;
+import java.io.IOException;
 import java.time.Instant;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.*;
 import java.util.concurrent.*;
 import org.flywaydb.core.Flyway;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.CleanupMode;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
@@ -87,14 +93,30 @@ class RankedResultsTest {
     }
 
     @Test void exactRateThenVolumeThenIdDetermineRankEvenWhenDisplayValuesMatch() {
+        jdbc.update("DELETE FROM app_user");
         var a = new RankedResults.Total(new UUID(0, 1), "a", null, 100000000000001L, 100000000000000L);
         var b = new RankedResults.Total(new UUID(0, 2), "b", null, 100000000000000L, 100000000000000L);
         assertThat(a.view(null).bbPer100()).isEqualByComparingTo(b.view(null).bbPer100());
-        assertThat(RankedResults.ORDER.compare(a, b)).isNegative();
         var twice = new RankedResults.Total(new UUID(0, 3), "c", null, 200, 2000);
-        var once = new RankedResults.Total(new UUID(0, 2), "b", null, 100, 1000);
-        assertThat(RankedResults.ORDER.compare(twice, once)).isNegative();
-        assertThat(RankedResults.ORDER.compare(once, new RankedResults.Total(new UUID(0, 1), "a", null, 100, 1000))).isPositive();
+        var once = new RankedResults.Total(new UUID(0, 4), "d", null, 100, 1000);
+        var tied = new RankedResults.Total(new UUID(0, 5), "e", null, 100, 1000);
+        // Even the smallest positive difference possible for BIGINT hand counts
+        // must survive the indexed rate representation (about 1.18e-38).
+        var tinyA = new RankedResults.Total(new UUID(0, 6), "f", null, 1, Long.MAX_VALUE - 1);
+        var tinyB = new RankedResults.Total(new UUID(0, 7), "g", null, 1, Long.MAX_VALUE);
+        var negativeA = new RankedResults.Total(new UUID(Long.MIN_VALUE, 0), "h", null, -1, Long.MAX_VALUE);
+        var negativeB = new RankedResults.Total(new UUID(-1, 0), "i", null, -1, Long.MAX_VALUE - 1);
+        var expected = List.of(a, b, twice, once, tied, tinyA, tinyB, negativeA, negativeB);
+        for (var total : expected.reversed()) {
+            user(total.userId());
+            jdbc.update("INSERT INTO ranked_player_total (user_id, net_chips, hand_count) VALUES (?, ?, ?)",
+                    total.userId(), total.net(), total.hands());
+        }
+        assertThat(results.leaderboard(0, 100).players()).extracting(RankedResults.Player::userId)
+                .containsExactlyElementsOf(expected.stream().map(RankedResults.Total::userId).toList());
+        assertThat(results.leaderboard(1, 3).players()).extracting(RankedResults.Player::rank).containsExactly(4L, 5L, 6L);
+        for (int index = 0; index < expected.size(); index++)
+            assertThat(results.player(expected.get(index).userId()).orElseThrow().rank()).isEqualTo(index + 1L);
     }
 
     @Test void incompleteHandsAreRejectedAndNewUsersHaveNoFabricatedRate() {
@@ -106,28 +128,57 @@ class RankedResultsTest {
         assertThat(results.player(UUID.randomUUID())).isEmpty();
     }
 
-    @Test void reopeningFileDatabasePreservesOnlyCommittedHands(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) {
-        String url = "jdbc:h2:file:" + directory.resolve("ranked").toAbsolutePath().toString().replace('\\', '/');
-        var first = new JdbcDataSource();
-        first.setURL(url);
-        Flyway.configure().dataSource(first).load().migrate();
-        jdbc = new JdbcTemplate(first);
-        RankedFixtures.USERS.forEach(this::user);
-        var beforeRestart = new RankedResults(jdbc, new DataSourceTransactionManager(first));
-        UUID room = UUID.randomUUID();
-        var completed = RankedFixtures.hand(1, "fold", 1000, 1000, 1000);
-        beforeRestart.settle(room, completed);
-        jdbc.execute("SHUTDOWN");
+    @Test void reopeningFileDatabasePreservesOnlyCommittedHands(@TempDir(cleanup = CleanupMode.NEVER) Path directory) throws Exception {
+        try {
+            String url = "jdbc:h2:file:" + directory.resolve("ranked").toAbsolutePath().toString().replace('\\', '/');
+            var first = new JdbcDataSource();
+            first.setURL(url);
+            Flyway.configure().dataSource(first).load().migrate();
+            jdbc = new JdbcTemplate(first);
+            RankedFixtures.USERS.forEach(this::user);
+            var beforeRestart = new RankedResults(jdbc, new DataSourceTransactionManager(first));
+            UUID room = UUID.randomUUID();
+            var completed = RankedFixtures.hand(1, "fold", 1000, 1000, 1000);
+            beforeRestart.settle(room, completed);
+            jdbc.execute("SHUTDOWN");
 
-        var reopened = new JdbcDataSource();
-        reopened.setURL(url);
-        var afterRestart = new RankedResults(new JdbcTemplate(reopened), new DataSourceTransactionManager(reopened));
-        assertThat(afterRestart.player(RankedFixtures.USERS.getFirst()).orElseThrow().handCount()).isEqualTo(1);
-        // A retry after reopening is harmless; no active room/unfinished hand is restored.
-        afterRestart.settle(room, completed);
-        var freshRooms = new com.poker.room.RoomManager();
-        assertThat(freshRooms.roomCount()).isZero();
-        assertThat(afterRestart.player(RankedFixtures.USERS.getFirst()).orElseThrow().handCount()).isEqualTo(1);
-        new JdbcTemplate(reopened).execute("SHUTDOWN");
+            var reopened = new JdbcDataSource();
+            reopened.setURL(url);
+            var afterRestart = new RankedResults(new JdbcTemplate(reopened), new DataSourceTransactionManager(reopened));
+            assertThat(afterRestart.player(RankedFixtures.USERS.getFirst()).orElseThrow().handCount()).isEqualTo(1);
+            // A retry after reopening is harmless; no active room/unfinished hand is restored.
+            afterRestart.settle(room, completed);
+            var freshRooms = new com.poker.room.RoomManager();
+            assertThat(freshRooms.roomCount()).isZero();
+            assertThat(afterRestart.player(RankedFixtures.USERS.getFirst()).orElseThrow().handCount()).isEqualTo(1);
+            new JdbcTemplate(reopened).execute("SHUTDOWN");
+        } finally {
+            deleteRecursively(directory);
+        }
+    }
+
+    private static void deleteRecursively(Path directory) throws Exception {
+        if (directory == null || !Files.exists(directory)) return;
+        Exception last = null;
+        for (int attempt = 0; attempt < 10; attempt++) {
+            try (var paths = Files.walk(directory)) {
+                paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException ex) {
+                        throw new CleanupFailure(ex);
+                    }
+                });
+                return;
+            } catch (CleanupFailure | IOException ex) {
+                last = ex;
+                Thread.sleep(100);
+            }
+        }
+        if (last != null) throw last;
+    }
+
+    private static final class CleanupFailure extends RuntimeException {
+        private CleanupFailure(IOException cause) { super(cause); }
     }
 }

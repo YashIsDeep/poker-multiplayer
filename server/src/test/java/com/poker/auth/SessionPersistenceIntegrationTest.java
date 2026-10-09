@@ -3,6 +3,8 @@ package com.poker.auth;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,7 +53,7 @@ class SessionPersistenceIntegrationTest {
 
     @Test
     void jdbcSessionRestoresTheTokenFreePrincipalOnARequestWithOnlyTheCookie() throws Exception {
-        MvcResult login = mockMvc.perform(get("/auth/dev").param("u", "RoundTrip"))
+        MvcResult login = mockMvc.perform(post("/auth/dev").with(csrf()).param("u", "RoundTrip"))
                 .andExpect(status().isFound())
                 .andReturn();
         Cookie session = login.getResponse().getCookie("SESSION");
@@ -59,8 +61,7 @@ class SessionPersistenceIntegrationTest {
         String sessionId = new String(
                 Base64.getDecoder().decode(session.getValue()), StandardCharsets.UTF_8);
 
-        UUID userId = repository.findByProviderAndProviderSubject(AuthProvider.DEV, "roundtrip")
-                .orElseThrow().getId();
+        UUID userId = repository.findAll().getFirst().getId();
         SecurityContextHolder.clearContext();
         mockMvc.perform(get("/api/me").cookie(session))
                 .andExpect(status().isOk())

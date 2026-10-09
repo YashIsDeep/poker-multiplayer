@@ -5,7 +5,6 @@ import react from '@vitejs/plugin-react'
 // generates OAuth redirect URIs on the proxied origin. Vite expands the
 // shorthand string form to `{ target, changeOrigin: true }`, which would send
 // providers back to :8080, so every entry spells the option out.
-const tunnelMode = process.env.TUNNEL_MODE === 'true'
 const tunnelHost = process.env.VITE_TUNNEL_HOST?.trim()
 
 export default defineConfig({
@@ -31,18 +30,8 @@ export default defineConfig({
         target: 'http://127.0.0.1:8080',
         changeOrigin: false,
         ws: true,
-        ...(tunnelMode
-          ? {
-              // The remote browser is same-origin with the Vite proxy. Keep
-              // Spring's loopback origin allow-list while forwarding the
-              // tunnel handshake through the local development proxy.
-              configure: (proxy) => {
-                proxy.on('proxyReqWs', (proxyRequest) => {
-                  proxyRequest.setHeader('origin', 'http://127.0.0.1:5173')
-                })
-              },
-            }
-          : {}),
+        // Preserve the browser Origin. dev:proxy configures the exact public
+        // origin in Spring's allowlist when it starts an OAuth-only tunnel.
       },
     },
   },

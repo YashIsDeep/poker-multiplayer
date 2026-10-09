@@ -20,31 +20,35 @@ public class WebSocketConfig extends AbstractSessionWebSocketMessageBrokerConfig
     private final PokerWebSocketProperties properties;
     private final MappingJackson2MessageConverter stompMessageConverter;
     private final ActiveWebSocketSessionInterceptor activeSessionInterceptor;
-    private final com.poker.hardening.InboundFrameBudgetInterceptor frameBudgetInterceptor;
     private final org.springframework.scheduling.TaskScheduler brokerTaskScheduler;
+    private final WebSocketTransportRegistry transports;
 
     public WebSocketConfig(
             PokerWebSocketProperties properties,
             MappingJackson2MessageConverter stompMessageConverter,
             ActiveWebSocketSessionInterceptor activeSessionInterceptor,
-            com.poker.hardening.InboundFrameBudgetInterceptor frameBudgetInterceptor,
+            WebSocketTransportRegistry transports,
             @org.springframework.beans.factory.annotation.Qualifier("gameplayTaskScheduler")
             org.springframework.scheduling.TaskScheduler brokerTaskScheduler) {
         this.properties = properties;
         this.stompMessageConverter = stompMessageConverter;
         this.activeSessionInterceptor = activeSessionInterceptor;
-        this.frameBudgetInterceptor = frameBudgetInterceptor;
+        this.transports = transports;
         this.brokerTaskScheduler = brokerTaskScheduler;
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         super.configureClientInboundChannel(registration);
-        registration.interceptors(activeSessionInterceptor, frameBudgetInterceptor);
+        registration.interceptors(activeSessionInterceptor);
     }
 
     @Override
     protected void configureStompEndpoints(StompEndpointRegistry registry) {
+        // Subscription ownership is updated on the inbound channel. Preserve
+        // per-socket order so the broker observes SUBSCRIBE/UNSUBSCRIBE in the
+        // same order as those quota checks.
+        registry.setPreserveReceiveOrder(true);
         registry.addEndpoint("/ws")
                 .setAllowedOrigins(properties.getAllowedOrigins().toArray(String[]::new));
     }
@@ -71,6 +75,7 @@ public class WebSocketConfig extends AbstractSessionWebSocketMessageBrokerConfig
     public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
         super.configureWebSocketTransport(registration);
         registration
+                .addDecoratorFactory(transports::decorate)
                 .setMessageSizeLimit(properties.getMaxMessageSize())
                 .setSendBufferSizeLimit(properties.getSendBufferSize())
                 .setSendTimeLimit(properties.getSendTimeLimit())

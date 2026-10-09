@@ -35,5 +35,7 @@ public class RoomBeansConfig {
         scheduler.setPoolSize(2); scheduler.setThreadNamePrefix("poker-game-"); scheduler.initialize(); return scheduler;
     }
 
-    @Bean UserSocketRegistry userSocketRegistry() { return new UserSocketRegistry(); }
+    @Bean UserSocketRegistry userSocketRegistry(com.poker.hardening.HardeningProperties properties) {
+        return new UserSocketRegistry(properties);
+    }
 }

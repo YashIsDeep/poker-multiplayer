@@ -1,5 +1,6 @@
 package com.poker.auth;
 
+import com.poker.hardening.HardeningProperties;
 import com.poker.ws.WebSocketSessionLogoutHandler;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
@@ -20,6 +22,7 @@ import org.springframework.security.web.context.DelegatingSecurityContextReposit
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.savedrequest.NullRequestCache;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
@@ -58,7 +61,9 @@ public class SecurityConfig {
         HttpSessionCsrfTokenRepository repository = new HttpSessionCsrfTokenRepository();
         repository.setHeaderName("X-XSRF-TOKEN");
         repository.setParameterName("_csrf");
-        return repository;
+        return new SessionBoundCsrfTokenRepository(repository,
+                request -> HttpMethod.GET.matches(request.getMethod())
+                        && (request.getContextPath() + "/auth/dev/csrf").equals(request.getRequestURI()));
     }
 
     @Bean
@@ -66,6 +71,16 @@ public class SecurityConfig {
             SecurityContextRepository securityContextRepository,
             SessionAuthenticationStrategy sessionAuthenticationStrategy) {
         return new OAuthLoginSuccessHandler(securityContextRepository, sessionAuthenticationStrategy);
+    }
+
+    @Bean
+    SimpleUrlAuthenticationFailureHandler oauthAuthenticationFailureHandler() {
+        SimpleUrlAuthenticationFailureHandler handler =
+                new SimpleUrlAuthenticationFailureHandler("/login?loginError");
+        // The SPA does not read the persisted exception. Never create a new
+        // JDBC session just to retain an unauthenticated OAuth error.
+        handler.setAllowSessionCreation(false);
+        return handler;
     }
 
     @Bean
@@ -77,9 +92,11 @@ public class SecurityConfig {
             GoogleOidcUserService googleOidcUserService,
             DiscordOAuth2UserService discordOAuth2UserService,
             OAuthLoginSuccessHandler oauthLoginSuccessHandler,
+            SimpleUrlAuthenticationFailureHandler oauthAuthenticationFailureHandler,
             DiscardingAuthorizedClientRepository authorizedClientRepository,
             CsrfTokenRepository csrfTokenRepository,
             WebSocketSessionLogoutHandler webSocketSessionLogoutHandler,
+            HardeningProperties hardeningProperties,
             @Value("${poker.admin.live.enabled:false}") boolean adminLiveEnabled) throws Exception {
         http
                 .csrf(csrf -> csrf
@@ -92,6 +109,10 @@ public class SecurityConfig {
                         .requireExplicitSave(true))
                 .sessionManagement(session -> session
                         .sessionAuthenticationStrategy(sessionAuthenticationStrategy))
+                // API and WebSocket authentication failures return 401 and the
+                // SPA owns its post-login redirect, so no rejected request
+                // should allocate a durable JDBC session just to be replayed.
+                .requestCache(cache -> cache.requestCache(new NullRequestCache()))
                 .authorizeHttpRequests(auth -> {
                     auth
                             .requestMatchers(HttpMethod.GET, "/api/health", "/api/meta", "/api/leaderboard", "/api/players/*").permitAll()
@@ -99,10 +120,11 @@ public class SecurityConfig {
                                     "/", "/login", "/index.html", "/favicon.ico", "/assets/**", "/room/**", "/leaderboard", "/players/*")
                             .permitAll()
                             .requestMatchers("/oauth2/authorization/**", "/login/oauth2/code/**").permitAll()
-                            .requestMatchers(HttpMethod.GET, "/auth/dev").permitAll();
+                            .requestMatchers(HttpMethod.GET, "/auth/dev/csrf").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/auth/dev").permitAll();
                     if (adminLiveEnabled) {
                         // The controller itself enforces loopback-only access
-                        // and the optional shared admin token.
+                        // and the mandatory shared admin token.
                         auth.requestMatchers(HttpMethod.GET, "/internal/admin/live/**").permitAll();
                     }
                     auth
@@ -125,6 +147,9 @@ public class SecurityConfig {
                         .logoutSuccessUrl("/"));
 
         if (clientRegistrationRepositories.getIfAvailable() != null) {
+            http.addFilterBefore(
+                    new OAuthInitiationRateLimitFilter(hardeningProperties),
+                    OAuth2AuthorizationRequestRedirectFilter.class);
             http.oauth2Login(oauth -> oauth
                     // The SPA renders the sign-in screen at /login, so Spring must not
                     // install its own generated login page on that path.
@@ -133,7 +158,7 @@ public class SecurityConfig {
                             .oidcUserService(googleOidcUserService)
                             .userService(discordOAuth2UserService))
                     .successHandler(oauthLoginSuccessHandler)
-                    .failureHandler(new SimpleUrlAuthenticationFailureHandler("/login?loginError"))
+                    .failureHandler(oauthAuthenticationFailureHandler)
                     .authorizedClientRepository(authorizedClientRepository));
         }
         return http.build();
